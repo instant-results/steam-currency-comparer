@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .cache import SQLiteCache
-from .models import RegionalPriceResult
-from .steam_access import SteamAccessError
+from .models import PriceStatus, RegionalPriceResult
+from .steam_access import SteamTemporaryError
 
 
 class LiveRegionalPriceProvider(Protocol):
@@ -36,6 +36,7 @@ class CachedPriceService:
         *,
         price_ttl: float = 12 * 60 * 60,
         missing_ttl: float = 60 * 60,
+        unavailable_ttl: float = 6 * 60 * 60,
         clock: Callable[[], float] = time.time,
         use_stale_on_error: bool = True,
     ) -> None:
@@ -43,6 +44,7 @@ class CachedPriceService:
         self._cache = cache
         self._price_ttl = price_ttl
         self._missing_ttl = missing_ttl
+        self._unavailable_ttl = unavailable_ttl
         self._clock = clock
         self._use_stale_on_error = use_stale_on_error
 
@@ -54,7 +56,11 @@ class CachedPriceService:
     ) -> PriceLookup:
         cached = self._cache.get_price(app_id, region, expected_currency)
         if cached is not None:
-            ttl = self._price_ttl if cached.result.price is not None else self._missing_ttl
+            ttl = {
+                PriceStatus.AVAILABLE: self._price_ttl,
+                PriceStatus.NO_REGIONAL_PRICE: self._missing_ttl,
+                PriceStatus.APP_UNAVAILABLE: self._unavailable_ttl,
+            }[cached.result.status]
             if self._clock() - cached.fetched_at <= ttl:
                 return PriceLookup(cached.result, "cache")
 
@@ -64,7 +70,7 @@ class CachedPriceService:
                 region,
                 expected_currency,
             )
-        except SteamAccessError:
+        except SteamTemporaryError:
             if cached is not None and self._use_stale_on_error:
                 return PriceLookup(cached.result, "stale cache")
             raise

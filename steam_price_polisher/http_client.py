@@ -26,11 +26,13 @@ class HttpClientError(RuntimeError):
         status_code: int | None = None,
         retry_after: float | None = None,
         transient: bool = False,
+        invalid_response: bool = False,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.retry_after = retry_after
         self.transient = transient
+        self.invalid_response = invalid_response
 
 
 class UrllibJsonHttpClient:
@@ -79,7 +81,10 @@ class UrllibJsonHttpClient:
         try:
             return json.loads(payload)
         except json.JSONDecodeError as exc:
-            raise HttpClientError(f"Invalid JSON response from {url}") from exc
+            raise HttpClientError(
+                f"Invalid JSON response from {url}",
+                invalid_response=True,
+            ) from exc
 
 
 def _parse_retry_after(value: str | None) -> float | None:

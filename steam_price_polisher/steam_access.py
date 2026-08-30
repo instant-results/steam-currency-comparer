@@ -3,17 +3,83 @@
 from __future__ import annotations
 
 import re
+import math
 import time
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlencode
 
-from .http_client import JsonHttpClient
-from .models import RegionalPriceResult, StorePrice, WishlistItem, WishlistResult
+from .http_client import HttpClientError, JsonHttpClient
+from .models import (
+    RegionalPriceResult,
+    SkipCategory,
+    StorePrice,
+    WishlistItem,
+    WishlistResult,
+)
 
 
 class SteamAccessError(RuntimeError):
     """Raised when Steam cannot provide data required by the application."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: SkipCategory,
+        app_id: str,
+        region: str,
+        retryable: bool,
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+        self.app_id = str(app_id)
+        self.region = region
+        self.retryable = retryable
+
+
+class SteamTemporaryError(SteamAccessError):
+    def __init__(self, message: str, *, app_id: str, region: str) -> None:
+        super().__init__(
+            message,
+            category=SkipCategory.TEMPORARY_FAILURE,
+            app_id=app_id,
+            region=region,
+            retryable=True,
+        )
+
+
+class SteamProtocolError(SteamAccessError):
+    def __init__(self, message: str, *, app_id: str, region: str) -> None:
+        super().__init__(
+            message,
+            category=SkipCategory.INVALID_RESPONSE,
+            app_id=app_id,
+            region=region,
+            retryable=False,
+        )
+
+
+class SteamRegionMismatchError(SteamAccessError):
+    def __init__(self, message: str, *, app_id: str, region: str) -> None:
+        super().__init__(
+            message,
+            category=SkipCategory.REGION_MISMATCH,
+            app_id=app_id,
+            region=region,
+            retryable=False,
+        )
+
+
+class SteamRequestError(SteamAccessError):
+    def __init__(self, message: str, *, app_id: str, region: str) -> None:
+        super().__init__(
+            message,
+            category=SkipCategory.REQUEST_FAILURE,
+            app_id=app_id,
+            region=region,
+            retryable=False,
+        )
 
 
 def normalize_steam_identifier(value: str) -> str:
@@ -166,21 +232,113 @@ class SteamClient:
 
         try:
             response = self._http_client.get_json(url)
-        except Exception as exc:
-            raise SteamAccessError(
-                f"Regional price request failed for app {app_id} ({region}): {exc}"
+        except HttpClientError as exc:
+            message = f"Regional request failed for app {app_id} ({region}): {exc}"
+            if exc.invalid_response:
+                raise SteamProtocolError(
+                    message,
+                    app_id=app_id,
+                    region=region,
+                ) from exc
+            if exc.transient:
+                raise SteamTemporaryError(
+                    message,
+                    app_id=app_id,
+                    region=region,
+                ) from exc
+            raise SteamRequestError(
+                message,
+                app_id=app_id,
+                region=region,
             ) from exc
 
-        app_data = response.get(str(app_id)) if isinstance(response, dict) else None
-        if not app_data or not app_data.get("success"):
-            return RegionalPriceResult(None, None)
+        if not isinstance(response, dict):
+            raise SteamProtocolError(
+                f"Steam returned a non-object response for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+        if str(app_id) not in response:
+            raise SteamProtocolError(
+                f"Steam response omitted app {app_id} for region {region}.",
+                app_id=app_id,
+                region=region,
+            )
 
-        data = app_data.get("data") or {}
+        app_data = response[str(app_id)]
+        if not isinstance(app_data, dict) or "success" not in app_data:
+            raise SteamProtocolError(
+                f"Steam returned malformed app data for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+        if app_data["success"] is False:
+            return RegionalPriceResult.app_unavailable(
+                f"Steam marked app {app_id} unavailable in region {region}."
+            )
+        if app_data["success"] is not True:
+            raise SteamProtocolError(
+                f"Steam returned an invalid success flag for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+
+        data = app_data.get("data")
+        if not isinstance(data, dict):
+            raise SteamProtocolError(
+                f"Steam returned invalid data for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
         game_name = data.get("name")
+        if game_name is not None and not isinstance(game_name, str):
+            raise SteamProtocolError(
+                f"Steam returned an invalid game name for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
         price_overview = data.get("price_overview")
-        if not price_overview or price_overview.get("final") is None:
-            return RegionalPriceResult(None, game_name)
+        if price_overview is None:
+            return RegionalPriceResult.no_regional_price(
+                game_name,
+                f"Steam supplied no regional price for {region}.",
+            )
+        if not isinstance(price_overview, dict):
+            raise SteamProtocolError(
+                f"Steam returned invalid price data for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
 
-        amount = float(price_overview["final"]) / 100.0
-        price = StorePrice(region, expected_currency.upper(), amount)
-        return RegionalPriceResult(price, game_name)
+        final_cents = price_overview.get("final")
+        if (
+            isinstance(final_cents, bool)
+            or not isinstance(final_cents, (int, float))
+            or not math.isfinite(final_cents)
+            or final_cents < 0
+        ):
+            raise SteamProtocolError(
+                f"Steam returned an invalid final price for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+
+        returned_currency = price_overview.get("currency")
+        if not isinstance(returned_currency, str) or not returned_currency:
+            raise SteamProtocolError(
+                f"Steam omitted the price currency for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+        expected = expected_currency.upper()
+        if returned_currency.upper() != expected:
+            raise SteamRegionMismatchError(
+                f"Steam returned {returned_currency.upper()} instead of {expected} "
+                f"for app {app_id} ({region}).",
+                app_id=app_id,
+                region=region,
+            )
+
+        amount = float(final_cents) / 100.0
+        price = StorePrice(region, expected, amount)
+        return RegionalPriceResult.available(price, game_name)

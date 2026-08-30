@@ -7,7 +7,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import TextIO
 
-from .models import AnalysisResult, GameComparison
+from .models import AnalysisResult, GameComparison, SkipCategory
 
 
 GREEN = "\033[92m"
@@ -142,7 +142,28 @@ class ConsolePresenter:
         self.line(
             f"Expensive Games: {self.styled(str(len(result.expensive_games)), RED)}"
         )
-        self.line(f"Skipped/Free/Unreleased: {len(result.skipped)}")
+        self.line(
+            "No Regional Price: "
+            f"{result.skipped_count(SkipCategory.NO_REGIONAL_PRICE)}"
+        )
+        self.line(
+            "Apps Unavailable: "
+            f"{result.skipped_count(SkipCategory.APP_UNAVAILABLE)}"
+        )
+        self.line(f"Technical Failures: {len(result.technical_failures)}")
+        for category in (
+            SkipCategory.TEMPORARY_FAILURE,
+            SkipCategory.INVALID_RESPONSE,
+            SkipCategory.REGION_MISMATCH,
+            SkipCategory.REQUEST_FAILURE,
+        ):
+            count = result.skipped_count(category)
+            if count:
+                self.line(f"  {category.label}: {count}")
+        if result.is_partial:
+            self.line(f"Run Status: {self.styled('PARTIAL', YELLOW, BOLD)}")
+        else:
+            self.line(f"Run Status: {self.styled('COMPLETE', GREEN, BOLD)}")
         self.line(self.styled(border, CYAN))
 
     def _show_group(

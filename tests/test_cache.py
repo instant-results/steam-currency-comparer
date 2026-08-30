@@ -1,12 +1,14 @@
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.exchange_rates import CachedExchangeRateProvider
-from steam_price_polisher.models import RegionalPriceResult, StorePrice
+from steam_price_polisher.models import PriceStatus, RegionalPriceResult, StorePrice
 from steam_price_polisher.price_service import CachedPriceService
-from steam_price_polisher.steam_access import SteamAccessError
+from steam_price_polisher.steam_access import SteamProtocolError, SteamTemporaryError
 
 
 class MutableClock:
@@ -51,7 +53,7 @@ class CacheTests(unittest.TestCase):
         )
 
     def test_price_is_loaded_from_cache_on_repeated_lookup(self):
-        live_result = RegionalPriceResult(
+        live_result = RegionalPriceResult.available(
             StorePrice("pl", "PLN", 49.99),
             "Test Game",
         )
@@ -67,7 +69,7 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(live.calls, 1)
 
     def test_stale_price_is_used_when_refresh_fails(self):
-        live_result = RegionalPriceResult(
+        live_result = RegionalPriceResult.available(
             StorePrice("pl", "PLN", 49.99),
             "Test Game",
         )
@@ -80,7 +82,11 @@ class CacheTests(unittest.TestCase):
         )
         service.get_regional_price("10", "pl", "PLN")
         self.clock.value += 11
-        live.error = SteamAccessError("Steam unavailable")
+        live.error = SteamTemporaryError(
+            "Steam unavailable",
+            app_id="10",
+            region="pl",
+        )
 
         result = service.get_regional_price("10", "pl", "PLN")
 
@@ -100,6 +106,64 @@ class CacheTests(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(upstream.calls, 1)
+
+    def test_stale_price_does_not_hide_a_protocol_failure(self):
+        live_result = RegionalPriceResult.available(
+            StorePrice("pl", "PLN", 49.99),
+            "Test Game",
+        )
+        live = FakePriceProvider(live_result)
+        service = CachedPriceService(
+            live,
+            self.cache,
+            price_ttl=10,
+            clock=self.clock,
+        )
+        service.get_regional_price("10", "pl", "PLN")
+        self.clock.value += 11
+        live.error = SteamProtocolError(
+            "Malformed response",
+            app_id="10",
+            region="pl",
+        )
+
+        with self.assertRaises(SteamProtocolError):
+            service.get_regional_price("10", "pl", "PLN")
+
+    def test_legacy_missing_status_is_migrated_without_losing_data(self):
+        legacy_path = Path(self.temp_directory.name) / "legacy.sqlite3"
+        with closing(sqlite3.connect(legacy_path)) as connection:
+            with connection:
+                connection.execute(
+                    """
+                    CREATE TABLE regional_prices (
+                        app_id TEXT NOT NULL,
+                        region TEXT NOT NULL,
+                        currency TEXT NOT NULL,
+                        amount REAL,
+                        game_name TEXT,
+                        status TEXT NOT NULL CHECK(
+                            status IN ('available', 'missing')
+                        ),
+                        fetched_at REAL NOT NULL,
+                        PRIMARY KEY (app_id, region)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO regional_prices (
+                        app_id, region, currency, amount, game_name, status, fetched_at
+                    ) VALUES ('10', 'pl', 'PLN', NULL, 'Legacy Game', 'missing', 900)
+                    """
+                )
+
+        migrated = SQLiteCache(legacy_path, clock=self.clock)
+        entry = migrated.get_price("10", "pl", "PLN")
+
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.result.status, PriceStatus.NO_REGIONAL_PRICE)
+        self.assertEqual(entry.result.game_name, "Legacy Game")
 
 
 if __name__ == "__main__":

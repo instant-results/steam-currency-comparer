@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -25,10 +26,47 @@ class StorePrice:
     amount: float
 
 
+class PriceStatus(str, Enum):
+    AVAILABLE = "available"
+    NO_REGIONAL_PRICE = "no_regional_price"
+    APP_UNAVAILABLE = "app_unavailable"
+
+
 @dataclass(frozen=True)
 class RegionalPriceResult:
-    price: StorePrice | None
-    game_name: str | None
+    status: PriceStatus
+    price: StorePrice | None = None
+    game_name: str | None = None
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is PriceStatus.AVAILABLE and self.price is None:
+            raise ValueError("An available result requires a price")
+        if self.status is not PriceStatus.AVAILABLE and self.price is not None:
+            raise ValueError("A non-available result cannot contain a price")
+
+    @classmethod
+    def available(
+        cls,
+        price: StorePrice,
+        game_name: str | None,
+    ) -> RegionalPriceResult:
+        return cls(PriceStatus.AVAILABLE, price, game_name)
+
+    @classmethod
+    def no_regional_price(
+        cls,
+        game_name: str | None,
+        detail: str | None = None,
+    ) -> RegionalPriceResult:
+        return cls(PriceStatus.NO_REGIONAL_PRICE, None, game_name, detail)
+
+    @classmethod
+    def app_unavailable(
+        cls,
+        detail: str | None = None,
+    ) -> RegionalPriceResult:
+        return cls(PriceStatus.APP_UNAVAILABLE, None, None, detail)
 
 
 @dataclass(frozen=True)
@@ -66,6 +104,36 @@ class SkippedGame:
     app_id: str
     name: str
     reason: str
+    category: SkipCategory
+    region: str | None = None
+    retryable: bool = False
+
+
+class SkipCategory(str, Enum):
+    NO_REGIONAL_PRICE = "no_regional_price"
+    APP_UNAVAILABLE = "app_unavailable"
+    TEMPORARY_FAILURE = "temporary_failure"
+    INVALID_RESPONSE = "invalid_response"
+    REGION_MISMATCH = "region_mismatch"
+    REQUEST_FAILURE = "request_failure"
+
+    @property
+    def label(self) -> str:
+        return {
+            SkipCategory.NO_REGIONAL_PRICE: "No regional price",
+            SkipCategory.APP_UNAVAILABLE: "App unavailable",
+            SkipCategory.TEMPORARY_FAILURE: "Temporary request failures",
+            SkipCategory.INVALID_RESPONSE: "Invalid Steam responses",
+            SkipCategory.REGION_MISMATCH: "Region/currency mismatches",
+            SkipCategory.REQUEST_FAILURE: "Permanent request failures",
+        }[self]
+
+    @property
+    def is_technical_failure(self) -> bool:
+        return self not in {
+            SkipCategory.NO_REGIONAL_PRICE,
+            SkipCategory.APP_UNAVAILABLE,
+        }
 
 
 @dataclass(frozen=True)
@@ -84,3 +152,16 @@ class AnalysisResult:
     @property
     def total_checked(self) -> int:
         return len(self.comparisons) + len(self.skipped)
+
+    @property
+    def technical_failures(self) -> tuple[SkippedGame, ...]:
+        return tuple(
+            game for game in self.skipped if game.category.is_technical_failure
+        )
+
+    @property
+    def is_partial(self) -> bool:
+        return bool(self.technical_failures)
+
+    def skipped_count(self, category: SkipCategory) -> int:
+        return sum(game.category is category for game in self.skipped)

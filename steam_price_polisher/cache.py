@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from .models import RegionalPriceResult, StorePrice
+from .models import PriceStatus, RegionalPriceResult, StorePrice
 
 
 @dataclass(frozen=True)
@@ -57,20 +57,13 @@ class SQLiteCache:
     def _initialize(self) -> None:
         with self._connection() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS regional_prices (
-                    app_id TEXT NOT NULL,
-                    region TEXT NOT NULL,
-                    currency TEXT NOT NULL,
-                    amount REAL,
-                    game_name TEXT,
-                    status TEXT NOT NULL CHECK(status IN ('available', 'missing')),
-                    fetched_at REAL NOT NULL,
-                    PRIMARY KEY (app_id, region)
-                )
-                """
-            )
+            table = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                ("regional_prices",),
+            ).fetchone()
+            if table is not None and "'missing'" in table["sql"]:
+                self._migrate_legacy_price_table(connection)
+            self._create_price_table(connection)
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS exchange_rates (
@@ -80,6 +73,54 @@ class SQLiteCache:
                 )
                 """
             )
+            connection.execute("PRAGMA user_version = 2")
+
+    @staticmethod
+    def _create_price_table(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS regional_prices (
+                app_id TEXT NOT NULL,
+                region TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                amount REAL,
+                game_name TEXT,
+                status TEXT NOT NULL CHECK(status IN (
+                    'available', 'no_regional_price', 'app_unavailable'
+                )),
+                detail TEXT,
+                fetched_at REAL NOT NULL,
+                PRIMARY KEY (app_id, region)
+            )
+            """
+        )
+
+    def _migrate_legacy_price_table(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "ALTER TABLE regional_prices RENAME TO regional_prices_legacy"
+        )
+        self._create_price_table(connection)
+        connection.execute(
+            """
+            INSERT INTO regional_prices (
+                app_id, region, currency, amount, game_name, status, detail, fetched_at
+            )
+            SELECT
+                app_id,
+                region,
+                currency,
+                amount,
+                game_name,
+                CASE status
+                    WHEN 'available' THEN 'available'
+                    ELSE 'no_regional_price'
+                END,
+                NULL,
+                fetched_at
+            FROM regional_prices_legacy
+            """
+        )
+        connection.execute("DROP TABLE regional_prices_legacy")
 
     def get_price(
         self,
@@ -90,7 +131,7 @@ class SQLiteCache:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT currency, amount, game_name, status, fetched_at
+                SELECT currency, amount, game_name, status, detail, fetched_at
                 FROM regional_prices
                 WHERE app_id = ? AND region = ?
                 """,
@@ -99,11 +140,26 @@ class SQLiteCache:
         if row is None or row["currency"] != expected_currency.upper():
             return None
 
-        price = None
-        if row["status"] == "available":
-            price = StorePrice(region.lower(), row["currency"], float(row["amount"]))
+        try:
+            status = PriceStatus(row["status"])
+        except ValueError:
+            return None
+        if status is PriceStatus.AVAILABLE:
+            if row["amount"] is None:
+                return None
+            result = RegionalPriceResult.available(
+                StorePrice(region.lower(), row["currency"], float(row["amount"])),
+                row["game_name"],
+            )
+        elif status is PriceStatus.NO_REGIONAL_PRICE:
+            result = RegionalPriceResult.no_regional_price(
+                row["game_name"],
+                row["detail"],
+            )
+        else:
+            result = RegionalPriceResult.app_unavailable(row["detail"])
         return PriceCacheEntry(
-            RegionalPriceResult(price, row["game_name"]),
+            result,
             float(row["fetched_at"]),
         )
 
@@ -114,7 +170,6 @@ class SQLiteCache:
         expected_currency: str,
         result: RegionalPriceResult,
     ) -> None:
-        status = "available" if result.price is not None else "missing"
         currency = (
             result.price.currency if result.price is not None else expected_currency.upper()
         )
@@ -123,13 +178,14 @@ class SQLiteCache:
             connection.execute(
                 """
                 INSERT INTO regional_prices (
-                    app_id, region, currency, amount, game_name, status, fetched_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    app_id, region, currency, amount, game_name, status, detail, fetched_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(app_id, region) DO UPDATE SET
                     currency = excluded.currency,
                     amount = excluded.amount,
                     game_name = excluded.game_name,
                     status = excluded.status,
+                    detail = excluded.detail,
                     fetched_at = excluded.fetched_at
                 """,
                 (
@@ -138,7 +194,8 @@ class SQLiteCache:
                     currency.upper(),
                     amount,
                     result.game_name,
-                    status,
+                    result.status.value,
+                    result.detail,
                     self._clock(),
                 ),
             )

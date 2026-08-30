@@ -6,7 +6,13 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from .comparison import compare_game
-from .models import GameComparison, SkippedGame, WishlistItem
+from .models import (
+    GameComparison,
+    PriceStatus,
+    SkipCategory,
+    SkippedGame,
+    WishlistItem,
+)
 from .price_service import CachedPriceService, PriceLookup
 from .steam_access import SteamAccessError
 
@@ -98,16 +104,25 @@ class AnalysisRunner:
                 self._home.currency,
             )
         except SteamAccessError as exc:
-            return self._skipped(index, total, item.app_id, display_name, str(exc), lookups)
+            return self._skipped_from_error(
+                index, total, item.app_id, display_name, exc, lookups
+            )
         lookups.append(home_lookup)
 
         home_result = home_lookup.result
         if home_result.game_name:
             display_name = home_result.game_name
-        if home_result.price is None:
-            reason = f"No {self._home.currency} price/Free/Unreleased"
+        if home_result.status is not PriceStatus.AVAILABLE:
             return self._skipped(
-                index, total, item.app_id, display_name, reason, lookups
+                index,
+                total,
+                item.app_id,
+                display_name,
+                home_result.detail or f"No {self._home.currency} regional price.",
+                self._category_for_status(home_result.status),
+                self._home.region,
+                False,
+                lookups,
             )
 
         alternative_prices = []
@@ -119,22 +134,21 @@ class AnalysisRunner:
                     alternative.currency,
                 )
             except SteamAccessError as exc:
-                return self._skipped(
-                    index,
-                    total,
-                    item.app_id,
-                    display_name,
-                    str(exc),
-                    lookups,
+                return self._skipped_from_error(
+                    index, total, item.app_id, display_name, exc, lookups
                 )
             lookups.append(lookup)
-            if lookup.result.price is None:
+            if lookup.result.status is not PriceStatus.AVAILABLE:
                 return self._skipped(
                     index,
                     total,
                     item.app_id,
                     display_name,
-                    f"{alternative.currency} price missing",
+                    lookup.result.detail
+                    or f"No {alternative.currency} regional price.",
+                    self._category_for_status(lookup.result.status),
+                    alternative.region,
+                    False,
                     lookups,
                 )
             alternative_prices.append(lookup.result.price)
@@ -166,6 +180,9 @@ class AnalysisRunner:
         app_id: str,
         name: str,
         reason: str,
+        category: SkipCategory,
+        region: str | None,
+        retryable: bool,
         lookups: Sequence[PriceLookup],
     ) -> AnalysisProgress:
         cache_hits, stale_hits, live_requests = self._source_counts(lookups)
@@ -175,11 +192,40 @@ class AnalysisRunner:
             app_id,
             name,
             None,
-            SkippedGame(app_id, name, reason),
+            SkippedGame(app_id, name, reason, category, region, retryable),
             cache_hits,
             stale_hits,
             live_requests,
         )
+
+    def _skipped_from_error(
+        self,
+        index: int,
+        total: int,
+        app_id: str,
+        name: str,
+        error: SteamAccessError,
+        lookups: Sequence[PriceLookup],
+    ) -> AnalysisProgress:
+        return self._skipped(
+            index,
+            total,
+            app_id,
+            name,
+            str(error),
+            error.category,
+            error.region,
+            error.retryable,
+            lookups,
+        )
+
+    @staticmethod
+    def _category_for_status(status: PriceStatus) -> SkipCategory:
+        if status is PriceStatus.NO_REGIONAL_PRICE:
+            return SkipCategory.NO_REGIONAL_PRICE
+        if status is PriceStatus.APP_UNAVAILABLE:
+            return SkipCategory.APP_UNAVAILABLE
+        raise ValueError(f"Available status cannot be converted to a skip category: {status}")
 
     @staticmethod
     def _source_counts(lookups: Sequence[PriceLookup]) -> tuple[int, int, int]:

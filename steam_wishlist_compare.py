@@ -154,7 +154,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
     result = AnalysisResult(tuple(comparisons), tuple(skipped))
     presenter.show_results(result)
-    return 0
+    return 2 if result.is_partial else 0
 
 
 if __name__ == "__main__":
