@@ -8,12 +8,27 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from steam_price_polisher.comparison import compare_game
-from steam_price_polisher.exchange_rates import ExchangeRateError, NbpExchangeRateProvider
+from steam_price_polisher.analysis import (
+    AnalysisRunner,
+    RegionConfig,
+    deduplicate_wishlist,
+)
+from steam_price_polisher.cache import SQLiteCache
+from steam_price_polisher.exchange_rates import (
+    CachedExchangeRateProvider,
+    ExchangeRateError,
+    NbpExchangeRateProvider,
+)
 from steam_price_polisher.http_client import UrllibJsonHttpClient
-from steam_price_polisher.models import AnalysisResult, GameComparison, SkippedGame, StorePrice
+from steam_price_polisher.models import AnalysisResult, GameComparison, SkippedGame
 from steam_price_polisher.presentation import ConsolePresenter
-from steam_price_polisher.steam_access import SteamAccessError, SteamClient
+from steam_price_polisher.price_service import CachedPriceService
+from steam_price_polisher.request_policy import (
+    RequestGate,
+    RetryPolicy,
+    RetryingJsonHttpClient,
+)
+from steam_price_polisher.steam_access import SteamClient
 
 
 # Keep the original defaults while making the processing layers independent.
@@ -40,10 +55,29 @@ def main(arguments: Sequence[str] | None = None) -> int:
     presenter = ConsolePresenter()
     presenter.banner()
 
-    http_client = UrllibJsonHttpClient(
+    raw_http_client = UrllibJsonHttpClient(
         cookie_string=os.environ.get("STEAM_COOKIE", "")
     )
-    rate_provider = NbpExchangeRateProvider(http_client)
+    data_directory = Path(
+        os.environ.get(
+            "STEAM_PRICE_POLISHER_DATA_DIR",
+            Path(__file__).with_name(".steam-price-polisher"),
+        )
+    )
+    try:
+        cache = SQLiteCache(data_directory / "cache.sqlite3")
+    except Exception as exc:
+        presenter.error(f"Could not initialize the local cache: {exc}")
+        return 1
+
+    nbp_http_client = RetryingJsonHttpClient(
+        raw_http_client,
+        policy=RetryPolicy(max_attempts=3, base_delay=1.0),
+    )
+    rate_provider = CachedExchangeRateProvider(
+        NbpExchangeRateProvider(nbp_http_client),
+        cache,
+    )
     try:
         rates = rate_provider.get_rates_to_pln(
             currency for _, currency in COMPARISON_REGIONS
@@ -59,19 +93,27 @@ def main(arguments: Sequence[str] | None = None) -> int:
         presenter.error("Steam ID cannot be empty.")
         return 1
 
+    steam_http_client = RetryingJsonHttpClient(
+        raw_http_client,
+        gate=RequestGate(STEAM_API_DELAY),
+    )
     steam_client = SteamClient(
-        http_client,
-        request_delay=STEAM_API_DELAY,
+        steam_http_client,
+        request_delay=0,
         wishlist_file=Path(__file__).with_name("wishlist.txt"),
     )
     wishlist_result = steam_client.get_wishlist(identifier)
     for warning in wishlist_result.warnings:
         presenter.warning(warning)
 
-    wishlist = wishlist_result.items
+    wishlist = deduplicate_wishlist(wishlist_result.items)
     if not wishlist:
         presenter.error("No games to process. The wishlist may be empty or private.")
         return 0
+
+    duplicates_removed = len(wishlist_result.items) - len(wishlist)
+    if duplicates_removed:
+        presenter.warning(f"Removed {duplicates_removed} duplicate wishlist entries.")
 
     if LIMIT_GAMES is not None:
         wishlist = wishlist[:LIMIT_GAMES]
@@ -84,73 +126,30 @@ def main(arguments: Sequence[str] | None = None) -> int:
     calls_per_game = 1 + len(COMPARISON_REGIONS)
     presenter.show_estimate(total_games * calls_per_game * STEAM_API_DELAY)
 
+    price_service = CachedPriceService(steam_client, cache)
+    runner = AnalysisRunner(
+        price_service,
+        home=RegionConfig(HOME_REGION, HOME_CURRENCY),
+        alternatives=tuple(
+            RegionConfig(region, currency)
+            for region, currency in COMPARISON_REGIONS
+        ),
+    )
     comparisons: list[GameComparison] = []
     skipped: list[SkippedGame] = []
 
-    for index, item in enumerate(wishlist, start=1):
-        display_name = item.name or f"App {item.app_id}"
-        try:
-            home_result = steam_client.get_regional_price(
-                item.app_id,
-                HOME_REGION,
-                HOME_CURRENCY,
-            )
-        except SteamAccessError as exc:
-            reason = str(exc)
-            skipped.append(SkippedGame(item.app_id, display_name, reason))
-            presenter.show_game_status(
-                index, total_games, item.app_id, display_name, reason
-            )
-            continue
-
-        if home_result.game_name:
-            display_name = home_result.game_name
-        if home_result.price is None:
-            reason = f"No {HOME_CURRENCY} price/Free/Unreleased"
-            skipped.append(SkippedGame(item.app_id, display_name, reason))
-            presenter.show_game_status(
-                index, total_games, item.app_id, display_name, reason
-            )
-            continue
-
-        alternative_prices: list[StorePrice] = []
-        skip_reason: str | None = None
-        for region, currency in COMPARISON_REGIONS:
-            try:
-                regional_result = steam_client.get_regional_price(
-                    item.app_id,
-                    region,
-                    currency,
-                )
-            except SteamAccessError as exc:
-                skip_reason = str(exc)
-                break
-            if regional_result.price is None:
-                skip_reason = f"{currency} price missing"
-                break
-            alternative_prices.append(regional_result.price)
-
-        if skip_reason:
-            skipped.append(SkippedGame(item.app_id, display_name, skip_reason))
-            presenter.show_game_status(
-                index, total_games, item.app_id, display_name, skip_reason
-            )
-            continue
-
-        comparison = compare_game(
-            item.app_id,
-            display_name,
-            home_result.price,
-            alternative_prices,
-            rates,
-        )
-        comparisons.append(comparison)
+    for progress in runner.run(wishlist, rates):
+        if progress.comparison is not None:
+            comparisons.append(progress.comparison)
+        if progress.skipped is not None:
+            skipped.append(progress.skipped)
         presenter.show_game_status(
-            index,
-            total_games,
-            item.app_id,
-            display_name,
-            "fair" if comparison.is_fair else "expensive",
+            progress.index,
+            progress.total,
+            progress.app_id,
+            progress.name,
+            progress.status,
+            progress.source_summary,
         )
 
     result = AnalysisResult(tuple(comparisons), tuple(skipped))

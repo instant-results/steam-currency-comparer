@@ -83,7 +83,7 @@ class ConsolePresenter:
     def show_estimate(self, seconds: float) -> None:
         minutes = seconds / 60
         self.line(
-            "Estimated time to fetch prices: "
+            "Cold-cache request delay estimate: up to "
             f"{self.styled(f'{seconds:.1f} seconds', YELLOW)} "
             f"({self.styled(f'{minutes:.1f} minutes', YELLOW)})"
         )
@@ -97,6 +97,7 @@ class ConsolePresenter:
         app_id: str,
         name: str,
         status: str,
+        source_summary: str = "",
     ) -> None:
         if status == "fair":
             label = self.styled("FAIR PRICE! [OK]", GREEN, BOLD)
@@ -104,7 +105,10 @@ class ConsolePresenter:
             label = self.styled("EXPENSIVE! [X]", RED)
         else:
             label = self.styled(f"SKIPPED ({status})", YELLOW)
-        self.line(f"[{index}/{total}] {app_id}: {self.styled(name, BOLD)} {label}")
+        source = f" [{source_summary}]" if source_summary else ""
+        self.line(
+            f"[{index}/{total}] {app_id}: {self.styled(name, BOLD)} {label}{source}"
+        )
 
     def show_results(self, result: AnalysisResult) -> None:
         border = "==============================================="

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import socket
+import urllib.error
 import urllib.request
 from collections.abc import Mapping
 from typing import Any, Protocol
@@ -12,6 +14,23 @@ from typing import Any, Protocol
 class JsonHttpClient(Protocol):
     def get_json(self, url: str, headers: Mapping[str, str] | None = None) -> Any:
         """Return a decoded JSON response."""
+
+
+class HttpClientError(RuntimeError):
+    """Structured HTTP or transport failure used by retry policies."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retry_after: float | None = None,
+        transient: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
+        self.transient = transient
 
 
 class UrllibJsonHttpClient:
@@ -39,6 +58,34 @@ class UrllibJsonHttpClient:
             request_headers["Cookie"] = self._cookie_string
 
         request = urllib.request.Request(url, headers=request_headers)
-        with self._opener.open(request, timeout=self._timeout) as response:
-            payload = response.read().decode("utf-8")
-        return json.loads(payload)
+        try:
+            with self._opener.open(request, timeout=self._timeout) as response:
+                payload = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            retry_after = _parse_retry_after(exc.headers.get("Retry-After"))
+            transient = exc.code == 429 or 500 <= exc.code <= 599
+            raise HttpClientError(
+                f"HTTP {exc.code} for {url}",
+                status_code=exc.code,
+                retry_after=retry_after,
+                transient=transient,
+            ) from exc
+        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+            raise HttpClientError(
+                f"Temporary network failure for {url}: {exc}",
+                transient=True,
+            ) from exc
+
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise HttpClientError(f"Invalid JSON response from {url}") from exc
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        return None
