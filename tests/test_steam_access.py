@@ -8,6 +8,7 @@ from steam_price_polisher.steam_access import (
     SteamProtocolError,
     SteamRegionMismatchError,
     SteamTemporaryError,
+    VanityResolutionStatus,
     normalize_steam_identifier,
 )
 
@@ -49,6 +50,93 @@ class SteamAccessTests(unittest.TestCase):
         self.assertEqual(result.source, "Steam Web API")
         query = parse_qs(urlparse(http.urls[0]).query)
         self.assertEqual(query["steamid"], ["76561198000000000"])
+
+    def test_resolves_vanity_name_with_configured_api_key(self):
+        http = QueueHttpClient(
+            [
+                {
+                    "response": {
+                        "success": 1,
+                        "steamid": "76561198000000000",
+                    }
+                },
+                {"response": {"items": [{"appid": 10}]}},
+            ]
+        )
+        client = SteamClient(
+            http,
+            request_delay=0,
+            sleep=lambda _: None,
+            web_api_key="secret-key",
+        )
+
+        result = client.get_wishlist("https://steamcommunity.com/id/example")
+
+        self.assertEqual([item.app_id for item in result.items], ["10"])
+        vanity_query = parse_qs(urlparse(http.urls[0]).query)
+        self.assertEqual(vanity_query["key"], ["secret-key"])
+        self.assertEqual(vanity_query["vanityurl"], ["example"])
+        self.assertEqual(vanity_query["url_type"], ["1"])
+        wishlist_query = parse_qs(urlparse(http.urls[1]).query)
+        self.assertEqual(wishlist_query["steamid"], ["76561198000000000"])
+
+    def test_vanity_without_api_key_skips_numeric_web_api(self):
+        http = QueueHttpClient([{}])
+        client = SteamClient(http, request_delay=0, sleep=lambda _: None)
+
+        result = client.get_wishlist("example")
+
+        self.assertEqual(result.items, ())
+        self.assertIn("STEAM_WEB_API_KEY", result.warnings[0])
+        self.assertEqual(len(http.urls), 1)
+        self.assertIn("/wishlist/id/example/", http.urls[0])
+
+    def test_unknown_vanity_name_has_a_specific_result(self):
+        client = SteamClient(
+            QueueHttpClient(
+                [{"response": {"success": 42, "message": "No match"}}]
+            ),
+            request_delay=0,
+            sleep=lambda _: None,
+            web_api_key="secret-key",
+        )
+
+        result = client.resolve_vanity_url("missing-profile")
+
+        self.assertEqual(result.status, VanityResolutionStatus.NOT_FOUND)
+        self.assertIsNone(result.steam_id)
+        self.assertIn("No match", result.message)
+
+    def test_invalid_vanity_response_is_distinguished(self):
+        client = SteamClient(
+            QueueHttpClient([{"unexpected": True}]),
+            request_delay=0,
+            sleep=lambda _: None,
+            web_api_key="secret-key",
+        )
+
+        result = client.resolve_vanity_url("example")
+
+        self.assertEqual(result.status, VanityResolutionStatus.INVALID_RESPONSE)
+
+    def test_vanity_request_failure_does_not_expose_api_key(self):
+        client = SteamClient(
+            QueueHttpClient(
+                [
+                    HttpClientError(
+                        "HTTP 401 for https://example.test?key=secret-key"
+                    )
+                ]
+            ),
+            request_delay=0,
+            sleep=lambda _: None,
+            web_api_key="secret-key",
+        )
+
+        result = client.resolve_vanity_url("example")
+
+        self.assertEqual(result.status, VanityResolutionStatus.REQUEST_FAILED)
+        self.assertNotIn("secret-key", result.message)
 
     def test_reads_regional_price_and_name(self):
         http = QueueHttpClient(

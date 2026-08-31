@@ -55,7 +55,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     presenter = ConsolePresenter()
     presenter.banner()
 
-    raw_http_client = UrllibJsonHttpClient(
+    nbp_raw_http_client = UrllibJsonHttpClient()
+    steam_raw_http_client = UrllibJsonHttpClient(
         cookie_string=os.environ.get("STEAM_COOKIE", "")
     )
     data_directory = Path(
@@ -71,7 +72,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         return 1
 
     nbp_http_client = RetryingJsonHttpClient(
-        raw_http_client,
+        nbp_raw_http_client,
         policy=RetryPolicy(max_attempts=3, base_delay=1.0),
     )
     rate_provider = CachedExchangeRateProvider(
@@ -94,13 +95,14 @@ def main(arguments: Sequence[str] | None = None) -> int:
         return 1
 
     steam_http_client = RetryingJsonHttpClient(
-        raw_http_client,
+        steam_raw_http_client,
         gate=RequestGate(STEAM_API_DELAY),
     )
     steam_client = SteamClient(
         steam_http_client,
         request_delay=0,
         wishlist_file=Path(__file__).with_name("wishlist.txt"),
+        web_api_key=os.environ.get("STEAM_WEB_API_KEY", ""),
     )
     wishlist_result = steam_client.get_wishlist(identifier)
     for warning in wishlist_result.warnings:

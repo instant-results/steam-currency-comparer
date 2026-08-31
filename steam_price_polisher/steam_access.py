@@ -6,6 +6,8 @@ import re
 import math
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -82,6 +84,25 @@ class SteamRequestError(SteamAccessError):
         )
 
 
+class VanityResolutionStatus(str, Enum):
+    RESOLVED = "resolved"
+    API_KEY_MISSING = "api_key_missing"
+    NOT_FOUND = "not_found"
+    REQUEST_FAILED = "request_failed"
+    INVALID_RESPONSE = "invalid_response"
+
+
+@dataclass(frozen=True)
+class VanityResolution:
+    status: VanityResolutionStatus
+    steam_id: str | None
+    message: str
+
+    @property
+    def resolved(self) -> bool:
+        return self.status is VanityResolutionStatus.RESOLVED
+
+
 def normalize_steam_identifier(value: str) -> str:
     """Extract a numeric ID or vanity name from supported Steam URLs."""
     identifier = value.strip().rstrip("/")
@@ -106,14 +127,30 @@ class SteamClient:
         request_delay: float = 1.5,
         sleep: Callable[[float], None] = time.sleep,
         wishlist_file: Path | None = None,
+        web_api_key: str = "",
     ) -> None:
         self._http_client = http_client
         self._request_delay = request_delay
         self._sleep = sleep
         self._wishlist_file = wishlist_file
+        self._web_api_key = web_api_key.strip()
 
-    def resolve_vanity_url(self, vanity_name: str) -> str | None:
-        query = urlencode({"vanityurl": vanity_name, "key": "DUMMY"})
+    def resolve_vanity_url(self, vanity_name: str) -> VanityResolution:
+        if not self._web_api_key:
+            return VanityResolution(
+                VanityResolutionStatus.API_KEY_MISSING,
+                None,
+                "A Steam Web API key is required to resolve the vanity URL "
+                f"'{vanity_name}'. Set STEAM_WEB_API_KEY or use a numeric SteamID64.",
+            )
+
+        query = urlencode(
+            {
+                "key": self._web_api_key,
+                "vanityurl": vanity_name,
+                "url_type": 1,
+            }
+        )
         url = (
             "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/"
             f"?{query}"
@@ -121,42 +158,74 @@ class SteamClient:
         try:
             payload = self._http_client.get_json(url)
         except Exception:
-            return None
-        response = payload.get("response", {}) if isinstance(payload, dict) else {}
-        if response.get("success") == 1:
-            return str(response["steamid"])
-        return None
+            return VanityResolution(
+                VanityResolutionStatus.REQUEST_FAILED,
+                None,
+                f"The Steam vanity-resolution request failed for '{vanity_name}'.",
+            )
+
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("response"), dict
+        ):
+            return VanityResolution(
+                VanityResolutionStatus.INVALID_RESPONSE,
+                None,
+                f"Steam returned an invalid vanity response for '{vanity_name}'.",
+            )
+
+        response = payload["response"]
+        if response.get("success") != 1:
+            detail = response.get("message")
+            suffix = f" Steam says: {detail}" if isinstance(detail, str) else ""
+            return VanityResolution(
+                VanityResolutionStatus.NOT_FOUND,
+                None,
+                f"Steam could not find the vanity profile '{vanity_name}'.{suffix}",
+            )
+
+        steam_id = response.get("steamid")
+        if not isinstance(steam_id, str) or not re.fullmatch(r"\d+", steam_id):
+            return VanityResolution(
+                VanityResolutionStatus.INVALID_RESPONSE,
+                None,
+                f"Steam returned an invalid SteamID for '{vanity_name}'.",
+            )
+        return VanityResolution(
+            VanityResolutionStatus.RESOLVED,
+            steam_id,
+            f"Resolved vanity profile '{vanity_name}' to SteamID64 {steam_id}.",
+        )
 
     def get_wishlist(self, raw_identifier: str) -> WishlistResult:
         identifier = normalize_steam_identifier(raw_identifier)
         warnings: list[str] = []
-        lookup_identifier = identifier
+        lookup_identifier: str | None = identifier
 
         if not re.fullmatch(r"\d+", identifier):
-            resolved = self.resolve_vanity_url(identifier)
-            if resolved:
-                lookup_identifier = resolved
+            resolution = self.resolve_vanity_url(identifier)
+            if resolution.resolved:
+                lookup_identifier = resolution.steam_id
             else:
-                warnings.append(
-                    f"Could not resolve vanity URL '{identifier}' to a numeric Steam ID."
-                )
+                lookup_identifier = None
+                warnings.append(resolution.message)
 
-        api_url = (
-            "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
-            f"?{urlencode({'steamid': lookup_identifier})}"
-        )
-        try:
-            payload = self._http_client.get_json(api_url)
-            if isinstance(payload, dict) and "response" in payload:
-                raw_items = payload["response"].get("items", [])
-                items = tuple(
-                    WishlistItem(str(item["appid"]))
-                    for item in raw_items
-                    if item.get("appid") is not None
-                )
-                return WishlistResult(items, "Steam Web API", tuple(warnings))
-        except Exception as exc:
-            warnings.append(f"Steam Web API wishlist request failed: {exc}")
+        if lookup_identifier is not None:
+            api_url = (
+                "https://api.steampowered.com/IWishlistService/GetWishlist/v1/"
+                f"?{urlencode({'steamid': lookup_identifier})}"
+            )
+            try:
+                payload = self._http_client.get_json(api_url)
+                if isinstance(payload, dict) and "response" in payload:
+                    raw_items = payload["response"].get("items", [])
+                    items = tuple(
+                        WishlistItem(str(item["appid"]))
+                        for item in raw_items
+                        if item.get("appid") is not None
+                    )
+                    return WishlistResult(items, "Steam Web API", tuple(warnings))
+            except Exception as exc:
+                warnings.append(f"Steam Web API wishlist request failed: {exc}")
 
         local_items = self._load_local_wishlist()
         if local_items:
