@@ -15,6 +15,7 @@ import secrets
 import threading
 import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -242,7 +243,16 @@ class JobManager:
         warnings = []
         if any(rate.cache_status == "stale cache" for rate in rates.values()):
             warnings.append("Exchange-rate refresh failed. Using stale cached rates; check their publication dates below.")
-        job.update(state="running", rates=[asdict(rate) for rate in rates.values()], warnings=warnings)
+        rate_rows = []
+        checked_at = datetime.now(timezone.utc).isoformat()
+        for rate in rates.values():
+            row = asdict(rate)
+            cached_rate = cache.get_exchange_rate(rate.currency)
+            row["checked_at_utc"] = checked_at
+            row["retrieved_at_utc"] = (datetime.fromtimestamp(cached_rate.fetched_at, timezone.utc).isoformat()
+                                       if cached_rate else None)
+            rate_rows.append(row)
+        job.update(state="running", rates=rate_rows, warnings=warnings)
         runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(wishlist, {key: rate.rate_to_pln for key, rate in rates.items()}):

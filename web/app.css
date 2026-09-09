@@ -16,3 +16,5 @@
 .sale-note{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:12px;white-space:normal;color:var(--muted)}.sale-note small{font-size:12px}.sale-badge{background:#c3ef7420;color:var(--green);padding:1px 5px;border-radius:3px}.sale-note s{font-size:12px}.foreign>span{display:block}#profile-attribution{overflow-wrap:anywhere;max-width:100%;font-size:12px}
 
 .regional-discount-badge{display:inline-block;margin-top:8px;padding:4px 8px;border-radius:4px;background:#392d20;color:#ffd19c;font-size:12px;line-height:1.4;font-weight:600}.difference-percent{display:block;margin-top:4px;font-size:14px;font-weight:600}.filters{flex-wrap:wrap}
+
+.export-options{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:20px}.export-options button{border:1px solid var(--green);border-radius:6px;background:transparent;color:var(--green);padding:10px 16px;cursor:pointer}.export-options button:disabled{opacity:.4;cursor:default}.export-options label,.export-options small{color:var(--muted);font-size:13px}

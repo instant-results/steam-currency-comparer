@@ -121,3 +121,26 @@ test("percentage uses cheapest converted final price and handles a zero referenc
   assert.equal(difference.textContent, "−10.00 zł");
   assert.equal(difference.children[0].textContent, "−50.0%");
 });
+
+
+test("CSV includes hidden results and rate provenance, with owner opt-in", () => {
+  const {run} = setup();
+  run(`items = ${JSON.stringify([game("1",'Quoted "game", name'),skipped("2","app_unavailable")])}; currentProfile = "private-profile"; currentRates = [{currency:"USD",rate_to_pln:4,effective_date:"2026-09-09",retrieved_at_utc:"2026-09-10T09:00:00Z",checked_at_utc:"2026-09-10T10:00:00Z",source:"NBP",cache_status:"cache"}];`);
+  const csv = run('buildCsv(false, "2026-09-10T11:00:00Z")');
+  assert.ok(csv.startsWith("\uFEFF"));
+  assert.match(csv, /Quoted ""game"", name/);
+  assert.match(csv, /app_unavailable/);
+  assert.match(csv, /2026-09-10T09:00:00Z/);
+  assert.match(csv, /2026-09-10T10:00:00Z/);
+  assert.ok(!csv.includes("wishlist_profile"));
+  assert.ok(!csv.includes("private-profile"));
+  assert.match(run('buildCsv(true)'), /private-profile/);
+  assert.equal(csv.split("\r\n").length, 5);
+});
+
+test("CSV protects spreadsheet formulas without converting numeric differences to text", () => {
+  const {run} = setup();
+  assert.equal(run('csvCell("=HYPERLINK(1)")'), '\"\'=HYPERLINK(1)\"');
+  assert.equal(run('csvCell(-20)'), '\"-20\"');
+  assert.equal(run('csvCell(null)'), '\"\"');
+});

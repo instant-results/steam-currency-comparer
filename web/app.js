@@ -4,6 +4,7 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
 function showProfile(profile) {
+  currentProfile = profile || "";
   $("profile-attribution").textContent = profile ? `Wishlist: ${profile}` : "Saved comparison · profile was not recorded by the earlier app version";
   $("profile-attribution").hidden = false;
 }
@@ -44,8 +45,10 @@ function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job",
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; document.querySelectorAll('[name="region"]').forEach(el => el.disabled = value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
+let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 function render() {
+  $("export-csv").disabled = !items.length;
   const comparable = items.filter(item => item.comparison);
   $("count-total").textContent = items.length || (running || demoMode ? "0" : "—");
   $("count-fair").textContent = comparable.filter(item => item.comparison.is_fair).length;
@@ -104,7 +107,7 @@ function render() {
   $("order-note").textContent = sort === "arrival" ? "New games append at the end" : "Sorted results · new games follow this sort";
   document.querySelectorAll('.sort').forEach(button => { const th = button.closest('th'); th.removeAttribute('aria-sort'); if(button.dataset.sort === sort) th.setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending'); });
 }
-function showRates(rates) { const target = $("rates"); target.replaceChildren(); for(const rate of rates) { const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`); label.append(node("small", `${rate.effective_date || "Date unknown"} · ${rate.cache_status}`)); row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`)); target.append(row); } if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder")); }
+function showRates(rates) { currentRates = rates; const target = $("rates"); target.replaceChildren(); for(const rate of rates) { const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`); label.append(node("small", `${rate.effective_date || "Date unknown"} · ${rate.cache_status}`)); row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`)); target.append(row); } if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder")); }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = false; items = []; lastRequest = body; showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
@@ -124,6 +127,40 @@ async function poll() {
     if(complete) { setBusy(false); if(!items.length) { $("empty").querySelector("h3").textContent = data.state === "cancelled" ? "Comparison cancelled." : "No results this time."; $("empty").querySelector("p").textContent = "Check your profile and make sure your wishlist is public, then try again."; } } else timer = setTimeout(poll, 1200);
   } catch(error) { if(error.status === 404) { saveJob(null); setBusy(false); status("COMPARISON EXPIRED"); notice(error.message, true); return; } status("CONNECTION INTERRUPTED"); notice("Connection interrupted. Reconnecting to your comparison…", true); timer = setTimeout(poll, 4000); }
 }
+// Quote every field and neutralize spreadsheet formulas in untrusted text.
+function csvCell(value) {
+  let text = value == null ? "" : String(value);
+  if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
+  return '"' + text.replaceAll('"', '""') + '"';
+}
+function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
+  const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_pln", "poland_difference_pln", "poland_difference_percent", "different_regional_discounts", "price_provenance"];
+  if (includeOwner) headers.push("wishlist_profile");
+  const rows = [headers];
+  for (const item of items) {
+    const c = item.comparison;
+    const prices = c ? [{...c.home_price, region:"pl", currency:"PLN", original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    for (const price of prices) {
+      const rate = currentRates.find(value => value.currency === price.currency) || {};
+      const identity = price.currency === "PLN";
+      const reference = c ? Math.min(...c.alternatives.map(value => value.amount_in_home)) : null;
+      const row = [exportedAt, demoMode, item.app_id, item.name, c ? "compared" : item.skipped?.category,
+        price.region, price.currency, price.original_amount, price.base_amount, price.discount_percent,
+        identity ? 1 : rate.rate_to_pln, rate.effective_date, rate.retrieved_at_utc, rate.checked_at_utc,
+        identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
+        price.amount_in_home, c ? c.home_price.amount - reference : null, c ? percentageDifference(c) : null,
+        c ? hasDifferentDiscounts(c) : null, item.source_summary];
+      if (includeOwner) row.push(currentProfile);
+      rows.push(row);
+    }
+  }
+  return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+$("export-csv").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([buildCsv($("export-owner").checked)], {type:"text/csv;charset=utf-8"}));
+  const link = node("a"); link.href = url; link.download = "steam-price-comparison.csv";
+  link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length) return notice("Choose at least one comparison storefront.", true); start({identifier: $("identifier").value.trim(), regions}); });
 $("cancel").addEventListener("click", async () => { if(!job) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${job.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${job.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest); });
@@ -133,7 +170,7 @@ $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction
 document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
 document.querySelectorAll('.sort').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
 $("demo").addEventListener("click", () => {
-  clearTimeout(timer); job = null; saveJob(null); lastRequest = null; $("profile-attribution").textContent = "Illustrative wishlist · not linked to a Steam profile"; $("profile-attribution").hidden = false; demoMode = true; setBusy(false); $("retry").hidden = true; $("search").value = ""; status("EXAMPLE · NOT LIVE"); $("results-title").textContent = "A wishlist, in perspective";
+  clearTimeout(timer); job = null; saveJob(null); lastRequest = null; currentProfile = ""; $("profile-attribution").textContent = "Illustrative wishlist · not linked to a Steam profile"; $("profile-attribution").hidden = false; demoMode = true; setBusy(false); $("retry").hidden = true; $("search").value = ""; status("EXAMPLE · NOT LIVE"); $("results-title").textContent = "A wishlist, in perspective";
   notice("Illustrative example: these prices and exchange rates are invented to show how the comparison works. Run your wishlist for actual data.");
   const examples = [["413150", "Stardew Valley", 53.99, 14.99, 13.99], ["1145360", "Hades", 114.99, 24.99, 24.50], ["1091500", "Cyberpunk 2077", 199.99, 59.99, 59.99], ["640820", "Pathfinder: Kingmaker", 89.99, 19.99, 19.99], ["1245620", "ELDEN RING", 249, 59.99, 59.99], ["367520", "Hollow Knight", 67.99, 14.99, 14.79]];
   items = examples.map(([app_id, name, amount, usd, eur]) => { const alternatives = [{region:"us",currency:"USD",original_amount:usd,rate_to_home:4,amount_in_home:usd*4},{region:"de",currency:"EUR",original_amount:eur,rate_to_home:4.3,amount_in_home:eur*4.3}]; return {app_id, name, source_summary:"Illustrative prices",comparison:{home_price:{amount,currency:"PLN"},alternatives,is_fair:alternatives.every(p => amount <= p.amount_in_home)}}; });
