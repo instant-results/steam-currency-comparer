@@ -80,3 +80,44 @@ test("sale labels distinguish discounted, regular, and unknown prices", () => {
   assert.equal(run('saleNote({base_amount:10,discount_percent:0}, "USD").children[0].textContent'), "Base price · no sale");
   assert.equal(run('saleNote({}, "USD").children[0].textContent'), "Sale details unavailable");
 });
+
+
+test("discount distinctions use known values and include sale versus no sale", () => {
+  const {run} = setup();
+  const check = values => run(`hasDifferentDiscounts({home_price:{discount_percent:${values[0]}},alternatives:[${values.slice(1).map(v => `{discount_percent:${v}}`).join(",")}]})`);
+  assert.equal(check([0,50]), true);
+  assert.equal(check([50,50]), false);
+  assert.equal(check([null,0]), false);
+  assert.equal(check([null,25,50]), true);
+  assert.equal(run("hasDifferentDiscounts(null)"), false);
+});
+
+test("discount filter and badge distinguish mismatches and preserve search", () => {
+  const {get,run} = setup();
+  const mismatch = game("1", "Alpha");
+  mismatch.comparison.home_price.discount_percent = 0;
+  mismatch.comparison.alternatives[0].discount_percent = 50;
+  run(`items = ${JSON.stringify([mismatch,game("2","Beta"),skipped("3","temporary_failure")])}; filter = "discounts"; render();`);
+  assert.deepEqual(get("rows").children.map(row => row.dataset.appId), ["1"]);
+  const badge = get("rows").children[0].children[0].children.at(-1);
+  assert.equal(badge.textContent, "Different regional discounts");
+  assert.match(badge.title, /PL: 0% off.*US: 50% off/);
+  get("search").value = "Beta"; run("render()");
+  assert.equal(get("rows").children.length, 0);
+});
+
+test("percentage uses cheapest converted final price and handles a zero reference", () => {
+  const {get,run} = setup();
+  const label = (home, prices) => run(`percentageLabel(percentageDifference({home_price:{amount:${home}},alternatives:${JSON.stringify(prices.map(amount_in_home => ({amount_in_home})))}}))`);
+  assert.equal(label(125,[150,100]), "+25.0%");
+  assert.equal(label(80,[100,150]), "−20.0%");
+  assert.equal(label(100,[100]), "0.0%");
+  assert.equal(label(0,[100]), "−100.0%");
+  assert.equal(label(10,[0]), "Percentage unavailable");
+  assert.equal(label(0,[0]), "Percentage unavailable");
+  assert.equal(label(99.999,[100]), "0.0%");
+  run(`items = ${JSON.stringify([game("1","Alpha")])}; render();`);
+  const difference = get("rows").children[0].children[3];
+  assert.equal(difference.textContent, "−10.00 zł");
+  assert.equal(difference.children[0].textContent, "−50.0%");
+});

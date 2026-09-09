@@ -359,3 +359,21 @@ python -m unittest discover -v
 The user requested coherent Git checkpoints for the completed work. Future agents
 should remind the user after meaningful uncommitted changes to ask whether those
 changes should be versioned. This preference is also recorded in AGENTS.md.
+
+## Regional discount research (2026-09-10)
+
+Community reports describe Sekiro's April 2022 sale excluding parts of Asia while
+Western regions received 50% off. This is evidence against assuming identical
+regional offers, not proof of per-currency discount differences on one identical
+package. README records the sources and limits. Website methodology now explains
+independent regional checks. No retrieval logic changed: discount metadata comes
+with each price response, so assuming a common percentage would not reduce
+cold-cache requests. Inference from old regional base prices remains disabled.
+
+
+## Discount distinction and percentage differences
+
+- Added a distinct product badge and Different discounts filter for unequal known regional discounts, including sale versus no sale; unknown values do not imply zero.
+- Badge tooltip lists regional observations and notes that retrieval times can differ.
+- Difference cells now include a one-decimal percentage against the cheapest selected foreign final price in PLN; a zero reference is explicitly unavailable.
+- These are frontend calculations using existing results, with no additional requests.
