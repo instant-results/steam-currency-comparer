@@ -128,6 +128,10 @@ def main(arguments: Sequence[str] | None = None) -> int:
     for warning in wishlist_result.warnings:
         presenter.warning(warning)
 
+    if wishlist_result.failure is not None:
+        presenter.error("Wishlist retrieval failed; this does not establish that the wishlist is empty or private.")
+        return 1
+
     wishlist = deduplicate_wishlist(wishlist_result.items)
     if not wishlist:
         presenter.error("No games to process. The wishlist may be empty or private.")

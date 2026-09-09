@@ -5,7 +5,9 @@ Steam regions after currency conversion.
 
 ## Run the command-line prototype
 
-Python 3.10 or newer is required. Numeric SteamID64 values and `/profiles/...`
+Python 3.10 or newer is required. Install dependencies once with
+`python -m pip install -r requirements.txt`; HTTPS uses the native certificate store.
+ Numeric SteamID64 values and `/profiles/...`
 URLs work without an API key:
 
 ```powershell

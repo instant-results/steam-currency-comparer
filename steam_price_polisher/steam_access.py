@@ -17,6 +17,7 @@ from .models import (
     SkipCategory,
     StorePrice,
     WishlistItem,
+    WishlistFailure,
     WishlistResult,
 )
 
@@ -200,6 +201,7 @@ class SteamClient:
         identifier = normalize_steam_identifier(raw_identifier)
         warnings: list[str] = []
         lookup_identifier: str | None = identifier
+        failure = None
 
         if not re.fullmatch(r"\d+", identifier):
             resolution = self.resolve_vanity_url(identifier)
@@ -208,6 +210,7 @@ class SteamClient:
             else:
                 lookup_identifier = None
                 warnings.append(resolution.message)
+                failure = WishlistFailure.VANITY
 
         if lookup_identifier is not None:
             api_url = (
@@ -216,23 +219,32 @@ class SteamClient:
             )
             try:
                 payload = self._http_client.get_json(api_url)
-                if isinstance(payload, dict) and "response" in payload:
-                    raw_items = payload["response"].get("items", [])
-                    items = tuple(
-                        WishlistItem(str(item["appid"]))
-                        for item in raw_items
-                        if item.get("appid") is not None
-                    )
-                    return WishlistResult(items, "Steam Web API", tuple(warnings))
-            except Exception as exc:
-                warnings.append(f"Steam Web API wishlist request failed: {exc}")
+                if not isinstance(payload, dict) or not isinstance(payload.get("response"), dict):
+                    raise ValueError("Invalid wishlist response")
+                raw_items = payload["response"].get("items", [])
+                if not isinstance(raw_items, list) or any(
+                    not isinstance(item, dict) or isinstance(item.get("appid"), bool)
+                    or not re.fullmatch(r"[0-9]{1,12}", str(item.get("appid", "")))
+                    for item in raw_items
+                ):
+                    raise ValueError("Invalid wishlist items")
+                items = tuple(WishlistItem(str(item["appid"])) for item in raw_items)
+                return WishlistResult(items, "Steam Web API", tuple(warnings))
+            except HttpClientError as exc:
+                failure = (WishlistFailure.TLS if exc.tls_error else
+                           WishlistFailure.INVALID_RESPONSE if exc.invalid_response else WishlistFailure.REQUEST)
+                warnings.append("Steam Web API wishlist retrieval failed.")
+            except (ValueError, TypeError):
+                failure = WishlistFailure.INVALID_RESPONSE
+                warnings.append("Steam returned an invalid wishlist response.")
 
         local_items = self._load_local_wishlist()
         if local_items:
             return WishlistResult(local_items, "wishlist.txt", tuple(warnings))
 
-        legacy_items = self._get_legacy_wishlist(identifier, warnings)
-        return WishlistResult(legacy_items, "legacy Steam store endpoint", tuple(warnings))
+        legacy_items, legacy_failure = self._get_legacy_wishlist(lookup_identifier or identifier, warnings)
+        return WishlistResult(legacy_items, "legacy Steam store endpoint", tuple(warnings),
+                              (failure or legacy_failure) if not legacy_items else legacy_failure)
 
     def _load_local_wishlist(self) -> tuple[WishlistItem, ...]:
         if self._wishlist_file is None or not self._wishlist_file.exists():
@@ -255,7 +267,7 @@ class SteamClient:
         self,
         identifier: str,
         warnings: list[str],
-    ) -> tuple[WishlistItem, ...]:
+    ) -> tuple[tuple[WishlistItem, ...], WishlistFailure | None]:
         path_type = "profiles" if re.fullmatch(r"\d+", identifier) else "id"
         items: list[WishlistItem] = []
         page = 0
@@ -266,12 +278,19 @@ class SteamClient:
             )
             try:
                 payload = self._http_client.get_json(url)
-            except Exception as exc:
-                warnings.append(f"Legacy Steam wishlist request failed: {exc}")
+            except HttpClientError as exc:
+                warnings.append("Legacy Steam wishlist retrieval failed.")
+                failure = WishlistFailure.TLS if exc.tls_error else WishlistFailure.REQUEST
+                return (), failure
+            if not isinstance(payload, dict) or any(
+                not re.fullmatch(r"[0-9]{1,12}", str(app_id)) or not isinstance(details, dict)
+                or ("name" in details and not isinstance(details["name"], str))
+                for app_id, details in payload.items()
+            ):
+                warnings.append("Steam returned an invalid legacy wishlist response.")
+                return (), WishlistFailure.INVALID_RESPONSE
+            if not payload:
                 break
-            if not isinstance(payload, dict) or not payload:
-                break
-
             page_items = tuple(
                 WishlistItem(str(app_id), details.get("name", f"App {app_id}"))
                 for app_id, details in payload.items()
@@ -280,8 +299,11 @@ class SteamClient:
             if len(page_items) < 50:
                 break
             page += 1
+            if page >= 100:
+                warnings.append("Steam wishlist pagination exceeded the supported limit.")
+                return (), WishlistFailure.INVALID_RESPONSE
             self._sleep(0.5)
-        return tuple(items)
+        return tuple(items), None
 
     def get_regional_price(
         self,

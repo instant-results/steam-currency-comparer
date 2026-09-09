@@ -14,11 +14,19 @@ class WishlistItem:
     name: str | None = None
 
 
+class WishlistFailure(str, Enum):
+    TLS = "tls"
+    REQUEST = "request"
+    INVALID_RESPONSE = "invalid_response"
+    VANITY = "vanity"
+
+
 @dataclass(frozen=True)
 class WishlistResult:
     items: tuple[WishlistItem, ...]
     source: str
     warnings: tuple[str, ...] = ()
+    failure: WishlistFailure | None = None
 
 
 @dataclass(frozen=True)

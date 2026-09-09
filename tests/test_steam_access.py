@@ -2,7 +2,7 @@ import unittest
 from urllib.parse import parse_qs, urlparse
 
 from steam_price_polisher.http_client import HttpClientError
-from steam_price_polisher.models import PriceStatus
+from steam_price_polisher.models import PriceStatus, WishlistFailure
 from steam_price_polisher.steam_access import (
     SteamClient,
     SteamProtocolError,
@@ -137,6 +137,26 @@ class SteamAccessTests(unittest.TestCase):
 
         self.assertEqual(result.status, VanityResolutionStatus.REQUEST_FAILED)
         self.assertNotIn("secret-key", result.message)
+
+    def test_tls_failure_is_not_an_empty_wishlist(self):
+        http = QueueHttpClient([HttpClientError("private details", tls_error=True)] * 2)
+        result = SteamClient(http).get_wishlist("https://steamcommunity.com/profiles/76561198000000000/")
+        self.assertEqual(result.failure, WishlistFailure.TLS)
+        self.assertNotIn("private details", str(result))
+
+    def test_explicit_empty_wishlist_is_not_a_failure(self):
+        result = SteamClient(QueueHttpClient([{"response": {"items": []}}])).get_wishlist("76561198000000000")
+        self.assertEqual(result.items, ())
+        self.assertIsNone(result.failure)
+
+    def test_malformed_api_is_not_reported_as_empty(self):
+        result = SteamClient(QueueHttpClient([{"response": {"items": "broken"}}, {}])).get_wishlist("76561198000000000")
+        self.assertEqual(result.failure, WishlistFailure.INVALID_RESPONSE)
+
+    def test_valid_fallback_recovers_from_api_failure(self):
+        result = SteamClient(QueueHttpClient([HttpClientError("offline"), {"10": {"name": "Game"}}])).get_wishlist("76561198000000000")
+        self.assertIsNone(result.failure)
+        self.assertEqual(result.items[0].app_id, "10")
 
     def test_reads_regional_price_and_name(self):
         http = QueueHttpClient(

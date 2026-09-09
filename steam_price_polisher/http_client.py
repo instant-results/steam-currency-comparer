@@ -5,6 +5,9 @@ from __future__ import annotations
 import http.cookiejar
 import json
 import socket
+import ssl
+
+import truststore
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -27,19 +30,22 @@ class HttpClientError(RuntimeError):
         retry_after: float | None = None,
         transient: bool = False,
         invalid_response: bool = False,
+        tls_error: bool = False,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.retry_after = retry_after
         self.transient = transient
         self.invalid_response = invalid_response
+        self.tls_error = tls_error
 
 
 class UrllibJsonHttpClient:
     def __init__(self, cookie_string: str = "", timeout: float = 15.0) -> None:
         cookie_jar = http.cookiejar.CookieJar()
         self._opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(cookie_jar)
+            urllib.request.HTTPCookieProcessor(cookie_jar),
+            urllib.request.HTTPSHandler(context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)),
         )
         self._cookie_string = cookie_string
         self._timeout = timeout
@@ -72,7 +78,12 @@ class UrllibJsonHttpClient:
                 retry_after=retry_after,
                 transient=transient,
             ) from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        except (urllib.error.URLError, TimeoutError, socket.timeout, ssl.SSLError) as exc:
+            if isinstance(getattr(exc, "reason", exc), ssl.SSLError):
+                raise HttpClientError(
+                    "The server could not verify the secure connection to the upstream service.",
+                    tls_error=True,
+                ) from exc
             raise HttpClientError(
                 f"Temporary network failure for {url}: {exc}",
                 transient=True,
