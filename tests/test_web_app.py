@@ -1,0 +1,164 @@
+import io
+import json
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+from unittest.mock import patch, Mock
+
+from steam_price_polisher.configuration import ComparisonConfig
+from steam_price_polisher.models import ExchangeRate, WishlistItem, WishlistResult, StorePrice, RegionalPriceResult
+from steam_price_polisher.web_app import WebApplication, JobManager, validate_request, InputError, BusyError
+
+PROFILE = "76561198000000000"
+
+
+class WebAppTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.manager = JobManager(self.directory.name, start_worker=False)
+        self.app = WebApplication(self.manager)
+
+    def request(self, path, method="GET", body=None, token="", **headers):
+        raw = json.dumps(body).encode() if body is not None else b""
+        env = {"REQUEST_METHOD": method, "PATH_INFO": path, "HTTP_HOST": "127.0.0.1:8765",
+               "HTTP_ORIGIN": "http://127.0.0.1:8765", "CONTENT_TYPE": "application/json",
+               "CONTENT_LENGTH": str(len(raw)), "wsgi.input": io.BytesIO(raw),
+               "HTTP_AUTHORIZATION": "Bearer " + token, "REMOTE_ADDR": "127.0.0.1", **headers}
+        result = {}
+        def respond(status, response_headers):
+            result["status"] = int(status.split()[0]); result["headers"] = dict(response_headers)
+        result["body"] = b"".join(self.app(env, respond))
+        if result["headers"]["Content-Type"].startswith("application/json"):
+            result["json"] = json.loads(result["body"])
+        return result
+
+    def submit(self):
+        response = self.request("/api/jobs", "POST", {"identifier": PROFILE, "regions": ["us", "de"]})
+        self.assertEqual(response["status"], 202)
+        return response["json"]
+
+    def test_assets_are_allowlisted_and_security_headers_apply(self):
+        for asset in ["/", "/app.js", "/app.css", "/favicon.svg"]:
+            with self.subTest(asset=asset):
+                response = self.request(asset)
+                self.assertEqual(response["status"], 200)
+                self.assertIn("frame-ancestors 'none'", response["headers"]["Content-Security-Policy"])
+        for path in ["/.env", "/PROJECT_CONTEXT.md", "/../steam_price_polisher/cache.py", "/.steam-price-polisher/cache.sqlite3"]:
+            self.assertEqual(self.request(path)["status"], 404)
+        self.assertEqual(self.request("/", HTTP_HOST="evil.test")["status"], 400)
+
+    def test_job_requires_capability_token_and_can_be_cancelled(self):
+        job = self.submit(); path = "/api/jobs/" + job["id"]
+        self.assertEqual(self.request(path)["status"], 404)
+        self.assertEqual(self.request(path, token="incorrect")["status"], 404)
+        self.assertEqual(self.request(path, token="żółć")["status"], 404)
+        response = self.request(path, token=job["token"])
+        self.assertEqual(response["json"]["state"], "queued")
+        self.assertEqual(response["json"]["profile"], PROFILE)
+        self.assertEqual(response["json"]["regions"], ["us", "de"])
+        self.assertNotIn(job["token"], response["body"].decode())
+        self.assertEqual(self.request(path + "/cancel", "POST", {}, job["token"])["json"]["state"], "cancelling")
+        self.manager.execute(self.manager.jobs[job["id"]])
+        self.assertEqual(self.request(path, token=job["token"])["json"]["state"], "cancelled")
+
+    def test_cross_origin_and_invalid_bodies_do_not_create_jobs(self):
+        for overrides in [{"HTTP_ORIGIN": "https://evil.test"}, {"HTTP_ORIGIN": ""}, {"CONTENT_TYPE": "text/plain"}, {"CONTENT_LENGTH": "99999"}]:
+            self.assertIn(self.request("/api/jobs", "POST", {"identifier": PROFILE, "regions": ["de"]}, **overrides)["status"], {400, 403})
+        self.assertEqual(len(self.manager.jobs), 0)
+
+    def test_validates_profile_hosts_regions_and_disallows_credentials(self):
+        for identifier in [PROFILE, "https://steamcommunity.com/profiles/" + PROFILE, "https://steamcommunity.com/id/example", "https://store.steampowered.com/wishlist/profiles/" + PROFILE]:
+            validate_request({"identifier": identifier, "regions": ["de"]})
+        for identifier in ["https://evil.test/steamcommunity.com/id/example", "http://localhost/", "file:///etc/passwd", "123", "https://steamcommunity.com/id/a?key=secret", "https://steamcommunity.com:443/id/example", "https://steamcommunity.com/id/../"]:
+            with self.subTest(identifier=identifier), self.assertRaises(InputError):
+                validate_request({"identifier": identifier, "regions": ["de"]})
+        for body in [{"identifier": PROFILE, "regions": []}, {"identifier": PROFILE, "regions": ["us", "us"]}, {"identifier": PROFILE, "regions": ["de"], "cookie": "secret"}]:
+            self.assertEqual(self.request("/api/jobs", "POST", body)["status"], 400)
+
+    def test_duplicate_and_excess_jobs_are_bounded(self):
+        self.submit()
+        with self.assertRaises(BusyError):
+            self.manager.submit(PROFILE, ComparisonConfig(), "127.0.0.1")
+        self.manager.max_jobs = 1
+        with self.assertRaises(BusyError):
+            self.manager.submit(PROFILE, ComparisonConfig(), "other")
+
+    def test_expired_job_is_inaccessible(self):
+        job = self.submit(); stored = self.manager.jobs[job["id"]]
+        stored.update(state="complete"); stored.updated -= 3601
+        self.assertEqual(self.request("/api/jobs/" + job["id"], token=job["token"])["status"], 404)
+
+    def test_worker_failure_is_redacted(self):
+        job = self.submit(); stored = self.manager.jobs[job["id"]]
+        self.manager.runner = Mock(side_effect=RuntimeError("secret-key local-path"))
+        self.manager.execute(stored)
+        self.assertEqual(stored.snapshot()["state"], "failed")
+        self.assertNotIn("secret-key", str(stored.snapshot()))
+        self.assertEqual(stored.identifier, "")
+
+    def test_analysis_integrates_prices_rates_and_cache_resume(self):
+        job = self.submit(); stored = self.manager.jobs[job["id"]]
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10", "Test Game"),), "mock")
+            nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, 40 if region == "pl" else 12, 40 if region == "pl" else 12, 0), "Test Game")
+            self.manager.execute(stored)
+            result = stored.snapshot()
+            self.assertEqual(result["state"], "complete")
+            self.assertTrue(result["items"][0]["comparison"]["is_fair"])
+            self.assertEqual(result["rates"][0]["effective_date"], "2026-09-08")
+            self.assertEqual(result["items"][0]["source_summary"], "live 3")
+            self.assertNotIn("wishlist_file", steam.call_args.kwargs)
+            second = self.manager.submit(PROFILE, ComparisonConfig(), "other")
+            self.manager.execute(second)
+            self.assertEqual(second.snapshot()["items"][0]["source_summary"], "cache 3")
+            self.assertEqual(steam.return_value.get_regional_price.call_count, 3)
+
+    def test_partial_results_hide_upstream_error_details(self):
+        from steam_price_polisher.steam_access import SteamTemporaryError
+        job = self.submit(); stored = self.manager.jobs[job["id"]]
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
+            nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
+            steam.return_value.get_regional_price.side_effect = SteamTemporaryError("secret", app_id="10", region="pl")
+            self.manager.execute(stored)
+        self.assertEqual(stored.snapshot()["state"], "partial")
+        self.assertNotIn("secret", json.dumps(stored.snapshot()))
+
+    def test_tls_error_does_not_blame_profile_privacy(self):
+        from steam_price_polisher.models import WishlistFailure
+        created = self.submit()
+        stored = self.manager.jobs[created["id"]]
+        with patch("steam_price_polisher.web_app.SteamClient") as steam:
+            steam.return_value.get_wishlist.return_value = WishlistResult((), "failed", failure=WishlistFailure.TLS)
+            self.manager.execute(stored)
+        self.assertEqual(stored.snapshot()["state"], "failed")
+        self.assertIn("server connection problem", stored.snapshot()["error"])
+        self.assertNotIn("No public wishlist games", stored.snapshot()["error"])
+
+    def test_755_game_wishlist_passes_size_validation(self):
+        created = self.submit()
+        stored = self.manager.jobs[created["id"]]
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.CachedExchangeRateProvider") as rates, patch("steam_price_polisher.web_app.AnalysisRunner") as runner:
+            steam.return_value.get_wishlist.return_value = WishlistResult(tuple(WishlistItem(str(i + 1)) for i in range(755)), "mock")
+            rates.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08")}
+            runner.return_value.run.return_value = iter(())
+            self.manager.execute(stored)
+        self.assertEqual(stored.snapshot()["total"], 755)
+        self.assertEqual(stored.snapshot()["state"], "complete")
+        runner.return_value.run.assert_called_once()
+
+    def test_background_worker_processes_submitted_job(self):
+        finished = threading.Event()
+        def work(job):
+            job.update(state="complete"); finished.set()
+        manager = JobManager(self.directory.name, runner=work)
+        job = manager.submit(PROFILE, ComparisonConfig(), "test")
+        self.assertTrue(finished.wait(2))
+        self.assertEqual(job.snapshot()["state"], "complete")
+
+
+if __name__ == "__main__":
+    unittest.main()

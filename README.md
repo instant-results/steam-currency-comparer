@@ -3,16 +3,57 @@
 Compare the PLN prices of games on a Steam wishlist with prices from selected
 Steam regions after currency conversion.
 
+## Run the web app
+
+```powershell
+python -m pip install -r requirements.txt
+python .\serve_web.py
+```
+
+Open [Steam Prices Polisher](http://127.0.0.1:8765). Install the requirements once; HTTPS uses the operating system certificate store
+with certificate and hostname verification enabled. Add a numeric SteamID64 or supported Steam profile URL, select
+comparison storefronts, and watch prices arrive. Incoming results append in discovery order. Products with no regional price or
+unavailable apps are hidden by default; use **Show unavailable products** to
+reveal them. Technical failures remain visible. Column headers enable explicit
+sorting, and **Discovery order** restores arrival order. Search, filter, or sort results;
+cancel a run or retry it using completed cached prices. The example mode uses
+clearly labeled illustrative prices and makes no external requests.
+
+The web app supports **public wishlists only**. It ignores Steam cookies and the
+local `wishlist.txt` file. A server-configured API key can resolve vanity URLs.
+Jobs are private and temporary. Refresh reconnects within the same browser tab;
+closing the tab or restarting the server loses job access. Completed regional
+prices remain cached. Up to 1,000 games can be analyzed per wishlist.
+
+For eventual public hosting, see [DEPLOYMENT.md](DEPLOYMENT.md). The WSGI service
+includes bounded background jobs, input checks, same-origin POST protection,
+private result tokens, and a persistent price cache. Deploy it as one Python
+process behind HTTPS; this local version has not been published.
+
 ## Run the command-line prototype
 
-Python 3.10 or newer is required. Install dependencies once with
-`python -m pip install -r requirements.txt`; HTTPS uses the native certificate store.
- Numeric SteamID64 values and `/profiles/...`
+Python 3.10 or newer is required. Numeric SteamID64 values and `/profiles/...`
 URLs work without an API key:
 
 ```powershell
 python .\steam_wishlist_compare.py 76561198000000000
 ```
+
+## Choose comparison storefronts
+
+Poland (PLN) remains the home storefront. Select the United States (`us`, USD),
+Germany (`de`, EUR), or both with `--regions` after the Steam identifier:
+
+```powershell
+python .\steam_wishlist_compare.py 76561198000000000 --regions de
+python .\steam_wishlist_compare.py 76561198000000000 --regions de us
+```
+
+Without `--regions`, the default is `us de`. Selection order is preserved in
+results. Currency is determined by the storefront; arbitrary currency/region
+pairs, duplicate regions, and the home region are rejected before requests or
+cache initialization. The catalog currently supports only these three
+storefronts, with Poland as home. Run with `--help` for command-line help.
 
 ## Custom Steam profile URLs
 
@@ -32,22 +73,6 @@ endpoint. You can always use a numeric SteamID64 instead.
 
 Do not commit a populated `.env` file. The project does not automatically load
 `.env`; `.env.example` only documents the supported variables.
-
-## Choose comparison storefronts
-
-Poland (PLN) remains the home storefront. Select the United States (`us`, USD),
-Germany (`de`, EUR), or both with `--regions` after the Steam identifier:
-
-```powershell
-python .\steam_wishlist_compare.py 76561198000000000 --regions de
-python .\steam_wishlist_compare.py 76561198000000000 --regions de us
-```
-
-Without `--regions`, the default is `us de`. Selection order is preserved in
-results. Currency is determined by the storefront; arbitrary currency/region
-pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The catalog currently supports only these three
-storefronts, with Poland as home. Run with `--help` for command-line help.
 
 ## Rates and comparison methodology
 
@@ -73,10 +98,39 @@ judgment of consumer fairness or a checkout quote:
   in the euro area may differ.
 - Regional prices can be cached or fetched at different times.
 
-The analysis result retains rate records and versioned methodology metadata.
+The analysis result retains rate records and versioned methodology metadata for
+use by the future interactive interface.
 
 ## Tests
 
 ```powershell
 python -m unittest discover -v
 ```
+
+Frontend rendering regression checks (Node.js):
+
+```powershell
+node --test tests/test_web_render.cjs
+```
+
+## Profile attribution and sale prices
+
+The current profile and selected regions are restored with the comparison in the
+same browser tab. Each new result also carries private profile attribution until
+its one-hour expiry. Older sessions created before this feature cannot recover
+an identifier that was never stored; start a new comparison once.
+
+Each storefront retains its own final price, base price, and discount percentage.
+The comparison uses final prices, including sales. The UI shows sale badges and
+original-currency base prices; it never copies one region's discount to another.
+Unknown metadata is labeled explicitly. Old price-cache entries are refreshed
+on the next web comparison to obtain sale details. Web price freshness is one
+hour for regular prices and 15 minutes for known sales; stale fallback is still
+possible and clearly labeled. These are snapshots, not guaranteed checkout prices.
+
+Steam policy sources: [Pricing](https://partner.steamgames.com/doc/store/pricing?l=english)
+and [Discounting](https://partner.steamgames.com/doc/marketing/discounts?l=english).
+Publishers set regional base prices; minimum transaction thresholds can affect
+local availability. Discounts reference established base or introductory launch
+prices. The public documentation does not provide a blanket guarantee that every
+regional offer has the same discount, so this tool checks each independently.
