@@ -20,8 +20,8 @@ class ExchangeRateTests(unittest.TestCase):
     def test_fetches_requested_nbp_rates(self):
         http = FakeHttpClient(
             {
-                "USD": {"rates": [{"mid": 3.75}]},
-                "EUR": {"rates": [{"mid": 4.25}]},
+                "USD": {"code": "USD", "table": "A", "rates": [{"mid": 3.75, "effectiveDate": "2026-09-08"}]},
+                "EUR": {"code": "EUR", "table": "A", "rates": [{"mid": 4.25, "effectiveDate": "2026-09-07"}]},
             }
         )
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -10,17 +11,17 @@ from typing import Sequence
 
 from steam_price_polisher.analysis import (
     AnalysisRunner,
-    RegionConfig,
     deduplicate_wishlist,
 )
 from steam_price_polisher.cache import SQLiteCache
+from steam_price_polisher.configuration import ComparisonConfig
 from steam_price_polisher.exchange_rates import (
     CachedExchangeRateProvider,
     ExchangeRateError,
     NbpExchangeRateProvider,
 )
 from steam_price_polisher.http_client import UrllibJsonHttpClient
-from steam_price_polisher.models import AnalysisResult, GameComparison, SkippedGame
+from steam_price_polisher.models import AnalysisResult, ComparisonMethodology, GameComparison, SkippedGame
 from steam_price_polisher.presentation import ConsolePresenter
 from steam_price_polisher.price_service import CachedPriceService
 from steam_price_polisher.request_policy import (
@@ -31,10 +32,6 @@ from steam_price_polisher.request_policy import (
 from steam_price_polisher.steam_access import SteamClient
 
 
-# Keep the original defaults while making the processing layers independent.
-HOME_REGION = "pl"
-HOME_CURRENCY = "PLN"
-COMPARISON_REGIONS = (("us", "USD"), ("de", "EUR"))
 LIMIT_GAMES: int | None = None
 STEAM_API_DELAY = 1.5
 
@@ -52,8 +49,32 @@ def _read_identifier(arguments: Sequence[str]) -> str:
 
 def main(arguments: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if arguments is None else arguments)
+    parser = argparse.ArgumentParser(
+        description="Compare Steam wishlist prices against Poland (PLN)."
+    )
+    parser.add_argument("identifier", nargs="?", help="SteamID64 or Steam profile URL")
+    parser.add_argument(
+        "--regions", nargs="+", metavar="REGION",
+        help="Storefronts: us (USD), de (EUR). Default: us de. Put the identifier first.",
+    )
+    try:
+        options = parser.parse_args(args)
+    except SystemExit as exc:
+        return int(exc.code)
     presenter = ConsolePresenter()
+    try:
+        config = (
+            ComparisonConfig() if options.regions is None
+            else ComparisonConfig.from_regions(options.regions)
+        )
+    except ValueError as exc:
+        presenter.error(str(exc))
+        return 1
     presenter.banner()
+    presenter.info(
+        "Storefronts: home pl (PLN); compare "
+        + ", ".join(f"{region.region} ({region.currency})" for region in config.alternatives)
+    )
 
     nbp_raw_http_client = UrllibJsonHttpClient()
     steam_raw_http_client = UrllibJsonHttpClient(
@@ -80,16 +101,15 @@ def main(arguments: Sequence[str] | None = None) -> int:
         cache,
     )
     try:
-        rates = rate_provider.get_rates_to_pln(
-            currency for _, currency in COMPARISON_REGIONS
-        )
+        rate_details = rate_provider.get_rate_details(config.currencies)
+        rates = {currency: rate.rate_to_pln for currency, rate in rate_details.items()}
     except ExchangeRateError as exc:
         presenter.error(str(exc))
         return 1
-    presenter.show_exchange_rates(rates, HOME_CURRENCY)
+    presenter.show_exchange_rates(rate_details, config.home.currency)
     presenter.line()
 
-    identifier = _read_identifier(args)
+    identifier = _read_identifier([options.identifier] if options.identifier is not None else [])
     if not identifier:
         presenter.error("Steam ID cannot be empty.")
         return 1
@@ -125,18 +145,16 @@ def main(arguments: Sequence[str] | None = None) -> int:
 
     total_games = len(wishlist)
     presenter.show_wishlist_info(total_games, wishlist_result.source)
-    calls_per_game = 1 + len(COMPARISON_REGIONS)
+    calls_per_game = 1 + len(config.alternatives)
     presenter.show_estimate(total_games * calls_per_game * STEAM_API_DELAY)
 
     price_service = CachedPriceService(steam_client, cache)
     runner = AnalysisRunner(
         price_service,
-        home=RegionConfig(HOME_REGION, HOME_CURRENCY),
-        alternatives=tuple(
-            RegionConfig(region, currency)
-            for region, currency in COMPARISON_REGIONS
-        ),
+        home=config.home,
+        alternatives=config.alternatives,
     )
+
     comparisons: list[GameComparison] = []
     skipped: list[SkippedGame] = []
 
@@ -154,7 +172,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
             progress.source_summary,
         )
 
-    result = AnalysisResult(tuple(comparisons), tuple(skipped))
+    result = AnalysisResult(
+        tuple(comparisons), tuple(skipped), tuple(rate_details.values()), ComparisonMethodology()
+    )
     presenter.show_results(result)
     return 2 if result.is_partial else 0
 

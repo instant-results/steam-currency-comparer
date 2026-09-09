@@ -24,6 +24,7 @@ class ExchangeRateCacheEntry:
     currency: str
     rate: float
     fetched_at: float
+    effective_date: str | None = None
 
 
 class SQLiteCache:
@@ -73,7 +74,10 @@ class SQLiteCache:
                 )
                 """
             )
-            connection.execute("PRAGMA user_version = 2")
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(exchange_rates)")}
+            if "effective_date" not in columns:
+                connection.execute("ALTER TABLE exchange_rates ADD COLUMN effective_date TEXT")
+            connection.execute("PRAGMA user_version = 3")
 
     @staticmethod
     def _create_price_table(connection: sqlite3.Connection) -> None:
@@ -204,7 +208,7 @@ class SQLiteCache:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT rate_to_pln, fetched_at
+                SELECT rate_to_pln, fetched_at, effective_date
                 FROM exchange_rates
                 WHERE currency = ?
                 """,
@@ -216,17 +220,19 @@ class SQLiteCache:
             currency.upper(),
             float(row["rate_to_pln"]),
             float(row["fetched_at"]),
+            row["effective_date"],
         )
 
-    def put_exchange_rate(self, currency: str, rate: float) -> None:
+    def put_exchange_rate(self, currency: str, rate: float, effective_date: str | None = None) -> None:
         with self._connection() as connection:
             connection.execute(
                 """
-                INSERT INTO exchange_rates (currency, rate_to_pln, fetched_at)
-                VALUES (?, ?, ?)
+                INSERT INTO exchange_rates (currency, rate_to_pln, fetched_at, effective_date)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(currency) DO UPDATE SET
                     rate_to_pln = excluded.rate_to_pln,
+                    effective_date = excluded.effective_date,
                     fetched_at = excluded.fetched_at
                 """,
-                (currency.upper(), rate, self._clock()),
+                (currency.upper(), rate, self._clock(), effective_date),
             )

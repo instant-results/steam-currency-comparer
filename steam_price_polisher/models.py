@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from datetime import date
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -140,6 +142,8 @@ class SkipCategory(str, Enum):
 class AnalysisResult:
     comparisons: tuple[GameComparison, ...]
     skipped: tuple[SkippedGame, ...]
+    exchange_rates: tuple[ExchangeRate, ...] = ()
+    methodology: ComparisonMethodology | None = None
 
     @property
     def fair_games(self) -> tuple[GameComparison, ...]:
@@ -165,3 +169,32 @@ class AnalysisResult:
 
     def skipped_count(self, category: SkipCategory) -> int:
         return sum(game.category is category for game in self.skipped)
+
+
+@dataclass(frozen=True)
+class ExchangeRate:
+    currency: str
+    rate_to_pln: float
+    effective_date: str | None
+    source: str = "NBP table A (mid)"
+    cache_status: str = "live"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.rate_to_pln, bool) or not isfinite(self.rate_to_pln) or self.rate_to_pln <= 0:
+            raise ValueError("Exchange rate must be finite and positive")
+        if self.effective_date is not None:
+            if date.fromisoformat(self.effective_date).isoformat() != self.effective_date:
+                raise ValueError("Effective date must use YYYY-MM-DD")
+
+
+@dataclass(frozen=True)
+class ComparisonMethodology:
+    version: str = "1"
+    rule: str = "FAIR means the PLN price is no higher than every selected converted price."
+    limitations: tuple[str, ...] = (
+        "Currency conversion is a price indicator, not a complete judgment of consumer fairness.",
+        "Displayed US and EU prices may have different tax treatment; no VAT or sales-tax adjustment is applied.",
+        "Payment-provider fees and conversion costs are excluded; NBP mid rates are not checkout quotes.",
+        "Germany is the selected EUR storefront proxy; its prices do not represent every euro-area storefront.",
+        "Regional prices may be cached or fetched at different times; publication dates can differ by currency.",
+    )

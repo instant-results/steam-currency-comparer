@@ -7,7 +7,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import TextIO
 
-from .models import AnalysisResult, GameComparison, SkipCategory
+from .models import AnalysisResult, ExchangeRate, GameComparison, SkipCategory
 
 
 GREEN = "\033[92m"
@@ -66,13 +66,17 @@ class ConsolePresenter:
     def error(self, text: str) -> None:
         self.line(self.styled(text, RED))
 
-    def show_exchange_rates(self, rates: Mapping[str, float], home_currency: str) -> None:
-        self.info("Fetching exchange rates from Narodowy Bank Polski...")
+    def show_exchange_rates(self, rates: Mapping[str, ExchangeRate], home_currency: str) -> None:
+        self.info("Exchange rates used (publication date and retrieval source):")
         for currency, rate in rates.items():
             self.line(
                 f"  {currency} to {home_currency} Rate: "
-                f"{self.styled(f'{rate:.4f}', GREEN)} {home_currency}"
+                f"{self.styled(f'{rate.rate_to_pln:.4f}', GREEN)} {home_currency}; "
+                f"{rate.source}; effective {rate.effective_date or 'unknown'} [{rate.cache_status}]"
             )
+
+            if rate.cache_status == "stale cache":
+                self.warning(f"{currency}: refresh failed; using cached rate with its original publication date.")
 
     def show_wishlist_info(self, count: int, source: str) -> None:
         self.line(
@@ -116,6 +120,16 @@ class ConsolePresenter:
         self.line(self.styled(border, CYAN))
         self.line(self.styled("                    RESULTS                    ", BOLD, CYAN))
         self.line(self.styled(border, CYAN))
+
+        if result.methodology is not None:
+            self.line(f"Comparison methodology v{result.methodology.version}")
+            self.line(result.methodology.rule)
+            for limitation in result.methodology.limitations:
+                self.line(f"  - {limitation}")
+        if result.exchange_rates:
+            self.show_exchange_rates(
+                {rate.currency: rate for rate in result.exchange_rates}, "PLN"
+            )
 
         if result.fair_games:
             self._show_group(

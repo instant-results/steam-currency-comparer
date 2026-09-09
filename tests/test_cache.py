@@ -6,7 +6,7 @@ from pathlib import Path
 
 from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.exchange_rates import CachedExchangeRateProvider
-from steam_price_polisher.models import PriceStatus, RegionalPriceResult, StorePrice
+from steam_price_polisher.models import ExchangeRate, PriceStatus, RegionalPriceResult, StorePrice
 from steam_price_polisher.price_service import CachedPriceService
 from steam_price_polisher.steam_access import SteamProtocolError, SteamTemporaryError
 
@@ -37,9 +37,9 @@ class FakeRateProvider:
         self.rates = rates
         self.calls = 0
 
-    def get_rates_to_pln(self, currencies):
+    def get_rate_details(self, currencies):
         self.calls += 1
-        return {currency: self.rates[currency] for currency in currencies}
+        return {currency: ExchangeRate(currency, self.rates[currency], "2026-09-08") for currency in currencies}
 
 
 class CacheTests(unittest.TestCase):

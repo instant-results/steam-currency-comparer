@@ -6,6 +6,7 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from .comparison import compare_game
+from .configuration import ComparisonConfig, RegionConfig
 from .models import (
     GameComparison,
     PriceStatus,
@@ -15,12 +16,6 @@ from .models import (
 )
 from .price_service import CachedPriceService, PriceLookup
 from .steam_access import SteamAccessError
-
-
-@dataclass(frozen=True)
-class RegionConfig:
-    region: str
-    currency: str
 
 
 @dataclass(frozen=True)
@@ -72,11 +67,10 @@ class AnalysisRunner:
         home: RegionConfig,
         alternatives: Sequence[RegionConfig],
     ) -> None:
-        if not alternatives:
-            raise ValueError("At least one comparison region is required")
+        config = ComparisonConfig(home=home, alternatives=tuple(alternatives))
         self._price_service = price_service
-        self._home = home
-        self._alternatives = tuple(alternatives)
+        self._home = config.home
+        self._alternatives = config.alternatives
 
     def run(
         self,
