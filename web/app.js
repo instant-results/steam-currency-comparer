@@ -25,6 +25,21 @@ function saleNote(price, currency) {
   } else { note.append(node("small", "Base price · no sale")); }
   return note;
 }
+function hasDifferentDiscounts(comparison) {
+  if (!comparison) return false;
+  const known = [comparison.home_price, ...comparison.alternatives]
+    .map(price => price.discount_percent).filter(value => Number.isFinite(value));
+  return new Set(known).size > 1;
+}
+function percentageDifference(comparison) {
+  const reference = Math.min(...comparison.alternatives.map(price => price.amount_in_home));
+  return reference > 0 ? (comparison.home_price.amount - reference) / reference * 100 : null;
+}
+function percentageLabel(value) {
+  if (value == null) return "Percentage unavailable";
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${Math.abs(rounded).toFixed(1)}%`;
+}
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; document.querySelectorAll('[name="region"]').forEach(el => el.disabled = value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
@@ -39,7 +54,7 @@ function render() {
   const hiddenUnavailable = item => ["no_regional_price", "app_unavailable"].includes(item.skipped?.category);
   const showUnavailable = $("show-unavailable").checked;
   const hiddenCount = showUnavailable ? 0 : items.filter(hiddenUnavailable).length;
-  const visible = items.filter(item => (showUnavailable || !hiddenUnavailable(item)) && item.name.toLocaleLowerCase().includes(search) && (filter === "all" || (filter === "skipped" ? !item.comparison : item.comparison && item.comparison.is_fair === (filter === "fair"))));
+  const visible = items.filter(item => (showUnavailable || !hiddenUnavailable(item)) && item.name.toLocaleLowerCase().includes(search) && (filter === "all" || (filter === "discounts" ? hasDifferentDiscounts(item.comparison) : filter === "skipped" ? !item.comparison : item.comparison && item.comparison.is_fair === (filter === "fair"))));
   const diff = item => item.comparison ? item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home)) : null;
   if (sort !== "arrival") visible.sort((a, b) => { if(sort === "name") return direction * a.name.localeCompare(b.name); const av = sort === "home" ? a.comparison?.home_price.amount : diff(a); const bv = sort === "home" ? b.comparison?.home_price.amount : diff(b); if(av == null) return bv == null ? 0 : 1; if(bv == null) return -1; return direction * (av - bv); });
   const rows = $("rows");
@@ -58,10 +73,20 @@ function render() {
     tr.dataset.appId = item.app_id;
     const link = node("a", item.name + " ↗", "game-name"); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link, node("div", item.source_summary || "", "game-meta")); tr.append(title);
     if(item.comparison) {
-      const c = item.comparison; const home = node("td", `${money(c.home_price.amount)} zł`, "price"); home.append(saleNote(c.home_price, "PLN")); tr.append(home);
+      const c = item.comparison;
+      if (hasDifferentDiscounts(c)) {
+        const badge = node("span", "Different regional discounts", "regional-discount-badge");
+        const values = [{...c.home_price, region: "pl"}, ...c.alternatives].map(price =>
+          `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
+        badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
+        title.append(badge);
+      }
+      const home = node("td", `${money(c.home_price.amount)} zł`, "price"); home.append(saleNote(c.home_price, "PLN")); tr.append(home);
       const td = node("td"), alternatives = node("div", undefined, "foreign");
       for (const p of c.alternatives) { const price = node("span"); price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " zł")); price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}`; price.append(saleNote(p, p.currency)); alternatives.append(price); } td.append(alternatives); tr.append(td);
-      const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} zł`, "difference" + (c.is_fair ? " fair" : "")); difference.append(node("small", c.is_fair ? "Cheaper / equal" : "Pricier in Poland")); tr.append(difference);
+      const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} zł`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
+      percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : "Compared with the cheapest selected foreign price, converted to PLN.";
+      difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : "Pricier in Poland")); tr.append(difference);
     } else { const td = node("td", item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
@@ -123,10 +148,10 @@ if (document.modelContext?.registerTool) {
     Promise.resolve(document.modelContext.registerTool({
       name: "filter_wishlist_results", title: "Filter wishlist results",
       description: "Filter the current comparison by game name and price category, updating the visible table.",
-      inputSchema: {type: "object", properties: {search: {type: "string", maxLength: 200}, category: {type: "string", enum: ["all", "fair", "expensive", "skipped"]}}, required: ["search", "category"], additionalProperties: false},
+      inputSchema: {type: "object", properties: {search: {type: "string", maxLength: 200}, category: {type: "string", enum: ["all", "fair", "expensive", "discounts", "skipped"]}}, required: ["search", "category"], additionalProperties: false},
       annotations: {readOnlyHint: false, untrustedContentHint: true},
       execute(input) {
-        if (!input || typeof input.search !== "string" || input.search.length > 200 || !["all", "fair", "expensive", "skipped"].includes(input.category)) throw new Error("Invalid result filter");
+        if (!input || typeof input.search !== "string" || input.search.length > 200 || !["all", "fair", "expensive", "discounts", "skipped"].includes(input.category)) throw new Error("Invalid result filter");
         $("search").value = input.search;
         document.querySelector(`[data-filter="${input.category}"]`).click();
         return {summary: $("row-count").textContent, example: demoMode};

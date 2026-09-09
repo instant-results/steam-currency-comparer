@@ -134,3 +134,45 @@ Publishers set regional base prices; minimum transaction thresholds can affect
 local availability. Discounts reference established base or introductory launch
 prices. The public documentation does not provide a blanket guarantee that every
 regional offer has the same discount, so this tool checks each independently.
+
+## Regional discount assumptions and retrieval cost
+
+Research checked on 2026-09-10, including community observations outside Valve's
+policy documentation:
+
+- During Sekiro's April 2022 promotion, users reported a 50% discount in Western
+  regions but no discount in parts of Asia. See the
+  [contemporaneous Steam Community report](https://steamcommunity.com/discussions/forum/1/3279192886604240573/)
+  and [independent Reddit discussion](https://www.reddit.com/r/Steam/comments/uc1qof/).
+- These are historical user reports about regional offers. They are not a fresh
+  live measurement or proof that the same package can receive different
+  per-currency percentages. Regional publishers/packages are a possible explanation.
+- Accordingly, the app does not assume that every regional offer for one app
+  shares its sale status. It retains the actual returned values for each region.
+
+This does not add a separate discount request. Each existing regional
+`appdetails` response includes the currency, final price, base price (`initial`),
+and `discount_percent`. A cold comparison with PL/US/DE still needs up to three
+price requests per game, whether discounts are inspected or ignored. Missing
+home prices can stop the comparison early; fresh cache entries avoid requests.
+
+Applying a home-region discount to cached foreign base prices could reduce some
+future refresh requests, but those prices would be estimates: base prices and
+availability can change, regional offers can differ, and rounding matters. This
+optimization is not enabled. Preserve observed final prices for the current
+comparison; consider measured concurrency or caching improvements separately.
+
+
+## Discount differences and percentage comparison
+
+Products with unequal known regional discount percentages carry a **Different
+regional discounts** badge and can be isolated with the **Different discounts**
+filter. This includes sale versus no sale. Unknown metadata is not treated as
+zero discount. Hover over the badge for the observed regional percentages;
+cached observations at different times can also explain a mismatch.
+
+Each comparable product shows the absolute PLN difference and percentage:
+`(Polish final price - cheapest selected foreign final price in PLN) / cheapest selected foreign final price in PLN * 100`.
+Negative means cheaper in Poland. Percentages are rounded to one decimal place;
+a zero reference price shows “Percentage unavailable”. Both additions reuse
+existing results without extra Steam requests.
