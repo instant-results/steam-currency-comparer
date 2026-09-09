@@ -10,7 +10,7 @@ class Element {
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
   replaceChildren(...children) { for (const child of [...this.children]) child.remove(); this.append(...children); }
-  addEventListener() {}
+  addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector() { return new Element("p"); }
@@ -143,4 +143,23 @@ test("CSV protects spreadsheet formulas without converting numeric differences t
   assert.equal(run('csvCell("=HYPERLINK(1)")'), '\"\'=HYPERLINK(1)\"');
   assert.equal(run('csvCell(-20)'), '\"-20\"');
   assert.equal(run('csvCell(null)'), '\"\"');
+});
+
+
+test("artwork loads lazily in a fixed slot and falls back without replacing the row", () => {
+  const {get,run} = setup();
+  run(`items = ${JSON.stringify([game("413150","Stardew Valley")])}; render();`);
+  const row = get("rows").children[0];
+  const frame = row.children[0].children[0].children[0];
+  const img = frame.children[1];
+  assert.equal(img.src, "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/413150/header.jpg");
+  assert.equal(img.loading, "lazy");
+  assert.equal(img.referrerPolicy, "no-referrer");
+  assert.equal(img.width, 120); assert.equal(img.height, 56);
+  img.listeners.error();
+  assert.equal(img.hidden, true);
+  assert.equal(frame.children[0].textContent, "No artwork");
+  run("render()");
+  assert.equal(get("rows").children[0], row);
+  assert.equal(run('gameArtwork("../bad").children.length'), 1);
 });

@@ -3,6 +3,19 @@ const $ = (id) => document.getElementById(id);
 let items = [], filter = "all", sort = "arrival", direction = 1, job = null, running = false, demoMode = false, timer = null, lastRequest = null;
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
+function gameArtwork(appId) {
+  const frame = node("span", undefined, "game-artwork");
+  frame.setAttribute("aria-hidden", "true");
+  frame.append(node("span", "No artwork", "artwork-fallback"));
+  if (!/^[0-9]{1,12}$/.test(String(appId))) return frame;
+  const img = node("img");
+  img.alt = ""; img.width = 120; img.height = 56;
+  img.loading = "lazy"; img.decoding = "async"; img.referrerPolicy = "no-referrer";
+  img.addEventListener("error", () => { img.hidden = true; }, {once: true});
+  img.src = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+  frame.append(img);
+  return frame;
+}
 function showProfile(profile) {
   currentProfile = profile || "";
   $("profile-attribution").textContent = profile ? `Wishlist: ${profile}` : "Saved comparison · profile was not recorded by the earlier app version";
@@ -74,7 +87,7 @@ function render() {
     if (!cached || cached.signature !== signature) {
     const tr = node("tr"), title = node("td");
     tr.dataset.appId = item.app_id;
-    const link = node("a", item.name + " ↗", "game-name"); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link, node("div", item.source_summary || "", "game-meta")); tr.append(title);
+    const link = node("a", undefined, "game-name"); link.append(gameArtwork(item.app_id), node("span", item.name + " ↗", "game-title")); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link, node("div", item.source_summary || "", "game-meta")); tr.append(title);
     if(item.comparison) {
       const c = item.comparison;
       if (hasDifferentDiscounts(c)) {

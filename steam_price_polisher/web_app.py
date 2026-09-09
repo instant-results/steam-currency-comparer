@@ -282,7 +282,7 @@ class WebApplication:
     def __call__(self, environ, start_response):
         method, path = environ.get("REQUEST_METHOD", "GET"), environ.get("PATH_INFO", "/")
         headers = [("X-Content-Type-Options", "nosniff"), ("Referrer-Policy", "no-referrer"),
-                   ("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"),
+                   ("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://shared.akamai.steamstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"),
                    ("Cache-Control", "no-store")]
         def respond(code, data, content_type="application/json; charset=utf-8"):
             body = data if isinstance(data, bytes) else json.dumps(data, allow_nan=False).encode("utf-8")
