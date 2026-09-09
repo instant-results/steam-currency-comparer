@@ -176,3 +176,24 @@ Each comparable product shows the absolute PLN difference and percentage:
 Negative means cheaper in Poland. Percentages are rounded to one decimal place;
 a zero reference price shows “Percentage unavailable”. Both additions reuse
 existing results without extra Steam requests.
+
+
+## CSV export
+
+Download CSV exports all currently loaded results, including products hidden by
+filters. A running comparison exports only its completed results so far. There
+is one row per game/storefront and one row for each uncompared game. Wishlist
+profile attribution is optional and off by default; access tokens are never exported.
+
+The UTF-8 CSV includes original/base/final prices, discounts, converted PLN prices,
+absolute and percentage differences, and exchange-rate provenance. NBP publication
+date, original successful retrieval time, and the comparison's rate-check time
+are separate fields. Timestamps use UTC. A cache check does not imply a new NBP
+request. Older in-memory results without timestamps export blank fields; run a
+new comparison after restarting the server to obtain them. PLN identity conversion
+has no NBP timestamps. Example exports are marked as illustrative data.
+
+CSV is intended for spreadsheets and analysis; numeric values use decimal points.
+Untrusted text starting with spreadsheet formula characters is prefixed with an
+apostrophe. JSON could preserve nested results more naturally, but is not currently
+offered. Export is generated locally in the browser without additional requests.
