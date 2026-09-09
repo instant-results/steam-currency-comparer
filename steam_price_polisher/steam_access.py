@@ -431,5 +431,18 @@ class SteamClient:
             )
 
         amount = float(final_cents) / 100.0
-        price = StorePrice(region, expected, amount)
+        initial = price_overview.get("initial")
+        discount = price_overview.get("discount_percent")
+        # Missing metadata stays unknown rather than being treated as no sale.
+        if initial is not None and (
+            isinstance(initial, bool) or not isinstance(initial, (int, float))
+            or not math.isfinite(initial) or initial < final_cents
+        ):
+            raise SteamProtocolError("Steam returned an invalid base price.", app_id=app_id, region=region)
+        if discount is not None and (
+            isinstance(discount, bool) or not isinstance(discount, int) or not 0 <= discount <= 100
+        ):
+            raise SteamProtocolError("Steam returned an invalid discount percentage.", app_id=app_id, region=region)
+        price = StorePrice(region, expected, amount,
+                           float(initial) / 100 if initial is not None else None, discount)
         return RegionalPriceResult.available(price, game_name)

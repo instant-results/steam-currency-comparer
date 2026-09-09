@@ -39,6 +39,8 @@ class CachedPriceService:
         unavailable_ttl: float = 6 * 60 * 60,
         clock: Callable[[], float] = time.time,
         use_stale_on_error: bool = True,
+        require_sale_metadata: bool = False,
+        sale_ttl: float = 15 * 60,
     ) -> None:
         self._live_provider = live_provider
         self._cache = cache
@@ -47,6 +49,8 @@ class CachedPriceService:
         self._unavailable_ttl = unavailable_ttl
         self._clock = clock
         self._use_stale_on_error = use_stale_on_error
+        self._require_sale_metadata = require_sale_metadata
+        self._sale_ttl = sale_ttl
 
     def get_regional_price(
         self,
@@ -61,7 +65,13 @@ class CachedPriceService:
                 PriceStatus.NO_REGIONAL_PRICE: self._missing_ttl,
                 PriceStatus.APP_UNAVAILABLE: self._unavailable_ttl,
             }[cached.result.status]
-            if self._clock() - cached.fetched_at <= ttl:
+            price = cached.result.price
+            metadata_missing = self._require_sale_metadata and price is not None and (
+                price.base_amount is None or price.discount_percent is None
+            )
+            if price is not None and price.discount_percent and price.discount_percent > 0:
+                ttl = min(ttl, self._sale_ttl)
+            if not metadata_missing and self._clock() - cached.fetched_at <= ttl:
                 return PriceLookup(cached.result, "cache")
 
         try:

@@ -77,7 +77,11 @@ class SQLiteCache:
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(exchange_rates)")}
             if "effective_date" not in columns:
                 connection.execute("ALTER TABLE exchange_rates ADD COLUMN effective_date TEXT")
-            connection.execute("PRAGMA user_version = 3")
+            price_columns = {row["name"] for row in connection.execute("PRAGMA table_info(regional_prices)")}
+            for name, kind in (("base_amount", "REAL"), ("discount_percent", "INTEGER")):
+                if name not in price_columns:
+                    connection.execute(f"ALTER TABLE regional_prices ADD COLUMN {name} {kind}")
+            connection.execute("PRAGMA user_version = 4")
 
     @staticmethod
     def _create_price_table(connection: sqlite3.Connection) -> None:
@@ -135,7 +139,7 @@ class SQLiteCache:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT currency, amount, game_name, status, detail, fetched_at
+                SELECT currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent
                 FROM regional_prices
                 WHERE app_id = ? AND region = ?
                 """,
@@ -152,7 +156,8 @@ class SQLiteCache:
             if row["amount"] is None:
                 return None
             result = RegionalPriceResult.available(
-                StorePrice(region.lower(), row["currency"], float(row["amount"])),
+                StorePrice(region.lower(), row["currency"], float(row["amount"]),
+                           row["base_amount"], row["discount_percent"]),
                 row["game_name"],
             )
         elif status is PriceStatus.NO_REGIONAL_PRICE:
@@ -182,11 +187,13 @@ class SQLiteCache:
             connection.execute(
                 """
                 INSERT INTO regional_prices (
-                    app_id, region, currency, amount, game_name, status, detail, fetched_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    app_id, region, currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(app_id, region) DO UPDATE SET
                     currency = excluded.currency,
                     amount = excluded.amount,
+                    base_amount = excluded.base_amount,
+                    discount_percent = excluded.discount_percent,
                     game_name = excluded.game_name,
                     status = excluded.status,
                     detail = excluded.detail,
@@ -201,6 +208,8 @@ class SQLiteCache:
                     result.status.value,
                     result.detail,
                     self._clock(),
+                    result.price.base_amount if result.price else None,
+                    result.price.discount_percent if result.price else None,
                 ),
             )
 
