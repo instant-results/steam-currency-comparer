@@ -439,3 +439,14 @@ User explicitly requested no commit for this work; leave it uncommitted.
 
 The welcome caption now follows the sidebar baseline and checked alternatives,
 including restoration and selections with zero or one alternative.
+
+
+## Remembered comparison selections
+
+Changing the baseline temporarily excludes conflicting comparison currencies
+without forgetting them. Returning to a non-conflicting baseline restores them.
+Explicit checkbox edits replace the remembered choices, so a newly selected pair
+wins over a previously hidden currency and the two-alternative limit remains intact.
+Restoring a saved comparison replaces the preferences with that run's selections.
+Regression tests exercise actual change handlers, repeated switches, explicit
+replacement/deselection, welcome captions, busy state, and saved restoration.

@@ -4,14 +4,18 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
 const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
-let resultHome = "pl";
+let resultHome = "pl", preferredComparisons = null;
 const baseline = () => storefronts[resultHome];
 const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
 function selectedHome() { return [...document.querySelectorAll('[name="home"]')].find(el => el.checked)?.value || "pl"; }
-function updateSelections() {
+function updateSelections(event) {
   const home = selectedHome();
   const options = [...document.querySelectorAll('[name="region"]')];
-  for (const el of options) if (el.value === home) el.checked = false;
+  // Baseline conflicts hide preferences temporarily; explicit checkbox edits replace them.
+  if (preferredComparisons === null || event?.target?.name === "region") {
+    preferredComparisons = options.filter(el => el.checked && el.value !== home).map(el => el.value).slice(0, 2);
+  }
+  for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
   const count = selected.length;
   const caption = $("welcome-currencies");
@@ -53,6 +57,7 @@ function showProfile(profile) {
 function restoreRequest(saved) {
   const request = saved?.request;
   if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
+  preferredComparisons = [...request.regions];
   lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl"};
   document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
   showBaseline(lastRequest.home);
