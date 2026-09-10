@@ -261,3 +261,12 @@ test("busy state preserves hidden preferences and restoration replaces old prefe
   ui.chooseHome("no"); assert.deepEqual(ui.selected(), ["pl"]);
   ui.chooseHome("de"); assert.deepEqual(ui.selected(), ["pl","no"]);
 });
+
+test("showRates displays publication date with retrieval hour and cache status", () => {
+  const {get, run} = setup();
+  run('showRates([{currency:"USD",rate_to_pln:4.1,effective_date:"2026-09-09",retrieved_at_utc:"2026-09-10T09:15:00Z",cache_status:"cache"}])');
+  const lines = get("rates").children;
+  assert.equal(lines.length, 1);
+  assert.match(lines[0].children[0].children[0].textContent, /2026-09-09 \d{2}:\d{2} · cache/);
+  assert.equal(lines[0].children[1].textContent, "4.10 PLN");
+});
