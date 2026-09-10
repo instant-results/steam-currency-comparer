@@ -465,6 +465,7 @@ td {
   padding: 17px 8px;
   border-bottom: 1px solid #1a2336;
   font-variant-numeric: tabular-nums;
+  vertical-align: top;
 }
 td:first-child {
   min-width: 145px;
@@ -486,7 +487,9 @@ td:first-child {
 }
 .price {
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
 }
 .foreign {
   display: flex;
@@ -877,7 +880,11 @@ td:first-child { min-width: 0; }
   font-weight: 600;
 }
 .sale-note s { font-size: 12px; }
-.foreign > span { display: block; }
+.foreign > span {
+  display: block;
+  font-size: 16px;
+  line-height: 1.5;
+}
 #profile-attribution {
   overflow-wrap: anywhere;
   max-width: 100%;
