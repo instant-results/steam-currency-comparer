@@ -67,11 +67,14 @@ test("search and unavailable-only filters work together", () => {
 
 test("saved request restores profile attribution and retry context", () => {
   const {get,run} = setup();
-  assert.equal(run('restoreRequest({request:{identifier:"https://steamcommunity.com/profiles/76561198000000000/",regions:["de"]}})'), true);
+  assert.equal(run('restoreRequest({request:{identifier:"https://steamcommunity.com/profiles/76561198000000000/",regions:["de"],order:"date_added"}})'), true);
   assert.match(get("identifier").value, /76561198000000000/);
   assert.match(get("profile-attribution").textContent, /76561198000000000/);
   assert.equal(run('lastRequest.regions[0]'), "de");
+  assert.equal(run('lastRequest.order'), "date_added");
+  assert.equal(get("wishlist-order").value, "date_added");
   assert.equal(run('restoreRequest({request:{identifier:"bad",regions:["invalid"]}})'), false);
+  assert.equal(run('restoreRequest({request:{identifier:"profile",regions:["de"],order:"random"}})'), false);
 });
 
 test("sale labels distinguish discounted, regular, and unknown prices", () => {
@@ -257,7 +260,9 @@ test("busy state preserves hidden preferences and restoration replaces old prefe
   const ui = selectionSetup(); ui.chooseHome("us");
   ui.run("setBusy(true)");
   assert.ok([...ui.inputs,...ui.homes].every(el => el.disabled));
+  assert.equal(ui.get("wishlist-order").disabled, true);
   ui.run("setBusy(false)"); ui.chooseHome("pl");
+  assert.equal(ui.get("wishlist-order").disabled, false);
   assert.deepEqual(ui.selected(), ["us","de"]);
   assert.equal(ui.run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl"]}})'), true);
   assert.equal(ui.caption(), "GBP ↔ PLN ↔ NOK");

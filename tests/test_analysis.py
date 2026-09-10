@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from steam_price_polisher.analysis import AnalysisRunner, RegionConfig
+from steam_price_polisher.analysis import AnalysisRunner, RegionConfig, order_wishlist_items
 from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.models import (
     AnalysisResult,
@@ -37,6 +37,59 @@ class FlakyPriceProvider:
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_orders_wishlist_by_priority_date_and_known_name(self):
+        wishlist = (
+            WishlistItem("10", "Zulu", date_added=100, priority=2),
+            WishlistItem("20", "Alpha", date_added=300, priority=0),
+            WishlistItem("30", "Beta"),
+        )
+
+        self.assertEqual(
+            [item.app_id for item in order_wishlist_items(wishlist, "priority")],
+            ["20", "10", "30"],
+        )
+        self.assertEqual(
+            [item.app_id for item in order_wishlist_items(wishlist, "date_added")],
+            ["20", "10", "30"],
+        )
+        self.assertEqual(
+            [item.app_id for item in order_wishlist_items(wishlist, "name")],
+            ["20", "30", "10"],
+        )
+
+    def test_name_order_prefetches_each_baseline_once_and_reuses_it(self):
+        class NamedProvider:
+            def __init__(self):
+                self.calls = []
+
+            def get_regional_price(self, app_id, region, expected_currency):
+                self.calls.append((app_id, region))
+                names = {"10": "Zulu", "20": "Alpha"}
+                return RegionalPriceResult.available(
+                    StorePrice(region, expected_currency, 10),
+                    names[app_id],
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            provider = NamedProvider()
+            runner = AnalysisRunner(
+                CachedPriceService(provider, SQLiteCache(Path(directory) / "cache.sqlite3")),
+                home=RegionConfig("pl", "PLN"),
+                alternatives=(RegionConfig("us", "USD"),),
+            )
+            progress = tuple(
+                runner.run(
+                    (WishlistItem("10"), WishlistItem("20")),
+                    {"USD": 4.0},
+                    order="name",
+                )
+            )
+
+        self.assertEqual([item.app_id for item in progress], ["20", "10"])
+        self.assertEqual(provider.calls.count(("10", "pl")), 1)
+        self.assertEqual(provider.calls.count(("20", "pl")), 1)
+        self.assertTrue(all(item.live_requests == 2 for item in progress))
+
     def test_interrupted_game_resumes_from_cached_regions(self):
         with tempfile.TemporaryDirectory() as directory:
             cache = SQLiteCache(Path(directory) / "cache.sqlite3")

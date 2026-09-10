@@ -58,6 +58,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response["json"]["state"], "queued")
         self.assertEqual(response["json"]["profile"], PROFILE)
         self.assertEqual(response["json"]["regions"], ["us", "de"])
+        self.assertEqual(response["json"]["order"], "priority")
         self.assertNotIn(job["token"], response["body"].decode())
         self.assertEqual(self.request(path + "/cancel", "POST", {}, job["token"])["json"]["state"], "cancelling")
         self.manager.execute(self.manager.jobs[job["id"]])
@@ -74,8 +75,21 @@ class WebAppTests(unittest.TestCase):
         for identifier in ["https://evil.test/steamcommunity.com/id/example", "http://localhost/", "file:///etc/passwd", "123", "https://steamcommunity.com/id/a?key=secret", "https://steamcommunity.com:443/id/example", "https://steamcommunity.com/id/../"]:
             with self.subTest(identifier=identifier), self.assertRaises(InputError):
                 validate_request({"identifier": identifier, "regions": ["de"]})
-        for body in [{"identifier": PROFILE, "regions": []}, {"identifier": PROFILE, "regions": ["us", "us"]}, {"identifier": PROFILE, "regions": ["de"], "cookie": "secret"}]:
+        for body in [{"identifier": PROFILE, "regions": []}, {"identifier": PROFILE, "regions": ["us", "us"]}, {"identifier": PROFILE, "regions": ["de"], "order": "random"}, {"identifier": PROFILE, "regions": ["de"], "cookie": "secret"}]:
             self.assertEqual(self.request("/api/jobs", "POST", body)["status"], 400)
+
+    def test_accepts_and_retains_each_wishlist_order(self):
+        for index, order in enumerate(("priority", "date_added", "name")):
+            response = self.request(
+                "/api/jobs",
+                "POST",
+                {"identifier": PROFILE, "regions": ["de"], "order": order},
+                REMOTE_ADDR=f"order-{index}",
+            )
+            self.assertEqual(response["status"], 202)
+            stored = self.manager.jobs[response["json"]["id"]]
+            self.assertEqual(stored.order, order)
+            self.assertEqual(stored.snapshot()["order"], order)
 
     def test_duplicate_and_excess_jobs_are_bounded(self):
         self.submit()
@@ -149,6 +163,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(stored.snapshot()["total"], 755)
         self.assertEqual(stored.snapshot()["state"], "complete")
         runner.return_value.run.assert_called_once()
+        self.assertEqual(runner.return_value.run.call_args.kwargs["order"], "priority")
 
     def test_non_pln_baseline_converts_both_legs_and_preserves_rate_dates(self):
         _, config = validate_request({"identifier": PROFILE, "home": "gb", "regions": ["no", "pl"]})
