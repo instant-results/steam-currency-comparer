@@ -504,6 +504,7 @@ td:first-child {
 }
 .difference {
   font-size: 14px;
+  font-weight: 600;
   color: var(--orange);
   white-space: nowrap;
 }
@@ -513,6 +514,7 @@ td:first-child {
 .difference small {
   display: block;
   font-size: 10px;
+  font-weight: 400;
   opacity: .85;
 }
 .skip-reason {
