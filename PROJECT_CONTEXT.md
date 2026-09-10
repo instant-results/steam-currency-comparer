@@ -38,7 +38,8 @@ remain readable and stable while results arrive.
   attribution off by default. It includes both exchange-rate legs and their
   publication, retrieval, and check times; tokens are never exported.
 - Start and Cancel share a sidebar slot. Profile, baseline, and comparisons are
-  retained with the saved job in the same tab. Example prices are illustrative.
+  retained with the saved job in the same tab. Example mode compares a curated
+  7-game wishlist (including The Witcher 3) using live Steam prices and official NBP exchange rates.
 
 ## Architecture and constraints
 
@@ -87,7 +88,7 @@ starting another process. Static changes need a browser refresh; backend changes
 need a restart, which clears in-memory jobs. Avoid triggering full live wishlists
 for routine tests.
 
-Last verified: 72 Python tests and 18 frontend tests, all passing. Tests cover
+Last verified: 73 Python tests and 18 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, filtering/sorting, CSV, thumbnails, and selection restoration.
 Frontend tests use a minimal DOM harness; they do not establish browser visual

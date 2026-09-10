@@ -24,8 +24,9 @@ a baseline and one or two comparison storefronts, and watch prices arrive. Incom
 unavailable apps are hidden by default; use **Show unavailable products** to
 reveal them. Technical failures remain visible. Column headers enable explicit
 sorting, and **Discovery order** restores arrival order. Search, filter, or sort results;
-cancel a run or retry it using completed cached prices. The example mode uses
-clearly labeled illustrative prices without price requests; thumbnails load from Steam.
+cancel a run or retry it using completed cached prices. The example mode compares a
+curated sample of 7 popular games (including The Witcher 3, Cyberpunk 2077, and ELDEN RING)
+using live Steam store prices and official NBP exchange rates; thumbnails load from Steam.
 
 The web app supports **public wishlists only**. It ignores Steam cookies and the
 local `wishlist.txt` file. A server-configured API key can resolve vanity URLs.

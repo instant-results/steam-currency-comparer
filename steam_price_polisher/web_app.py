@@ -24,7 +24,7 @@ from .cache import SQLiteCache
 from .configuration import ComparisonConfig
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
 from .http_client import UrllibJsonHttpClient
-from .models import ComparisonMethodology, WishlistFailure
+from .models import ComparisonMethodology, WishlistFailure, WishlistItem
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
@@ -34,6 +34,16 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml")}
+
+EXAMPLE_WISHLIST = (
+    WishlistItem("413150", "Stardew Valley"),
+    WishlistItem("1145360", "Hades"),
+    WishlistItem("1091500", "Cyberpunk 2077"),
+    WishlistItem("640820", "Pathfinder: Kingmaker"),
+    WishlistItem("1245620", "ELDEN RING"),
+    WishlistItem("367520", "Hollow Knight"),
+    WishlistItem("292030", "The Witcher 3: Wild Hunt"),
+)
 
 
 class Cancelled(Exception):
@@ -55,7 +65,9 @@ def validate_request(payload):
     if not isinstance(raw, str) or not 1 <= len(raw.strip()) <= 200:
         raise InputError("Enter a SteamID64 or a Steam profile URL.")
     identifier = raw.strip()
-    if not re.fullmatch(r"[0-9]{17}", identifier):
+    if identifier.lower() == "example":
+        identifier = "example"
+    elif not re.fullmatch(r"[0-9]{17}", identifier):
         url = urlsplit(identifier)
         if url.scheme not in {"http", "https"} or url.netloc.lower() not in {
             "steamcommunity.com", "store.steampowered.com"
@@ -219,29 +231,32 @@ class JobManager:
                 gate=gate, policy=RetryPolicy(max_attempts=3, maximum_delay=15), sleep=sleep)
         # Deliberately no STEAM_COOKIE or wishlist.txt in the web service.
         steam = SteamClient(client(self.gate), request_delay=0, web_api_key=self.api_key)
-        wishlist_result = steam.get_wishlist(job.identifier)
-        job.check_cancelled()
-        wishlist = deduplicate_wishlist(wishlist_result.items)
-        if wishlist_result.failure is not None:
-            messages = {
-                WishlistFailure.TLS: "The server could not verify its secure connection to Steam. This is a server connection problem, not a wishlist privacy setting.",
-                WishlistFailure.REQUEST: "Steam could not be reached to load your wishlist. Please try again shortly.",
-                WishlistFailure.INVALID_RESPONSE: "Steam returned an unreadable wishlist response. Please try again shortly.",
-                WishlistFailure.VANITY: "Could not resolve that custom profile URL. Try your numeric SteamID64 instead.",
-            }
-            job.update(state="failed", error=messages[wishlist_result.failure], message="Wishlist retrieval failed.")
-            return
-        if not wishlist:
-            message = "No public wishlist games were found. Check your profile and wishlist privacy settings."
-            if "/id/" in job.identifier and not self.api_key:
-                message += " Try your numeric SteamID64; custom URL resolution is not configured on this server."
-            job.update(state="failed", error=message, message="No games to compare.")
-            return
-        if len(wishlist) > self.max_games:
-            job.update(state="failed", error=f"This version supports up to {self.max_games} wishlist games per comparison.")
-            return
-        if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
-            raise ValueError("Invalid app ID")
+        if job.identifier == "example":
+            wishlist = EXAMPLE_WISHLIST
+        else:
+            wishlist_result = steam.get_wishlist(job.identifier)
+            job.check_cancelled()
+            wishlist = deduplicate_wishlist(wishlist_result.items)
+            if wishlist_result.failure is not None:
+                messages = {
+                    WishlistFailure.TLS: "The server could not verify its secure connection to Steam. This is a server connection problem, not a wishlist privacy setting.",
+                    WishlistFailure.REQUEST: "Steam could not be reached to load your wishlist. Please try again shortly.",
+                    WishlistFailure.INVALID_RESPONSE: "Steam returned an unreadable wishlist response. Please try again shortly.",
+                    WishlistFailure.VANITY: "Could not resolve that custom profile URL. Try your numeric SteamID64 instead.",
+                }
+                job.update(state="failed", error=messages[wishlist_result.failure], message="Wishlist retrieval failed.")
+                return
+            if not wishlist:
+                message = "No public wishlist games were found. Check your profile and wishlist privacy settings."
+                if "/id/" in job.identifier and not self.api_key:
+                    message += " Try your numeric SteamID64; custom URL resolution is not configured on this server."
+                job.update(state="failed", error=message, message="No games to compare.")
+                return
+            if len(wishlist) > self.max_games:
+                job.update(state="failed", error=f"This version supports up to {self.max_games} wishlist games per comparison.")
+                return
+            if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
+                raise ValueError("Invalid app ID")
         job.update(total=len(wishlist), message="Getting exchange rates…")
         cache = SQLiteCache(self.data_directory / "cache.sqlite3")
         rates = CachedExchangeRateProvider(NbpExchangeRateProvider(client()), cache).get_rate_details(tuple(dict.fromkeys((*job.config.currencies, job.config.home.currency))))
