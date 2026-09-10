@@ -410,7 +410,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 5px;
-  max-width: 145px;
+  max-width: 160px;
 }
 .search > span {
   font-size: 23px;
@@ -981,5 +981,6 @@ td:first-child { min-width: 0; }
 .currency-options .region { padding: 10px 12px; margin-bottom: 8px; }
 .currency-options .region:has(input:disabled):not(:has(input:checked)) { opacity: .5; }
 .currency-options .region small { white-space: normal; }
+#selection-help { margin: 6px 0 16px; }
 
 .empty-caption .welcome-currency { color: inherit; margin: 0; }
