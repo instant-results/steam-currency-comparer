@@ -241,3 +241,14 @@ Selections persist with the saved comparison and retry request. Changing form
 choices does not relabel existing results: their baseline remains the one used
 for that run. Old saved requests without a baseline default to Poland. Examples
 use the selected baseline and alternatives. Restart the server for the new API.
+
+
+## Remembered comparison selections
+
+Changing the baseline temporarily excludes conflicting comparison currencies
+without forgetting them. Returning to a non-conflicting baseline restores them.
+Explicit checkbox edits replace the remembered choices, so a newly selected pair
+wins over a previously hidden currency and the two-alternative limit remains intact.
+Restoring a saved comparison replaces the preferences with that run's selections.
+Regression tests exercise actual change handlers, repeated switches, explicit
+replacement/deselection, welcome captions, busy state, and saved restoration.
