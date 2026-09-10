@@ -12,6 +12,8 @@ from math import isfinite
 class WishlistItem:
     app_id: str
     name: str | None = None
+    date_added: int | None = None
+    priority: int | None = None
 
 
 class WishlistFailure(str, Enum):

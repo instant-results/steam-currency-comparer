@@ -228,7 +228,14 @@ class SteamClient:
                     for item in raw_items
                 ):
                     raise ValueError("Invalid wishlist items")
-                items = tuple(WishlistItem(str(item["appid"])) for item in raw_items)
+                items = tuple(
+                    WishlistItem(
+                        str(item["appid"]),
+                        date_added=self._optional_nonnegative_int(item.get("date_added")),
+                        priority=self._optional_nonnegative_int(item.get("priority")),
+                    )
+                    for item in raw_items
+                )
                 return WishlistResult(items, "Steam Web API", tuple(warnings))
             except HttpClientError as exc:
                 failure = (WishlistFailure.TLS if exc.tls_error else
@@ -292,7 +299,12 @@ class SteamClient:
             if not payload:
                 break
             page_items = tuple(
-                WishlistItem(str(app_id), details.get("name", f"App {app_id}"))
+                WishlistItem(
+                    str(app_id),
+                    details.get("name", f"App {app_id}"),
+                    date_added=self._optional_nonnegative_int(details.get("date_added")),
+                    priority=self._optional_nonnegative_int(details.get("priority")),
+                )
                 for app_id, details in payload.items()
             )
             items.extend(page_items)
@@ -304,6 +316,12 @@ class SteamClient:
                 return (), WishlistFailure.INVALID_RESPONSE
             self._sleep(0.5)
         return tuple(items), None
+
+    @staticmethod
+    def _optional_nonnegative_int(value: object) -> int | None:
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+        return None
 
     def get_regional_price(
         self,

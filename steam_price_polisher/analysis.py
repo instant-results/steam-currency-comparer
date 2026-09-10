@@ -17,6 +17,8 @@ from .models import (
 from .price_service import CachedPriceService, PriceLookup
 from .steam_access import SteamAccessError
 
+WISHLIST_ORDERS = frozenset({"priority", "date_added", "name"})
+
 
 @dataclass(frozen=True)
 class AnalysisProgress:
@@ -54,9 +56,44 @@ def deduplicate_wishlist(items: Iterable[WishlistItem]) -> tuple[WishlistItem, .
     unique: dict[str, WishlistItem] = {}
     for item in items:
         existing = unique.get(item.app_id)
-        if existing is None or (existing.name is None and item.name is not None):
+        if existing is None:
             unique[item.app_id] = item
+        else:
+            unique[item.app_id] = WishlistItem(
+                app_id=item.app_id,
+                name=existing.name if existing.name is not None else item.name,
+                date_added=(existing.date_added if existing.date_added is not None else item.date_added),
+                priority=existing.priority if existing.priority is not None else item.priority,
+            )
     return tuple(unique.values())
+
+
+def order_wishlist_items(
+    items: Sequence[WishlistItem], order: str
+) -> tuple[WishlistItem, ...]:
+    """Order items using metadata already supplied by Steam."""
+    if order not in WISHLIST_ORDERS:
+        raise ValueError(f"Unsupported wishlist order: {order!r}")
+    indexed = tuple(enumerate(items))
+    if order == "priority":
+        key = lambda pair: (
+            pair[1].priority is None,
+            pair[1].priority if pair[1].priority is not None else 0,
+            pair[0],
+        )
+    elif order == "date_added":
+        key = lambda pair: (
+            pair[1].date_added is None,
+            -(pair[1].date_added if pair[1].date_added is not None else 0),
+            pair[0],
+        )
+    else:
+        key = lambda pair: (
+            pair[1].name is None,
+            (pair[1].name or "").casefold(),
+            pair[0],
+        )
+    return tuple(item for _, item in sorted(indexed, key=key))
 
 
 class AnalysisRunner:
@@ -76,10 +113,56 @@ class AnalysisRunner:
         self,
         wishlist: Sequence[WishlistItem],
         rates_to_home: Mapping[str, float],
+        *,
+        order: str = "priority",
     ) -> Iterator[AnalysisProgress]:
-        total = len(wishlist)
-        for index, item in enumerate(wishlist, start=1):
-            yield self._analyze_game(index, total, item, rates_to_home)
+        prepared = self._prepare_wishlist(wishlist, order)
+        total = len(prepared)
+        for index, (item, home_lookup, home_error) in enumerate(prepared, start=1):
+            yield self._analyze_game(
+                index,
+                total,
+                item,
+                rates_to_home,
+                home_lookup=home_lookup,
+                home_error=home_error,
+            )
+
+    def _prepare_wishlist(
+        self,
+        wishlist: Sequence[WishlistItem],
+        order: str,
+    ) -> tuple[tuple[WishlistItem, PriceLookup | None, SteamAccessError | None], ...]:
+        if order not in WISHLIST_ORDERS:
+            raise ValueError(f"Unsupported wishlist order: {order!r}")
+        if order != "name" or all(item.name is not None for item in wishlist):
+            return tuple(
+                (item, None, None)
+                for item in order_wishlist_items(wishlist, order)
+            )
+
+        prepared: list[tuple[WishlistItem, PriceLookup | None, SteamAccessError | None]] = []
+        for item in wishlist:
+            if item.name is not None:
+                prepared.append((item, None, None))
+                continue
+            try:
+                lookup = self._price_service.get_regional_price(
+                    item.app_id,
+                    self._home.region,
+                    self._home.currency,
+                )
+            except SteamAccessError as exc:
+                prepared.append((item, None, exc))
+                continue
+            display_name = lookup.result.game_name or f"App {item.app_id}"
+            prepared.append((replace(item, name=display_name), lookup, None))
+        return tuple(
+            sorted(
+                prepared,
+                key=lambda entry: (entry[0].name or "").casefold(),
+            )
+        )
 
     def _analyze_game(
         self,
@@ -87,20 +170,28 @@ class AnalysisRunner:
         total: int,
         item: WishlistItem,
         rates_to_home: Mapping[str, float],
+        *,
+        home_lookup: PriceLookup | None = None,
+        home_error: SteamAccessError | None = None,
     ) -> AnalysisProgress:
         lookups: list[PriceLookup] = []
         display_name = item.name or f"App {item.app_id}"
 
-        try:
-            home_lookup = self._price_service.get_regional_price(
-                item.app_id,
-                self._home.region,
-                self._home.currency,
-            )
-        except SteamAccessError as exc:
+        if home_error is not None:
             return self._skipped_from_error(
-                index, total, item.app_id, display_name, exc, lookups
+                index, total, item.app_id, display_name, home_error, lookups
             )
+        if home_lookup is None:
+            try:
+                home_lookup = self._price_service.get_regional_price(
+                    item.app_id,
+                    self._home.region,
+                    self._home.currency,
+                )
+            except SteamAccessError as exc:
+                return self._skipped_from_error(
+                    index, total, item.app_id, display_name, exc, lookups
+                )
         lookups.append(home_lookup)
 
         home_result = home_lookup.result

@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .analysis import AnalysisRunner, deduplicate_wishlist
+from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
 from .configuration import ComparisonConfig
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
@@ -59,7 +59,9 @@ class BusyError(RuntimeError):
 
 
 def validate_request(payload):
-    if not isinstance(payload, dict) or set(payload) not in ({"identifier", "regions"}, {"identifier", "regions", "home"}):
+    required = {"identifier", "regions"}
+    allowed = {*required, "home", "order"}
+    if not isinstance(payload, dict) or not required <= set(payload) <= allowed:
         raise InputError("Supply a Steam profile and comparison regions.")
     raw = payload["identifier"]
     if not isinstance(raw, str) or not 1 <= len(raw.strip()) <= 200:
@@ -85,6 +87,8 @@ def validate_request(payload):
         config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     except ValueError as exc:
         raise InputError(str(exc)) from exc
+    if payload.get("order", "priority") not in WISHLIST_ORDERS:
+        raise InputError("Choose name, date added, or personal priority order.")
     return identifier, config
 
 
@@ -95,15 +99,15 @@ def rates_to_baseline(rates, currency):
 
 
 class Job:
-    def __init__(self, identifier, config, owner):
+    def __init__(self, identifier, config, owner, order):
         self.id = secrets.token_urlsafe(24)
         self.token = secrets.token_urlsafe(32)
-        self.identifier, self.config, self.owner = identifier, config, owner
+        self.identifier, self.config, self.owner, self.order = identifier, config, owner, order
         self.cancel = threading.Event()
         self.lock = threading.Lock()
         self.updated = time.monotonic()
         self.data = {"state": "queued", "message": "Queued — waiting for the current comparison.",
-                     "profile": identifier, "home": config.home.region, "regions": [r.region for r in config.alternatives],
+                     "profile": identifier, "home": config.home.region, "regions": [r.region for r in config.alternatives], "order": order,
                      "total": 0, "items": [], "rates": [], "warnings": [], "error": None,
                      "methodology": asdict(ComparisonMethodology(rule="FAIR means the baseline price is no higher than every selected price converted to the baseline currency."))}
 
@@ -155,7 +159,9 @@ class JobManager:
             self.thread = threading.Thread(target=self._work, daemon=True, name="wishlist-worker")
             self.thread.start()
 
-    def submit(self, identifier, config, owner):
+    def submit(self, identifier, config, owner, order="priority"):
+        if order not in WISHLIST_ORDERS:
+            raise ValueError(f"Unsupported wishlist order: {order!r}")
         with self.lock:
             now = time.monotonic()
             self.jobs = {key: job for key, job in self.jobs.items()
@@ -167,7 +173,7 @@ class JobManager:
                 raise BusyError("Please wait a minute before starting another comparison.")
             if len(self.jobs) >= self.max_jobs or self.queue.full():
                 raise BusyError("The comparison service is busy. Please try again later.")
-            job = Job(identifier, config, owner)
+            job = Job(identifier, config, owner, order)
             self.jobs[job.id] = job
             self.queue.put_nowait(job)
             return job
@@ -273,10 +279,19 @@ class JobManager:
             row["retrieved_at_utc"] = (datetime.fromtimestamp(cached_rate.fetched_at, timezone.utc).isoformat()
                                        if cached_rate else None)
             rate_rows.append(row)
-        job.update(state="running", rates=rate_rows, warnings=warnings)
+        order_messages = {
+            "priority": "Comparing games in personal priority order…",
+            "date_added": "Comparing newest wishlist additions first…",
+            "name": "Loading game names to prepare alphabetical order…",
+        }
+        job.update(state="running", rates=rate_rows, warnings=warnings, message=order_messages[job.order])
         runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
-        for progress in runner.run(wishlist, rates_to_baseline(rates, job.config.home.currency)):
+        for progress in runner.run(
+            wishlist,
+            rates_to_baseline(rates, job.config.home.currency),
+            order=job.order,
+        ):
             job.check_cancelled()
             item = asdict(progress)
             item["source_summary"] = progress.source_summary
@@ -330,7 +345,12 @@ class WebApplication:
             if path == "/api/jobs":
                 try:
                     identifier, config = validate_request(payload)
-                    job = self.manager.submit(identifier, config, environ.get("REMOTE_ADDR", "unknown"))
+                    job = self.manager.submit(
+                        identifier,
+                        config,
+                        environ.get("REMOTE_ADDR", "unknown"),
+                        order=payload.get("order", "priority"),
+                    )
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})
                 except BusyError as exc:

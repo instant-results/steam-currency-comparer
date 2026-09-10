@@ -4,6 +4,7 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
 const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
+const wishlistOrders = new Set(["priority", "date_added", "name"]);
 let resultHome = "pl", preferredComparisons = null;
 const baseline = () => storefronts[resultHome];
 const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
@@ -67,12 +68,14 @@ function showProfile(profile) {
 }
 function restoreRequest(saved) {
   const request = saved?.request;
-  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
+  const order = request?.order || "priority";
+  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
   preferredComparisons = [...request.regions];
-  lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl"};
+  lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl", order};
   document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
   showBaseline(lastRequest.home);
   $("identifier").value = request.identifier === "example" ? "" : request.identifier;
+  $("wishlist-order").value = order;
   document.querySelectorAll('[name="region"]').forEach(el => el.checked = request.regions.includes(el.value));
   updateSelections();
   showProfile(request.identifier);
@@ -104,7 +107,7 @@ function percentageLabel(value) {
 }
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
-function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; updateSelections(); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
+function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; $("wishlist-order").disabled = value; updateSelections(); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
@@ -223,7 +226,7 @@ async function poll() {
   try {
     const data = await request(`/api/jobs/${job.id}`, {headers: {Authorization: `Bearer ${job.token}`}});
     if (data.profile && !lastRequest) {
-      restoreRequest({request: {identifier: data.profile, regions: data.regions, home: data.home || "pl"}});
+      restoreRequest({request: {identifier: data.profile, regions: data.regions, home: data.home || "pl", order: data.order || "priority"}});
       saveJob({...job, request: lastRequest});
     }
     demoMode = data.profile === "example" || lastRequest?.identifier === "example";
@@ -272,7 +275,7 @@ $("export-csv").addEventListener("click", () => {
   const link = node("a"); link.href = url; link.download = "steam-price-comparison.csv";
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome()}); });
+$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();
 $("cancel").addEventListener("click", async () => { if(!job) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${job.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${job.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
@@ -286,7 +289,7 @@ $("demo").addEventListener("click", () => {
   const selected = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
   const home = selectedHome();
   const regions = selected.length ? selected : Object.keys(storefronts).filter(region => region !== home).slice(0, 2);
-  start({identifier: "example", regions, home});
+  start({identifier: "example", regions, home, order: $("wishlist-order").value});
 });
 
 // Optional agent controls share the same visible result filters.
