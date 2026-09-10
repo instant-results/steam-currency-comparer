@@ -12,7 +12,11 @@ function updateSelections() {
   const home = selectedHome();
   const options = [...document.querySelectorAll('[name="region"]')];
   for (const el of options) if (el.value === home) el.checked = false;
-  const count = options.filter(el => el.checked).length;
+  const selected = options.filter(el => el.checked);
+  const count = selected.length;
+  const caption = $("welcome-currencies");
+  caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
+  for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
   for (const el of options) {
     el.disabled = running || el.value === home || (!el.checked && count >= 2);
     el.closest('label').hidden = el.value === home;
