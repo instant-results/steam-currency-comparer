@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .comparison import compare_game
 from .configuration import ComparisonConfig, RegionConfig
@@ -145,12 +145,12 @@ class AnalysisRunner:
                     False,
                     lookups,
                 )
-            alternative_prices.append(lookup.result.price)
+            alternative_prices.append(replace(lookup.result.price, source=lookup.source))
 
         comparison = compare_game(
             item.app_id,
             display_name,
-            home_result.price,
+            replace(home_result.price, source=home_lookup.source),
             alternative_prices,
             rates_to_home,
         )

@@ -7,6 +7,13 @@ const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"
 let resultHome = "pl", preferredComparisons = null;
 const baseline = () => storefronts[resultHome];
 const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
+const formatProvenance = (source) => {
+  if (!source) return "";
+  if (source === "cache") return "cached";
+  if (source === "stale cache" || source === "stale") return "stale";
+  if (source === "live") return "live";
+  return source;
+};
 function selectedHome() { return [...document.querySelectorAll('[name="home"]')].find(el => el.checked)?.value || "pl"; }
 function updateSelections(event) {
   const home = selectedHome();
@@ -129,7 +136,7 @@ function render() {
     if (!cached || cached.signature !== signature) {
     const tr = node("tr"), title = node("td");
     tr.dataset.appId = item.app_id;
-    const link = node("a", undefined, "game-name"); link.append(gameArtwork(item.app_id), node("span", item.name + " ↗", "game-title")); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link, node("div", item.source_summary || "", "game-meta")); tr.append(title);
+    const link = node("a", undefined, "game-name"); link.append(gameArtwork(item.app_id), node("span", item.name + " ↗", "game-title")); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
     if(item.comparison) {
       const c = item.comparison;
       if (hasDifferentDiscounts(c)) {
@@ -139,9 +146,20 @@ function render() {
         badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
         title.append(badge);
       }
-      const home = node("td", `${money(c.home_price.amount)} ${unit()}`, "price"); home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
+      const home = node("td", `${money(c.home_price.amount)} ${unit()}`, "price");
+      const homeProvenance = formatProvenance(c.home_price.source);
+      if (homeProvenance) home.title = homeProvenance;
+      home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
       const td = node("td"), alternatives = node("div", undefined, "foreign");
-      for (const p of c.alternatives) { const price = node("span"); price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit())); price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}`; price.append(saleNote(p, p.currency)); alternatives.append(price); } td.append(alternatives); tr.append(td);
+      for (const p of c.alternatives) {
+        const price = node("span");
+        price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
+        const altProvenance = formatProvenance(p.source);
+        price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}${altProvenance ? ` · ${altProvenance}` : ""}`;
+        price.append(saleNote(p, p.currency));
+        alternatives.append(price);
+      }
+      td.append(alternatives); tr.append(td);
       const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
       percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
       difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
