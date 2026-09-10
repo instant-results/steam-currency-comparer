@@ -270,3 +270,25 @@ test("showRates displays publication date with retrieval hour and cache status",
   assert.match(lines[0].children[0].children[0].textContent, /2026-09-09 \d{2}:\d{2} · cache/);
   assert.equal(lines[0].children[1].textContent, "4.10 PLN");
 });
+
+test("price tooltips show standalone provenance for baseline and combined calculation for alternatives", () => {
+  const {get, run} = setup();
+  const item = {
+    app_id: "1",
+    name: "Test Game",
+    source_summary: "cache 1, live 1",
+    comparison: {
+      home_price: { amount: 10, source: "cache" },
+      alternatives: [{ region: "us", original_amount: 5, currency: "USD", rate_to_home: 4, amount_in_home: 20, source: "live" }],
+      is_fair: true,
+    }
+  };
+  run(`items = ${JSON.stringify([item])}; render();`);
+  const row = get("rows").children[0];
+  const titleCell = row.children[0];
+  assert.equal(titleCell.children.find(c => c.className === "game-meta"), undefined);
+  const homeCell = row.children[1];
+  assert.equal(homeCell.title, "cached");
+  const altSpan = row.children[2].children[0].children[0];
+  assert.equal(altSpan.title, "5.00 USD × 4 · live");
+});
