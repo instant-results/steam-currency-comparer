@@ -3,6 +3,31 @@ const $ = (id) => document.getElementById(id);
 let items = [], filter = "all", sort = "arrival", direction = 1, job = null, running = false, demoMode = false, timer = null, lastRequest = null;
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
+const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
+let resultHome = "pl";
+const baseline = () => storefronts[resultHome];
+const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
+function selectedHome() { return [...document.querySelectorAll('[name="home"]')].find(el => el.checked)?.value || "pl"; }
+function updateSelections() {
+  const home = selectedHome();
+  const options = [...document.querySelectorAll('[name="region"]')];
+  for (const el of options) if (el.value === home) el.checked = false;
+  const count = options.filter(el => el.checked).length;
+  for (const el of options) {
+    el.disabled = running || el.value === home || (!el.checked && count >= 2);
+    el.closest('label').hidden = el.value === home;
+  }
+  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running);
+  $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
+  $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
+}
+function showBaseline(home) {
+  resultHome = Object.hasOwn(storefronts, home) ? home : "pl";
+  $("home-heading").textContent = `PRICE IN ${baseline().name.toUpperCase()}`;
+  $("converted-heading").textContent = `CONVERTED TO ${baseline().currency}`;
+  $("difference-currency").textContent = baseline().currency;
+  $("expensive-label").textContent = `Pricier in ${baseline().name}`;
+}
 function gameArtwork(appId) {
   const frame = node("span", undefined, "game-artwork");
   frame.setAttribute("aria-hidden", "true");
@@ -23,10 +48,13 @@ function showProfile(profile) {
 }
 function restoreRequest(saved) {
   const request = saved?.request;
-  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.some(region => !["us", "de"].includes(region))) return false;
-  lastRequest = {identifier: request.identifier, regions: request.regions};
+  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
+  lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl"};
+  document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
+  showBaseline(lastRequest.home);
   $("identifier").value = request.identifier;
   document.querySelectorAll('[name="region"]').forEach(el => el.checked = request.regions.includes(el.value));
+  updateSelections();
   showProfile(request.identifier);
   return true;
 }
@@ -56,7 +84,7 @@ function percentageLabel(value) {
 }
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
-function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; document.querySelectorAll('[name="region"]').forEach(el => el.disabled = value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
+function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; updateSelections(); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
@@ -83,7 +111,7 @@ function render() {
   for (const id of rowCache.keys()) if (!currentIds.has(id)) rowCache.delete(id);
   let position = 0;
   for (const item of visible) {
-    const signature = JSON.stringify(item);
+    const signature = resultHome + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
     const tr = node("tr"), title = node("td");
@@ -93,17 +121,17 @@ function render() {
       const c = item.comparison;
       if (hasDifferentDiscounts(c)) {
         const badge = node("span", "Different regional discounts", "regional-discount-badge");
-        const values = [{...c.home_price, region: "pl"}, ...c.alternatives].map(price =>
+        const values = [{...c.home_price, region: c.home_price.region || resultHome}, ...c.alternatives].map(price =>
           `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
         badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
         title.append(badge);
       }
-      const home = node("td", `${money(c.home_price.amount)} zł`, "price"); home.append(saleNote(c.home_price, "PLN")); tr.append(home);
+      const home = node("td", `${money(c.home_price.amount)} ${unit()}`, "price"); home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
       const td = node("td"), alternatives = node("div", undefined, "foreign");
-      for (const p of c.alternatives) { const price = node("span"); price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " zł")); price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}`; price.append(saleNote(p, p.currency)); alternatives.append(price); } td.append(alternatives); tr.append(td);
-      const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} zł`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
-      percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : "Compared with the cheapest selected foreign price, converted to PLN.";
-      difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : "Pricier in Poland")); tr.append(difference);
+      for (const p of c.alternatives) { const price = node("span"); price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit())); price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}`; price.append(saleNote(p, p.currency)); alternatives.append(price); } td.append(alternatives); tr.append(td);
+      const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
+      percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
+      difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
     } else { const td = node("td", item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
@@ -130,17 +158,17 @@ function render() {
 function showRates(rates) { currentRates = rates; const target = $("rates"); target.replaceChildren(); for(const rate of rates) { const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`); label.append(node("small", `${rate.effective_date || "Date unknown"} · ${rate.cache_status}`)); row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`)); target.append(row); } if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder")); }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
-  clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = false; items = []; lastRequest = body; showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
+  clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = false; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
 async function poll() {
   try {
     const data = await request(`/api/jobs/${job.id}`, {headers: {Authorization: `Bearer ${job.token}`}});
     if (data.profile && !lastRequest) {
-      restoreRequest({request: {identifier: data.profile, regions: data.regions}});
+      restoreRequest({request: {identifier: data.profile, regions: data.regions, home: data.home || "pl"}});
       saveJob({...job, request: lastRequest});
     }
-    items = data.items; showRates(data.rates); render();
+    showBaseline(data.home || "pl"); items = data.items; showRates(data.rates); render();
     const complete = ["complete", "partial", "cancelled", "failed"].includes(data.state);
     status(data.state.toUpperCase(), !complete); if (data.state === "cancelling") { $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; } $("progress-label").textContent = data.message; $("progress").max = Math.max(data.total, 1); $("progress").value = data.items.length;
     if(data.error) notice(data.error, true); else if(data.state === "partial") notice("Some games could not be compared because a request failed. Retry to reuse completed prices and check the remaining games."); else if(data.warnings.length) notice(data.warnings.join(" ")); else if(data.state === "cancelled") notice("Comparison cancelled. Completed regional prices are cached for your next attempt."); else notice("");
@@ -154,12 +182,12 @@ function csvCell(value) {
   return '"' + text.replaceAll('"', '""') + '"';
 }
 function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
-  const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_pln", "poland_difference_pln", "poland_difference_percent", "different_regional_discounts", "price_provenance"];
+  const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_baseline", "baseline_difference", "baseline_difference_percent", "different_regional_discounts", "price_provenance", "baseline_storefront", "baseline_currency", "rate_to_baseline", "baseline_rate_to_pln", "baseline_rate_publication_date", "baseline_rate_retrieved_at_utc", "baseline_rate_checked_at_utc", "baseline_rate_cache_status"];
   if (includeOwner) headers.push("wishlist_profile");
   const rows = [headers];
   for (const item of items) {
     const c = item.comparison;
-    const prices = c ? [{...c.home_price, region:"pl", currency:"PLN", original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    const prices = c ? [{...c.home_price, region:resultHome, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
     for (const price of prices) {
       const rate = currentRates.find(value => value.currency === price.currency) || {};
       const identity = price.currency === "PLN";
@@ -170,6 +198,10 @@ function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
         identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
         price.amount_in_home, c ? c.home_price.amount - reference : null, c ? percentageDifference(c) : null,
         c ? hasDifferentDiscounts(c) : null, item.source_summary];
+      const homeRate = currentRates.find(value => value.currency === baseline().currency) || {};
+      row.push(resultHome, baseline().currency, c ? (price.region === resultHome ? 1 : price.rate_to_home) : null,
+        baseline().currency === "PLN" ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
+        homeRate.retrieved_at_utc, homeRate.checked_at_utc, baseline().currency === "PLN" ? "identity" : homeRate.cache_status);
       if (includeOwner) row.push(currentProfile);
       rows.push(row);
     }
@@ -181,7 +213,9 @@ $("export-csv").addEventListener("click", () => {
   const link = node("a"); link.href = url; link.download = "steam-price-comparison.csv";
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length) return notice("Choose at least one comparison storefront.", true); start({identifier: $("identifier").value.trim(), regions}); });
+$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome()}); });
+document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
+updateSelections();
 $("cancel").addEventListener("click", async () => { if(!job) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${job.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${job.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest); });
 $("search").addEventListener("input", render);
@@ -193,8 +227,17 @@ $("demo").addEventListener("click", () => {
   clearTimeout(timer); job = null; saveJob(null); lastRequest = null; currentProfile = ""; $("profile-attribution").textContent = "Illustrative wishlist · not linked to a Steam profile"; $("profile-attribution").hidden = false; demoMode = true; setBusy(false); $("retry").hidden = true; $("search").value = ""; status("EXAMPLE · NOT LIVE"); $("results-title").textContent = "A wishlist, in perspective";
   notice("Illustrative example: these prices and exchange rates are invented to show how the comparison works. Run your wishlist for actual data.");
   const examples = [["413150", "Stardew Valley", 53.99, 14.99, 13.99], ["1145360", "Hades", 114.99, 24.99, 24.50], ["1091500", "Cyberpunk 2077", 199.99, 59.99, 59.99], ["640820", "Pathfinder: Kingmaker", 89.99, 19.99, 19.99], ["1245620", "ELDEN RING", 249, 59.99, 59.99], ["367520", "Hollow Knight", 67.99, 14.99, 14.79]];
-  items = examples.map(([app_id, name, amount, usd, eur]) => { const alternatives = [{region:"us",currency:"USD",original_amount:usd,rate_to_home:4,amount_in_home:usd*4},{region:"de",currency:"EUR",original_amount:eur,rate_to_home:4.3,amount_in_home:eur*4.3}]; return {app_id, name, source_summary:"Illustrative prices",comparison:{home_price:{amount,currency:"PLN"},alternatives,is_fair:alternatives.every(p => amount <= p.amount_in_home)}}; });
-  showRates([{currency:"USD",rate_to_pln:4,effective_date:"Illustrative",cache_status:"example"},{currency:"EUR",rate_to_pln:4.3,effective_date:"Illustrative",cache_status:"example"}]); render();
+  showBaseline(selectedHome());
+  const demoRates = {PLN:1,USD:4,EUR:4.3,NOK:0.37,GBP:5.1};
+  const selected = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
+  const regions = selected.length ? selected : Object.keys(storefronts).filter(region => region !== resultHome).slice(0,2);
+  items = examples.map(([app_id, name, amount, usd, eur]) => {
+    const prices = {pl:amount,us:usd,de:eur,no:Math.round(eur*11.5),gb:Math.round(usd*0.8*100)/100};
+    const homeAmount = prices[resultHome];
+    const alternatives = regions.map(region => { const currency = storefronts[region].currency; const rate_to_home = demoRates[currency]/demoRates[baseline().currency]; return {region,currency,original_amount:prices[region],rate_to_home,amount_in_home:prices[region]*rate_to_home}; });
+    return {app_id,name,source_summary:"Illustrative prices",comparison:{home_price:{region:resultHome,amount:homeAmount,currency:baseline().currency},alternatives,is_fair:alternatives.every(price => homeAmount <= price.amount_in_home)}};
+  });
+  showRates([resultHome,...regions].map(region => ({currency:storefronts[region].currency,rate_to_pln:demoRates[storefronts[region].currency],effective_date:"Illustrative",cache_status:"example"}))); render();
 });
 
 // Optional agent controls share the same visible result filters.
