@@ -27,7 +27,7 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
   own baseline when the user edits the form for a future run.
 - Results append in discovery order using stable row elements. Game name,
   baseline price, absolute difference, and percentage difference can be sorted.
-  Discovery order clears sorting without restarting or changing filters.
+  Reset sorting restores discovery order without restarting or changing filters.
 - Table column headers align horizontally and vertically with row data:
   "GAME NAME" offsets for the artwork thumbnail slot to align with game titles,
   the baseline price header aligns with numerical prices, "OTHER STOREFRONTS"

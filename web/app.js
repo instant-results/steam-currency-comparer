@@ -177,7 +177,7 @@ function render() {
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
   $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
-  $("order-note").textContent = sort === "arrival" ? "New games append at the end" : "Sorted results · new games follow this sort";
+  $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
   document.querySelectorAll('.sort').forEach(button => {
     button.closest('th').removeAttribute('aria-sort');
     button.setAttribute('aria-pressed', String(button.dataset.sort === sort));

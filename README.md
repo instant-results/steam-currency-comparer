@@ -23,7 +23,7 @@ with certificate and hostname verification enabled. Add a numeric SteamID64 or s
 a baseline and one or two comparison storefronts, and watch prices arrive. Incoming results append in discovery order. Products with no regional price or
 unavailable apps are hidden by default; use **Show unavailable products** to
 reveal them. Technical failures remain visible. Column headers align directly with
-game titles and numerical price columns, enable explicit sorting, and **Discovery order**
+game titles and numerical price columns, enable explicit sorting, and **Reset sorting**
 restores arrival order. Search, filter, or sort results; cancel a run or retry it
 using completed cached prices. The example mode compares a curated sample of 7 popular
 games (including The Witcher 3, Cyberpunk 2077, and ELDEN RING) using live Steam store
