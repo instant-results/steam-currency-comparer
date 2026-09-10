@@ -168,7 +168,33 @@ function render() {
     if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
   });
 }
-function showRates(rates) { currentRates = rates; const target = $("rates"); target.replaceChildren(); for(const rate of rates) { const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`); label.append(node("small", `${rate.effective_date || "Date unknown"} · ${rate.cache_status}`)); row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`)); target.append(row); } if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder")); }
+function formatRateTime(isoString) {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch (_) {
+    return "";
+  }
+}
+function showRates(rates) {
+  currentRates = rates;
+  const target = $("rates");
+  target.replaceChildren();
+  for(const rate of rates) {
+    const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`);
+    const time = formatRateTime(rate.retrieved_at_utc || rate.checked_at_utc);
+    const dateText = rate.effective_date ? `${rate.effective_date}${time ? ` ${time}` : ""}` : "Date unknown";
+    label.append(node("small", `${dateText} · ${rate.cache_status}`));
+    if (rate.retrieved_at_utc) {
+      try { row.title = `Retrieved: ${new Date(rate.retrieved_at_utc).toLocaleString([], {hour12: false})}. Publication date: ${rate.effective_date || "unknown"}.`; } catch (_) {}
+    }
+    row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`));
+    target.append(row);
+  }
+  if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder"));
+}
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
