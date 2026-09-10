@@ -98,7 +98,7 @@ correctness. Use targeted UI verification when needed.
 ## Git handoff
 
 Branch at handoff: main. Latest implementation commits:
+- 6a7795f: Set font weight to 600 for absolute difference matching percentage.
 - 7ab2834: Display retrieval hour alongside exchange rate publication date.
-- 263c746: Add unit test for exchange rate hour display.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
