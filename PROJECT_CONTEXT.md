@@ -28,6 +28,11 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
 - Results append in discovery order using stable row elements. Game name,
   baseline price, absolute difference, and percentage difference can be sorted.
   Discovery order clears sorting without restarting or changing filters.
+- Table column headers align horizontally and vertically with row data:
+  "GAME NAME" offsets for the artwork thumbnail slot to align with game titles,
+  the baseline price header aligns with numerical prices, "OTHER STOREFRONTS"
+  aligns vertically on the primary header baseline with converted subtext beneath,
+  and all headers share uniform typography and prominence.
 - Unavailable products are hidden by default. Uncompared includes missing prices
   and technical failures, subject to the separate unavailable-products toggle.
 - Each regional price retains its own base price, final price, and discount.
@@ -101,7 +106,7 @@ correctness. Use targeted UI verification when needed.
 ## Git handoff
 
 Branch at handoff: main. Latest implementation commits:
+- 546fcb5: Align table column headers horizontally and vertically with matching typography.
 - 4e9f010: Display price provenance on hover and remove aggregate capsule labels.
-- d3308f3: Add unit tests for individual price provenance and hover tooltips.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
