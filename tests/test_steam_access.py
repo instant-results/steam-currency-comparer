@@ -40,13 +40,18 @@ class SteamAccessTests(unittest.TestCase):
 
     def test_reads_wishlist_from_web_api(self):
         http = QueueHttpClient(
-            [{"response": {"items": [{"appid": 10}, {"appid": 20}]}}]
+            [{"response": {"items": [
+                {"appid": 10, "priority": 2, "date_added": 1700000000},
+                {"appid": 20, "priority": 0, "date_added": 1800000000},
+            ]}}]
         )
         client = SteamClient(http, request_delay=0, sleep=lambda _: None)
 
         result = client.get_wishlist("76561198000000000")
 
         self.assertEqual([item.app_id for item in result.items], ["10", "20"])
+        self.assertEqual([item.priority for item in result.items], [2, 0])
+        self.assertEqual([item.date_added for item in result.items], [1700000000, 1800000000])
         self.assertEqual(result.source, "Steam Web API")
         query = parse_qs(urlparse(http.urls[0]).query)
         self.assertEqual(query["steamid"], ["76561198000000000"])
@@ -154,9 +159,11 @@ class SteamAccessTests(unittest.TestCase):
         self.assertEqual(result.failure, WishlistFailure.INVALID_RESPONSE)
 
     def test_valid_fallback_recovers_from_api_failure(self):
-        result = SteamClient(QueueHttpClient([HttpClientError("offline"), {"10": {"name": "Game"}}])).get_wishlist("76561198000000000")
+        result = SteamClient(QueueHttpClient([HttpClientError("offline"), {"10": {"name": "Game", "priority": 3, "date_added": 1700000000}}])).get_wishlist("76561198000000000")
         self.assertIsNone(result.failure)
         self.assertEqual(result.items[0].app_id, "10")
+        self.assertEqual(result.items[0].priority, 3)
+        self.assertEqual(result.items[0].date_added, 1700000000)
 
     def test_reads_regional_price_and_name(self):
         http = QueueHttpClient(
