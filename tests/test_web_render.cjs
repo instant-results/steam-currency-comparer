@@ -190,7 +190,7 @@ test("baseline selection excludes itself and caps alternatives at two", () => {
   const {get,run} = setup({'[name="region"]':inputs,'[name="home"]':homes});
   assert.equal(inputs[0].closest().hidden, true);
   assert.equal(inputs[3].disabled, true);
-  inputs[2].checked = false; run("updateSelections()");
+  inputs[2].checked = false; run('updateSelections({target:{name:"region"}})');
   assert.equal(inputs[3].disabled, false);
   homes[0].checked = false; homes[1].checked = true; run("updateSelections()");
   assert.equal(inputs[1].checked, false);
@@ -210,4 +210,54 @@ test("GBP results and CSV keep their baseline while form selection changes", () 
   assert.equal(get("difference-currency").textContent, "GBP");
   assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["gb"]}})'), false);
   assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), false);
+});
+
+
+function selectionSetup() {
+  const codes = ["pl","us","de","no","gb"];
+  const inputs = codes.map(value => { const el = new Element("input"); el.value = value; el.name = "region"; el.checked = ["us","de"].includes(value); const label = new Element("label"); el.closest = () => label; return el; });
+  const homes = codes.map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
+  const ui = setup({'[name="region"]':inputs,'[name="home"]':homes,'[name="home"], [name="region"]':[...homes,...inputs]});
+  return {...ui, inputs, homes,
+    chooseHome(value) { const input = homes.find(el => el.value === value); homes.forEach(el => el.checked = el === input); input.listeners.change({target:input}); },
+    chooseRegion(value, checked) { const input = inputs.find(el => el.value === value); assert.equal(input.disabled, false); input.checked = checked; input.listeners.change({target:input}); },
+    selected() { return inputs.filter(el => el.checked).map(el => el.value); },
+    caption() { return ui.get("welcome-currencies").children.map(el => el.textContent).join(" "); }
+  };
+}
+
+test("baseline conflicts restore original choices across repeated switches", () => {
+  const ui = selectionSetup();
+  assert.equal(ui.caption(), "PLN ↔ USD ↔ EUR");
+  ui.chooseHome("us"); assert.deepEqual(ui.selected(), ["de"]);
+  assert.equal(ui.caption(), "USD ↔ EUR");
+  ui.chooseHome("de"); assert.deepEqual(ui.selected(), ["us"]);
+  ui.chooseHome("no"); assert.deepEqual(ui.selected(), ["us","de"]);
+  ui.chooseHome("pl"); assert.deepEqual(ui.selected(), ["us","de"]);
+  assert.equal(ui.caption(), "PLN ↔ USD ↔ EUR");
+});
+
+test("explicit replacement takes precedence over hidden preferences and retains the limit", () => {
+  const ui = selectionSetup();
+  ui.chooseHome("us"); ui.chooseRegion("gb", true);
+  assert.deepEqual(ui.selected(), ["de","gb"]);
+  ui.chooseHome("pl"); assert.deepEqual(ui.selected(), ["de","gb"]);
+  assert.equal(ui.inputs.find(el => el.value === "us").disabled, true);
+  ui.chooseRegion("de", false); ui.chooseHome("no");
+  assert.deepEqual(ui.selected(), ["gb"]);
+  ui.chooseRegion("gb", false); ui.chooseHome("pl");
+  assert.deepEqual(ui.selected(), []);
+  assert.equal(ui.caption(), "PLN");
+});
+
+test("busy state preserves hidden preferences and restoration replaces old preferences", () => {
+  const ui = selectionSetup(); ui.chooseHome("us");
+  ui.run("setBusy(true)");
+  assert.ok([...ui.inputs,...ui.homes].every(el => el.disabled));
+  ui.run("setBusy(false)"); ui.chooseHome("pl");
+  assert.deepEqual(ui.selected(), ["us","de"]);
+  assert.equal(ui.run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl"]}})'), true);
+  assert.equal(ui.caption(), "GBP ↔ PLN ↔ NOK");
+  ui.chooseHome("no"); assert.deepEqual(ui.selected(), ["pl"]);
+  ui.chooseHome("de"); assert.deepEqual(ui.selected(), ["pl","no"]);
 });
