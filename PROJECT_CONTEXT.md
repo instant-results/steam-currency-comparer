@@ -96,7 +96,8 @@ correctness. Use targeted UI verification when needed.
 
 ## Git handoff
 
-Branch at handoff: main. Latest implementation commit:
-- 9e79673: Redesign web theme with blue base palette and positive green accents.
+Branch at handoff: main. Latest implementation commits:
+- a7eb1d2: Use real Steam prices and NBP rates for example mode with Witcher 3.
+- 1afd08d: Add unit test for example mode wishlist with Witcher 3.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
