@@ -163,3 +163,21 @@ test("artwork loads lazily in a fixed slot and falls back without replacing the 
   assert.equal(get("rows").children[0], row);
   assert.equal(run('gameArtwork("../bad").children.length'), 1);
 });
+
+
+test("percentage sorting differs from absolute sorting and keeps undefined percentages last", () => {
+  const {get,run} = setup();
+  const a = game("1","Large absolute"); a.comparison.home_price.amount = 120; a.comparison.alternatives[0].amount_in_home = 100;
+  const b = game("2","Large percent"); b.comparison.home_price.amount = 15; b.comparison.alternatives[0].amount_in_home = 10;
+  const zero = game("3","Zero reference"); zero.comparison.alternatives[0].amount_in_home = 0;
+  run(`items = ${JSON.stringify([a,b,zero,skipped("4","temporary_failure")])}; sort = "percentage"; render();`);
+  assert.deepEqual(get("rows").children.map(row => row.dataset.appId), ["1","2","3","4"]);
+  run('direction = -1; render();');
+  assert.deepEqual(get("rows").children.map(row => row.dataset.appId), ["2","1","3","4"]);
+  run('sort = "difference"; render();');
+  assert.deepEqual(get("rows").children.map(row => row.dataset.appId), ["1","3","2","4"]);
+  run('filter = "skipped"; render();');
+  assert.equal(get("filter-help").hidden, false);
+  run('filter = "all"; render();');
+  assert.equal(get("filter-help").hidden, true);
+});

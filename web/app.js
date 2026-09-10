@@ -62,6 +62,7 @@ let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 function render() {
   $("export-csv").disabled = !items.length;
+  $("filter-help").hidden = filter !== "skipped";
   const comparable = items.filter(item => item.comparison);
   $("count-total").textContent = items.length || (running || demoMode ? "0" : "—");
   $("count-fair").textContent = comparable.filter(item => item.comparison.is_fair).length;
@@ -72,7 +73,7 @@ function render() {
   const hiddenCount = showUnavailable ? 0 : items.filter(hiddenUnavailable).length;
   const visible = items.filter(item => (showUnavailable || !hiddenUnavailable(item)) && item.name.toLocaleLowerCase().includes(search) && (filter === "all" || (filter === "discounts" ? hasDifferentDiscounts(item.comparison) : filter === "skipped" ? !item.comparison : item.comparison && item.comparison.is_fair === (filter === "fair"))));
   const diff = item => item.comparison ? item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home)) : null;
-  if (sort !== "arrival") visible.sort((a, b) => { if(sort === "name") return direction * a.name.localeCompare(b.name); const av = sort === "home" ? a.comparison?.home_price.amount : diff(a); const bv = sort === "home" ? b.comparison?.home_price.amount : diff(b); if(av == null) return bv == null ? 0 : 1; if(bv == null) return -1; return direction * (av - bv); });
+  if (sort !== "arrival") visible.sort((a, b) => { if(sort === "name") return direction * a.name.localeCompare(b.name); const value = item => sort === "home" ? item.comparison?.home_price.amount : sort === "percentage" ? (item.comparison ? percentageDifference(item.comparison) : null) : diff(item); const av = value(a), bv = value(b); if(av == null) return bv == null ? 0 : 1; if(bv == null) return -1; return direction * (av - bv); });
   const rows = $("rows");
   const visibleIds = new Set(visible.map(item => item.app_id));
   for (const row of [...rows.children]) {
@@ -118,7 +119,13 @@ function render() {
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · illustrative example" : ""}`;
   $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
   $("order-note").textContent = sort === "arrival" ? "New games append at the end" : "Sorted results · new games follow this sort";
-  document.querySelectorAll('.sort').forEach(button => { const th = button.closest('th'); th.removeAttribute('aria-sort'); if(button.dataset.sort === sort) th.setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending'); });
+  document.querySelectorAll('.sort').forEach(button => {
+    button.closest('th').removeAttribute('aria-sort');
+    button.setAttribute('aria-pressed', String(button.dataset.sort === sort));
+  });
+  document.querySelectorAll('.sort').forEach(button => {
+    if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
+  });
 }
 function showRates(rates) { currentRates = rates; const target = $("rates"); target.replaceChildren(); for(const rate of rates) { const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`); label.append(node("small", `${rate.effective_date || "Date unknown"} · ${rate.cache_status}`)); row.append(label, node("span", `${money(rate.rate_to_pln)} PLN`)); target.append(row); } if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder")); }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }

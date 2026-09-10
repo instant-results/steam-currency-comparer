@@ -408,3 +408,13 @@ shows a neutral fallback. Images use app IDs already in the results, so there ar
 no additional regional price requests. Browsers fetch artwork directly from
 `shared.akamai.steamstatic.com` without a referrer. The image policy allows only
 that external host. Restart the local server after this change to apply the policy.
+
+
+## Readability and sorting
+
+Foreign final prices now use 16px text. Column headings identify Game name and
+Price in Poland. Difference offers independent PLN and percentage sort buttons;
+repeated clicks reverse direction, with unavailable percentages last. Uncompared
+shows contextual help explaining missing prices, failed requests, and the separate
+availability toggle. Storefront labels remain geographic: currency alone does not
+establish identical regional offers.
