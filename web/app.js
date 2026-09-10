@@ -136,7 +136,8 @@ function render() {
     if (!cached || cached.signature !== signature) {
     const tr = node("tr"), title = node("td");
     tr.dataset.appId = item.app_id;
-    const link = node("a", undefined, "game-name"); link.append(gameArtwork(item.app_id), node("span", item.name + " ↗", "game-title")); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
+    const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", item.name + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
+    artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
     if(item.comparison) {
       const c = item.comparison;
       if (hasDifferentDiscounts(c)) {

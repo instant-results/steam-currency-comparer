@@ -47,7 +47,8 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
 - Price provenance (cached, live, stale) is displayed individually on hover:
   standalone for the baseline price and alongside the converted price calculation
   for foreign storefronts.
-- Lazy-loaded Steam header thumbnails have fixed slots and a missing-image fallback.
+- Lazy-loaded Steam header thumbnails have fixed slots and a missing-image
+  fallback. Hovering over either a game's artwork or title shows its Steam App ID.
 - CSV exports all loaded results, regardless of filters, with optional profile
   attribution off by default. It includes both exchange-rate legs and their
   publication, retrieval, and check times; tokens are never exported.

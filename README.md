@@ -215,7 +215,8 @@ offered. Export is generated locally in the browser without additional requests.
 
 Each title links to Steam with a lazy-loaded header thumbnail from Steam's image
 CDN. Fixed image slots and reused rows avoid layout shifts; unavailable artwork
-shows a neutral fallback. Images use app IDs already in the results, so there are
+shows a neutral fallback. Hovering over either the artwork or title shows the
+Steam App ID. Images use app IDs already in the results, so there are
 no additional regional price requests. Browsers fetch artwork directly from
 `shared.akamai.steamstatic.com` without a referrer. The image policy allows only
 that external host. Restart the local server after this change to apply the policy.
