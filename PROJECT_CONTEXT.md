@@ -12,9 +12,10 @@ the user's next request rather than inventing a new feature or deploying the app
 
 ## Product and current behavior
 
-A local web app compares public Steam wishlist prices; eventual public hosting
-is intended but has not happened. The interface uses plain language and should
-remain readable and stable while results arrive.
+A local web app compares public Steam wishlist prices across international storefronts; eventual public hosting
+is intended but has not happened. The interface uses plain, direct, functional language describing
+regional price comparisons and exchange rates. All AI-generated marketing taglines, faux-edgy slogans,
+and dramatic fragment copy have been eliminated in favor of clear technical prose.
 
 - Select a baseline from PLN/Poland, USD/United States, EUR/Germany, NOK/Norway,
   or GBP/United Kingdom, plus one or two other currencies. The baseline is
@@ -97,7 +98,7 @@ correctness. Use targeted UI verification when needed.
 ## Git handoff
 
 Branch at handoff: main. Latest implementation commits:
-- a7eb1d2: Use real Steam prices and NBP rates for example mode with Witcher 3.
-- 1afd08d: Add unit test for example mode wishlist with Witcher 3.
+- a1db622: Replace marketing slogans and taglines with descriptive technical copy.
+- f145e92: Match baseline price font size to secondary currencies and align baselines.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
