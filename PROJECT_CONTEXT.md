@@ -95,11 +95,7 @@ correctness. Use targeted UI verification when needed.
 
 ## Git handoff
 
-Branch at handoff: main. Latest implementation commits:
-- b989b29: restore comparison selections after baseline conflicts.
-- 37fa65f: tests for selection restoration and currency controls.
+Branch at handoff: main. Latest implementation commit:
+- 9e79673: Redesign web theme with blue base palette and positive green accents.
 
-The working tree was clean before this documentation refresh. This refresh is
-uncommitted unless a later instruction authorizes committing it. Inspect actual
-Git status rather than relying on this snapshot. Follow AGENTS.md for reminders
-and separate feature/test commits when committing authorized work.
+The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
