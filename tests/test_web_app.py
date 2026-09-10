@@ -182,6 +182,30 @@ class WebAppTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home][:3]})
 
+    def test_example_mode_loads_curated_wishlist_including_witcher_3(self):
+        from steam_price_polisher.web_app import EXAMPLE_WISHLIST
+        identifier, config = validate_request({"identifier": "example", "regions": ["us", "de"]})
+        self.assertEqual(identifier, "example")
+        self.assertEqual(len(EXAMPLE_WISHLIST), 7)
+        app_ids = {item.app_id for item in EXAMPLE_WISHLIST}
+        self.assertIn("292030", app_ids)
+        self.assertIn("413150", app_ids)
+        self.assertIn("1091500", app_ids)
+        self.assertIn("1245620", app_ids)
+
+        stored = self.manager.submit("example", config, "test-example")
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, 50, 50, 0), "Game " + app)
+            self.manager.execute(stored)
+            steam.return_value.get_wishlist.assert_not_called()
+            snapshot = stored.snapshot()
+            self.assertEqual(snapshot["state"], "complete")
+            self.assertEqual(snapshot["total"], 7)
+            self.assertEqual(len(snapshot["items"]), 7)
+            returned_ids = [item["app_id"] for item in snapshot["items"]]
+            self.assertIn("292030", returned_ids)
+
     def test_background_worker_processes_submitted_job(self):
         finished = threading.Event()
         def work(job):
