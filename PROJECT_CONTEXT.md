@@ -34,6 +34,9 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
   Unequal known discounts receive a badge and filter; unknown is not zero.
 - Differences use the cheapest selected alternative in baseline currency.
   A zero reference makes the percentage unavailable.
+- Price provenance (cached, live, stale) is displayed individually on hover:
+  standalone for the baseline price and alongside the converted price calculation
+  for foreign storefronts.
 - Lazy-loaded Steam header thumbnails have fixed slots and a missing-image fallback.
 - CSV exports all loaded results, regardless of filters, with optional profile
   attribution off by default. It includes both exchange-rate legs and their
@@ -89,7 +92,7 @@ starting another process. Static changes need a browser refresh; backend changes
 need a restart, which clears in-memory jobs. Avoid triggering full live wishlists
 for routine tests.
 
-Last verified: 73 Python tests and 19 frontend tests, all passing. Tests cover
+Last verified: 73 Python tests and 20 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, filtering/sorting, CSV, thumbnails, and selection restoration.
 Frontend tests use a minimal DOM harness; they do not establish browser visual
@@ -98,7 +101,7 @@ correctness. Use targeted UI verification when needed.
 ## Git handoff
 
 Branch at handoff: main. Latest implementation commits:
-- 6a7795f: Set font weight to 600 for absolute difference matching percentage.
-- 7ab2834: Display retrieval hour alongside exchange rate publication date.
+- 4e9f010: Display price provenance on hover and remove aggregate capsule labels.
+- d3308f3: Add unit tests for individual price provenance and hover tooltips.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
