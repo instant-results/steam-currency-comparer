@@ -36,6 +36,7 @@ class StorePrice:
     amount: float
     base_amount: float | None = None
     discount_percent: int | None = None
+    source: str | None = None
 
 
 class PriceStatus(str, Enum):
@@ -90,6 +91,7 @@ class ConvertedPrice:
     amount_in_home: float
     base_amount: float | None = None
     discount_percent: int | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)

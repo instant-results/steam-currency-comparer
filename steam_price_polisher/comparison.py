@@ -39,6 +39,7 @@ def compare_game(
                 amount_in_home=alternative.amount * rate,
                 base_amount=alternative.base_amount,
                 discount_percent=alternative.discount_percent,
+                source=alternative.source,
             )
         )
 
