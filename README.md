@@ -4,6 +4,13 @@ Compare Steam wishlist prices using a selectable baseline and up to two other
 storefronts. The web app supports PLN (Poland), USD (United States), EUR (Germany),
 NOK (Norway), and GBP (United Kingdom). The default remains PLN against USD/EUR.
 
+## Continuing development
+
+Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the concise current-state
+handoff and [AGENTS.md](AGENTS.md) for collaboration and Git preferences.
+Inspect the current repository state before continuing; Git history contains
+the detailed change history.
+
 ## Run the web app
 
 ```powershell
