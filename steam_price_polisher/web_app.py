@@ -49,7 +49,7 @@ class BusyError(RuntimeError):
 
 
 def validate_request(payload):
-    if not isinstance(payload, dict) or set(payload) != {"identifier", "regions"}:
+    if not isinstance(payload, dict) or set(payload) not in ({"identifier", "regions"}, {"identifier", "regions", "home"}):
         raise InputError("Supply a Steam profile and comparison regions.")
     raw = payload["identifier"]
     if not isinstance(raw, str) or not 1 <= len(raw.strip()) <= 200:
@@ -68,12 +68,18 @@ def validate_request(payload):
             raise InputError("Use a Steam /profiles/ or /id/ profile URL.")
     regions = payload["regions"]
     if not isinstance(regions, list) or not 1 <= len(regions) <= 2:
-        raise InputError("Choose one or both comparison storefronts.")
+        raise InputError("Choose one or two comparison storefronts.")
     try:
-        config = ComparisonConfig.from_regions(regions)
+        config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     except ValueError as exc:
         raise InputError(str(exc)) from exc
     return identifier, config
+
+
+def rates_to_baseline(rates, currency):
+    """NBP quotes PLN per unit; divide both legs for a non-PLN baseline."""
+    baseline = rates[currency].rate_to_pln
+    return {key: rate.rate_to_pln / baseline for key, rate in rates.items()}
 
 
 class Job:
@@ -85,9 +91,9 @@ class Job:
         self.lock = threading.Lock()
         self.updated = time.monotonic()
         self.data = {"state": "queued", "message": "Queued — waiting for the current comparison.",
-                     "profile": identifier, "regions": [r.region for r in config.alternatives],
+                     "profile": identifier, "home": config.home.region, "regions": [r.region for r in config.alternatives],
                      "total": 0, "items": [], "rates": [], "warnings": [], "error": None,
-                     "methodology": asdict(ComparisonMethodology())}
+                     "methodology": asdict(ComparisonMethodology(rule="FAIR means the baseline price is no higher than every selected price converted to the baseline currency."))}
 
     def update(self, **values):
         with self.lock:
@@ -238,7 +244,7 @@ class JobManager:
             raise ValueError("Invalid app ID")
         job.update(total=len(wishlist), message="Getting exchange rates…")
         cache = SQLiteCache(self.data_directory / "cache.sqlite3")
-        rates = CachedExchangeRateProvider(NbpExchangeRateProvider(client()), cache).get_rate_details(job.config.currencies)
+        rates = CachedExchangeRateProvider(NbpExchangeRateProvider(client()), cache).get_rate_details(tuple(dict.fromkeys((*job.config.currencies, job.config.home.currency))))
         job.check_cancelled()
         warnings = []
         if any(rate.cache_status == "stale cache" for rate in rates.values()):
@@ -255,7 +261,7 @@ class JobManager:
         job.update(state="running", rates=rate_rows, warnings=warnings)
         runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
-        for progress in runner.run(wishlist, {key: rate.rate_to_pln for key, rate in rates.items()}):
+        for progress in runner.run(wishlist, rates_to_baseline(rates, job.config.home.currency)):
             job.check_cancelled()
             item = asdict(progress)
             item["source_summary"] = progress.source_summary

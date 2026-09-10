@@ -143,12 +143,44 @@ class WebAppTests(unittest.TestCase):
         stored = self.manager.jobs[created["id"]]
         with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.CachedExchangeRateProvider") as rates, patch("steam_price_polisher.web_app.AnalysisRunner") as runner:
             steam.return_value.get_wishlist.return_value = WishlistResult(tuple(WishlistItem(str(i + 1)) for i in range(755)), "mock")
-            rates.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08")}
+            rates.return_value.get_rate_details.return_value = {"PLN": ExchangeRate("PLN", 1, None), "USD": ExchangeRate("USD", 4, "2026-09-08")}
             runner.return_value.run.return_value = iter(())
             self.manager.execute(stored)
         self.assertEqual(stored.snapshot()["total"], 755)
         self.assertEqual(stored.snapshot()["state"], "complete")
         runner.return_value.run.assert_called_once()
+
+    def test_non_pln_baseline_converts_both_legs_and_preserves_rate_dates(self):
+        _, config = validate_request({"identifier": PROFILE, "home": "gb", "regions": ["no", "pl"]})
+        stored = self.manager.submit(PROFILE, config, "test-gbp")
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
+            nbp.return_value.get_rate_details.return_value = {"NOK": ExchangeRate("NOK", .4, "2026-09-08"), "GBP": ExchangeRate("GBP", 5, "2026-09-09")}
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, {"gb":10,"no":100,"pl":60}[region]), "Game")
+            self.manager.execute(stored)
+        result = stored.snapshot()
+        self.assertEqual(result["state"], "complete")
+        self.assertEqual(result["home"], "gb")
+        comparison = result["items"][0]["comparison"]
+        self.assertEqual(comparison["home_price"]["currency"], "GBP")
+        self.assertEqual([price["amount_in_home"] for price in comparison["alternatives"]], [8,12])
+        self.assertFalse(comparison["is_fair"])
+        for rate in result["rates"]:
+            if rate["currency"] != "PLN":
+                self.assertIsNotNone(rate["retrieved_at_utc"])
+        self.assertEqual({rate["effective_date"] for rate in result["rates"]}, {None,"2026-09-08","2026-09-09"})
+
+    def test_all_five_baselines_and_selection_limit(self):
+        from itertools import combinations
+        regions = ["pl", "us", "de", "no", "gb"]
+        for home in regions:
+            for alternatives in combinations([region for region in regions if region != home], 2):
+                _, config = validate_request({"identifier": PROFILE, "home": home, "regions": list(alternatives)})
+                self.assertEqual(config.home.region, home)
+            with self.assertRaises(ValueError):
+                validate_request({"identifier": PROFILE, "home": home, "regions": [home]})
+            with self.assertRaises(ValueError):
+                validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home][:3]})
 
     def test_background_worker_processes_submitted_job(self):
         finished = threading.Event()

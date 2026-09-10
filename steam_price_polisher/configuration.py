@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 # Limited to the existing supported Steam storefront/currency pairs.
-REGION_CURRENCIES = MappingProxyType({"pl": "PLN", "us": "USD", "de": "EUR"})
+REGION_CURRENCIES = MappingProxyType({"pl": "PLN", "us": "USD", "de": "EUR", "no": "NOK", "gb": "GBP"})
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class RegionConfig:
         region = self.region.strip().lower()
         currency = self.currency.strip().upper()
         if region not in REGION_CURRENCIES:
-            raise ValueError(f"Unsupported region: {region!r}. Choose pl, us, or de.")
+            raise ValueError(f"Unsupported region: {region!r}. Choose pl, us, de, no, or gb.")
         expected = REGION_CURRENCIES[region]
         if currency != expected:
             raise ValueError(f"Region {region} requires {expected}, not {currency!r}")
@@ -45,11 +45,9 @@ class ComparisonConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.home, RegionConfig):
             raise ValueError("Home must be a RegionConfig")
-        if self.home.region != "pl":
-            raise ValueError("Only Poland (PLN) is supported as the home storefront")
         alternatives = tuple(self.alternatives)
-        if not alternatives:
-            raise ValueError("At least one comparison region is required")
+        if not 1 <= len(alternatives) <= 2:
+            raise ValueError("Choose one or two comparison regions")
         seen = {self.home.region}
         for alternative in alternatives:
             if not isinstance(alternative, RegionConfig):
@@ -60,10 +58,10 @@ class ComparisonConfig:
         object.__setattr__(self, "alternatives", alternatives)
 
     @classmethod
-    def from_regions(cls, regions: Iterable[str]) -> ComparisonConfig:
+    def from_regions(cls, regions: Iterable[str], home: str = "pl") -> ComparisonConfig:
         if isinstance(regions, str):
             raise ValueError("Supply a sequence of region codes, not a single string")
-        return cls(alternatives=tuple(RegionConfig.from_region(region) for region in regions))
+        return cls(home=RegionConfig.from_region(home), alternatives=tuple(RegionConfig.from_region(region) for region in regions))
 
     @property
     def currencies(self) -> tuple[str, ...]:

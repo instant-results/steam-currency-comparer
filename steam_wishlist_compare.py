@@ -55,7 +55,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("identifier", nargs="?", help="SteamID64 or Steam profile URL")
     parser.add_argument(
         "--regions", nargs="+", metavar="REGION",
-        help="Storefronts: us (USD), de (EUR). Default: us de. Put the identifier first.",
+        help="Choose up to two: us (USD), de (EUR), no (NOK), gb (GBP). Default: us de. Put the identifier first.",
     )
     try:
         options = parser.parse_args(args)

@@ -15,10 +15,10 @@ class Element {
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector() { return new Element("p"); }
 }
-function setup() {
+function setup(selectors = {}) {
   const elements = new Map();
   const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: () => []}, sessionStorage: {getItem: () => null}, window: {}});
+  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, run: source => vm.runInContext(source, context)};
 }
@@ -180,4 +180,34 @@ test("percentage sorting differs from absolute sorting and keeps undefined perce
   assert.equal(get("filter-help").hidden, false);
   run('filter = "all"; render();');
   assert.equal(get("filter-help").hidden, true);
+});
+
+
+test("baseline selection excludes itself and caps alternatives at two", () => {
+  const inputs = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; const label = new Element("label"); el.closest = () => label; return el; });
+  const homes = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; el.checked = value === "pl"; return el; });
+  inputs[1].checked = inputs[2].checked = true;
+  const {get,run} = setup({'[name="region"]':inputs,'[name="home"]':homes});
+  assert.equal(inputs[0].closest().hidden, true);
+  assert.equal(inputs[3].disabled, true);
+  inputs[2].checked = false; run("updateSelections()");
+  assert.equal(inputs[3].disabled, false);
+  homes[0].checked = false; homes[1].checked = true; run("updateSelections()");
+  assert.equal(inputs[1].checked, false);
+  assert.equal(inputs[1].closest().hidden, true);
+  assert.equal(get("compare-legend").textContent, "Compare USD with");
+});
+
+test("GBP results and CSV keep their baseline while form selection changes", () => {
+  const {get,run} = setup();
+  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl"]}})'), true);
+  const item = game("1","Game"); item.comparison.home_price = {region:"gb",currency:"GBP",amount:10}; item.comparison.alternatives[0].amount_in_home = 8;
+  run(`items = ${JSON.stringify([item])}; render();`);
+  assert.equal(get("rows").children[0].children[1].textContent, "10.00 GBP");
+  assert.match(run('buildCsv(false)'), /baseline_currency/);
+  assert.match(run('buildCsv(false)'), /"gb","GBP"/);
+  run("updateSelections(); render()");
+  assert.equal(get("difference-currency").textContent, "GBP");
+  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["gb"]}})'), false);
+  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), false);
 });

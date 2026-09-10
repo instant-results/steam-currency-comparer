@@ -418,3 +418,18 @@ repeated clicks reverse direction, with unavailable percentages last. Uncompared
 shows contextual help explaining missing prices, failed requests, and the separate
 availability toggle. Storefront labels remain geographic: currency alone does not
 establish identical regional offers.
+
+
+## Selectable baseline (current, supersedes Poland-only notes above)
+
+Removed the header flag and home label. Sidebar radio cards select PL/PLN,
+US/USD, DE/EUR, NO/NOK, or GB/GBP. Comparison checkboxes offer the remaining
+currencies with a server-enforced maximum of two. PLN remains the default and
+legacy request fallback; the CLI still uses Poland as baseline.
+
+Non-PLN conversions divide NBP PLN quotes for both legs. Results, restored
+sessions, retry, badges, headings, demo and CSV preserve the run's baseline.
+CSV includes baseline rate provenance alongside each original currency rate.
+Changing form selections does not relabel existing results. Tests cover all
+baseline/alternative pairs, cross rates, limits, restoration, and CSV labeling.
+User explicitly requested no commit for this work; leave it uncommitted.

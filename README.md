@@ -1,7 +1,8 @@
 # Steam Prices Polisher
 
-Compare the PLN prices of games on a Steam wishlist with prices from selected
-Steam regions after currency conversion.
+Compare Steam wishlist prices using a selectable baseline and up to two other
+storefronts. The web app supports PLN (Poland), USD (United States), EUR (Germany),
+NOK (Norway), and GBP (United Kingdom). The default remains PLN against USD/EUR.
 
 ## Run the web app
 
@@ -12,12 +13,12 @@ python .\serve_web.py
 
 Open [Steam Prices Polisher](http://127.0.0.1:8765). Install the requirements once; HTTPS uses the operating system certificate store
 with certificate and hostname verification enabled. Add a numeric SteamID64 or supported Steam profile URL, select
-comparison storefronts, and watch prices arrive. Incoming results append in discovery order. Products with no regional price or
+a baseline and one or two comparison storefronts, and watch prices arrive. Incoming results append in discovery order. Products with no regional price or
 unavailable apps are hidden by default; use **Show unavailable products** to
 reveal them. Technical failures remain visible. Column headers enable explicit
 sorting, and **Discovery order** restores arrival order. Search, filter, or sort results;
 cancel a run or retry it using completed cached prices. The example mode uses
-clearly labeled illustrative prices and makes no external requests.
+clearly labeled illustrative prices without price requests; thumbnails load from Steam.
 
 The web app supports **public wishlists only**. It ignores Steam cookies and the
 local `wishlist.txt` file. A server-configured API key can resolve vanity URLs.
@@ -41,8 +42,9 @@ python .\steam_wishlist_compare.py 76561198000000000
 
 ## Choose comparison storefronts
 
-Poland (PLN) remains the home storefront. Select the United States (`us`, USD),
-Germany (`de`, EUR), or both with `--regions` after the Steam identifier:
+The command-line prototype retains Poland (PLN) as its baseline. Select up to two
+of the United States (`us`, USD), Germany (`de`, EUR), Norway (`no`, NOK), or the
+United Kingdom (`gb`, GBP) with `--regions` after the Steam identifier:
 
 ```powershell
 python .\steam_wishlist_compare.py 76561198000000000 --regions de
@@ -52,8 +54,8 @@ python .\steam_wishlist_compare.py 76561198000000000 --regions de us
 Without `--regions`, the default is `us de`. Selection order is preserved in
 results. Currency is determined by the storefront; arbitrary currency/region
 pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The catalog currently supports only these three
-storefronts, with Poland as home. Run with `--help` for command-line help.
+cache initialization. The web sidebar additionally lets any of the five supported
+storefronts become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
 
 ## Custom Steam profile URLs
 
@@ -87,8 +89,8 @@ values, the tool can use them with a visible stale-cache warning. Existing cache
 entries migrate automatically; rates without dates are refreshed, or explicitly
 shown with an unknown date when refresh fails. Fallback does not reset cache age.
 
-`FAIR` means the Polish price is no higher than **every** selected foreign price
-converted to PLN. This is a currency-conversion indicator, not a complete
+`FAIR` means the baseline price is no higher than **every** selected foreign price
+converted to the baseline currency. This is a currency-conversion indicator, not a complete
 judgment of consumer fairness or a checkout quote:
 
 - No VAT or sales-tax adjustment is applied; displayed US and EU prices may
@@ -171,9 +173,9 @@ filter. This includes sale versus no sale. Unknown metadata is not treated as
 zero discount. Hover over the badge for the observed regional percentages;
 cached observations at different times can also explain a mismatch.
 
-Each comparable product shows the absolute PLN difference and percentage:
-`(Polish final price - cheapest selected foreign final price in PLN) / cheapest selected foreign final price in PLN * 100`.
-Negative means cheaper in Poland. Percentages are rounded to one decimal place;
+Each comparable product shows the absolute baseline-currency difference and percentage:
+`(baseline final price - cheapest selected alternative in baseline currency) / cheapest selected alternative in baseline currency * 100`.
+Negative means cheaper in the baseline storefront. Percentages are rounded to one decimal place;
 a zero reference price shows “Percentage unavailable”. Both additions reuse
 existing results without extra Steam requests.
 
@@ -185,7 +187,7 @@ filters. A running comparison exports only its completed results so far. There
 is one row per game/storefront and one row for each uncompared game. Wishlist
 profile attribution is optional and off by default; access tokens are never exported.
 
-The UTF-8 CSV includes original/base/final prices, discounts, converted PLN prices,
+The UTF-8 CSV includes original/base/final prices, discounts, prices converted to the baseline currency,
 absolute and percentage differences, and exchange-rate provenance. NBP publication
 date, original successful retrieval time, and the comparison's rate-check time
 are separate fields. Timestamps use UTC. A cache check does not imply a new NBP
@@ -212,8 +214,30 @@ that external host. Restart the local server after this change to apply the poli
 ## Readability and sorting
 
 Foreign final prices now use 16px text. Column headings identify Game name and
-Price in Poland. Difference offers independent PLN and percentage sort buttons;
+the baseline storefront. Difference offers independent absolute and percentage sort buttons;
 repeated clicks reverse direction, with unavailable percentages last. Uncompared
 shows contextual help explaining missing prices, failed requests, and the separate
 availability toggle. Storefront labels remain geographic: currency alone does not
 establish identical regional offers.
+
+
+## Five-currency baseline selection
+
+The flag/header badge is removed. Select a baseline in the left sidebar and up
+to two other currencies below it. The baseline cannot also be an alternative;
+once two alternatives are checked, uncheck one before choosing another. One
+alternative is allowed. Both browser controls and the server enforce the limit.
+Supported pairs are PL/PLN, US/USD, DE/EUR, NO/NOK, and GB/GBP, matching
+[Steam's supported currencies](https://partner.steamgames.com/doc/store/pricing/currencies).
+
+NBP reports PLN per currency unit. The conversion into baseline currency B is
+`rate_to_pln[A] / rate_to_pln[B]`; PLN has an identity rate of 1. The rate notebook
+retains the underlying PLN quotes and dates. CSV additionally includes the
+baseline storefront/currency, derived conversion factor, and baseline rate's
+publication/retrieval/check times and cache status, preserving both conversion
+legs. Final-price and difference columns now use baseline-neutral names.
+
+Selections persist with the saved comparison and retry request. Changing form
+choices does not relabel existing results: their baseline remains the one used
+for that run. Old saved requests without a baseline default to Poland. Examples
+use the selected baseline and alternatives. Restart the server for the new API.
