@@ -62,6 +62,8 @@ class AnalysisTests(unittest.TestCase):
         self.assertIsNotNone(second.comparison)
         self.assertEqual(second.cache_hits, 1)
         self.assertEqual(second.live_requests, 2)
+        self.assertEqual(second.comparison.home_price.source, "cache")
+        self.assertEqual([p.source for p in second.comparison.alternatives], ["live", "live"])
         self.assertEqual(live.calls.count(("10", "pl")), 1)
 
     def test_valid_missing_price_does_not_make_the_run_partial(self):
