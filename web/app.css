@@ -32,15 +32,15 @@
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
 a { color: inherit; text-decoration: none; }
-button, input { font: inherit; }
-button, a, input, summary { touch-action: manipulation; }
+button, input, select { font: inherit; }
+button, a, input, select, summary { touch-action: manipulation; }
 button { cursor: pointer; color: inherit; }
 button:disabled { opacity: .5; cursor: wait; }
-button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 4px;
 }
-button, input { border-radius: 7px; }
+button, input, select { border-radius: 7px; }
 [hidden] { display: none !important; }
 
 .topbar {
@@ -165,7 +165,7 @@ h1 > span { color: var(--muted); }
   border-bottom: 1px solid var(--line);
 }
 .profile-field {
-  max-width: 640px;
+  max-width: 760px;
 }
 .profile-field > label {
   font-size: 23px;
@@ -177,6 +177,31 @@ h1 > span { color: var(--muted); }
 .profile-step {
   margin-bottom: 7px;
   font-size: 10px;
+}
+.profile-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 12px;
+}
+.profile-input {
+  padding-top: 24px;
+}
+.wishlist-order {
+  min-width: 0;
+}
+.wishlist-order > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.wishlist-order select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #232f46;
+  padding: 0 34px 0 12px;
+  background: #0c101c;
+  color: var(--text);
 }
 .profile-actions {
   display: flex;
@@ -823,6 +848,8 @@ progress::-webkit-progress-value {
   .toplinks a { display: none; }
   .intro h1 { font-size: 33px; }
   .eyebrow { font-size: 9px; }
+  .profile-controls { grid-template-columns: 1fr; }
+  .profile-input { padding-top: 0; }
   .profile-actions {
     align-items: stretch;
     flex-direction: column;

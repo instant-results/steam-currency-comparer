@@ -24,14 +24,19 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
   and comparison results. The Steam profile field and primary/example actions
   occupy the full-width first row; the currency sidebar is reserved for baseline
   and comparison choices.
+- The wishlist row selects the initial loading order: personal priority
+  (default, lowest number first), date added (newest first), or name (A-Z).
+  Missing metadata remains stable at the end. Alphabetical order may prefetch
+  baseline details to obtain names, then reuses those lookups without duplicate
+  baseline requests. The selected order persists with refresh and retry.
 - Baseline conflicts temporarily hide comparison selections. Switching to a
   non-conflicting baseline restores them. Explicit checkbox edits replace the
   remembered choices. Saved-job restoration restores that run's selections.
 - The welcome caption follows sidebar choices. Existing results retain their
   own baseline when the user edits the form for a future run.
-- Results append in discovery order using stable row elements. Game name,
+- Results append in the selected loading order using stable row elements. Game name,
   baseline price, absolute difference, and percentage difference can be sorted.
-  Reset sorting restores discovery order without restarting or changing filters.
+  Reset sorting restores loading order without restarting or changing filters.
 - Table column headers align horizontally and vertically with row data:
   "GAME NAME" offsets for the artwork thumbnail slot to align with game titles,
   the baseline price header aligns with numerical prices, "OTHER STOREFRONTS"
@@ -103,9 +108,10 @@ starting another process. Static changes need a browser refresh; backend changes
 need a restart, which clears in-memory jobs. Avoid triggering full live wishlists
 for routine tests.
 
-Last verified: 73 Python tests and 20 frontend tests, all passing. Tests cover
+Last verified: 76 Python tests and 20 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
-render stability, filtering/sorting, CSV, thumbnails, and selection restoration.
+render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
+and selection restoration.
 Frontend tests use a minimal DOM harness; they do not establish browser visual
 correctness. Use targeted UI verification when needed.
 
@@ -115,4 +121,5 @@ Branch at handoff: main. Latest implementation commits:
 - 546fcb5: Align table column headers horizontally and vertically with matching typography.
 - 4e9f010: Display price provenance on hover and remove aggregate capsule labels.
 
-The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
+Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md
+for reminders and separate feature/test commits when committing authorized work.
