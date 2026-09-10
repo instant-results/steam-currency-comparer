@@ -21,6 +21,9 @@
   /* Warning / pricier */
   --orange: #f59e0b;
 
+  --artwork-width: 120px;
+  --artwork-gap: 12px;
+
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   font-size: 16px;
 }
@@ -438,8 +441,12 @@ th {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  vertical-align: top;
 }
-th:first-child, td:first-child { padding-left: 0; }
+td:first-child { padding-left: 0; }
+th:first-child {
+  padding-left: calc(var(--artwork-width) + var(--artwork-gap));
+}
 th:last-child, td:last-child {
   text-align: right;
   padding-right: 0;
@@ -448,6 +455,7 @@ th small {
   font-size: 8px;
   display: block;
   color: #64748b;
+  margin-top: 3px;
 }
 .sort {
   background: none;
@@ -456,10 +464,15 @@ th small {
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
+  text-align: left;
 }
-.sort span {
+.sort-arrow {
   color: #64748b;
   margin-left: 4px;
+}
+#home-heading, #difference-currency {
+  color: inherit;
+  margin-left: 0;
 }
 td {
   padding: 17px 8px;
@@ -938,13 +951,13 @@ td:first-child { min-width: 0; }
   font-size: 13px;
 }
 
-.game-name { display: flex; align-items: center; gap: 12px; }
+.game-name { display: flex; align-items: center; gap: var(--artwork-gap); }
 .game-title { min-width: 0; overflow-wrap: anywhere; }
 .game-artwork {
   position: relative;
   display: block;
-  flex: 0 0 120px;
-  width: 120px;
+  flex: 0 0 var(--artwork-width);
+  width: var(--artwork-width);
   height: 56px;
   overflow: hidden;
   border-radius: 5px;
@@ -971,8 +984,11 @@ td:first-child { min-width: 0; }
   background: var(--surface);
 }
 @media (max-width: 1100px) {
-  .game-name { gap: 8px; }
-  .game-artwork { flex-basis: 86px; width: 86px; height: 40px; }
+  :root {
+    --artwork-width: 86px;
+    --artwork-gap: 8px;
+  }
+  .game-artwork { height: 40px; }
 }
 
 .foreign > span > span { font-size: 16px; color: var(--text); }
@@ -983,7 +999,7 @@ td:first-child { min-width: 0; }
   gap: 12px;
   margin-top: 6px;
 }
-.sort[aria-pressed=true] { color: var(--blue-light); }
+.sort[aria-pressed=true], .sort[aria-pressed=true] .sort-arrow { color: var(--blue-light); }
 #filter-help { margin: 0 0 14px; font-size: 13px; }
 
 .setup .currency-options { display: block; margin: 24px 0; }
