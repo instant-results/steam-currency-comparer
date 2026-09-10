@@ -25,3 +25,5 @@
 .foreign>span>span{font-size:16px;color:var(--text)}.foreign>span>small{font-size:12px;margin-right:5px}.difference-sorts{display:flex;justify-content:flex-end;gap:12px;margin-top:6px}.sort[aria-pressed=true]{color:var(--green)}#filter-help{margin:0 0 14px;font-size:13px}
 
 .setup .currency-options{display:block;margin:24px 0}.currency-options .region{padding:10px 12px;margin-bottom:8px}.currency-options .region:has(input:disabled):not(:has(input:checked)){opacity:.5}.currency-options .region small{white-space:normal}
+
+.empty-caption .welcome-currency{color:inherit;margin:0}

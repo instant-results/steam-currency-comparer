@@ -433,3 +433,9 @@ CSV includes baseline rate provenance alongside each original currency rate.
 Changing form selections does not relabel existing results. Tests cover all
 baseline/alternative pairs, cross rates, limits, restoration, and CSV labeling.
 User explicitly requested no commit for this work; leave it uncommitted.
+
+
+## Welcome currency caption
+
+The welcome caption now follows the sidebar baseline and checked alternatives,
+including restoration and selections with zero or one alternative.
