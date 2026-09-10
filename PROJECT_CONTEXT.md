@@ -89,7 +89,7 @@ starting another process. Static changes need a browser refresh; backend changes
 need a restart, which clears in-memory jobs. Avoid triggering full live wishlists
 for routine tests.
 
-Last verified: 73 Python tests and 18 frontend tests, all passing. Tests cover
+Last verified: 73 Python tests and 19 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, filtering/sorting, CSV, thumbnails, and selection restoration.
 Frontend tests use a minimal DOM harness; they do not establish browser visual
@@ -98,7 +98,7 @@ correctness. Use targeted UI verification when needed.
 ## Git handoff
 
 Branch at handoff: main. Latest implementation commits:
-- a1db622: Replace marketing slogans and taglines with descriptive technical copy.
-- f145e92: Match baseline price font size to secondary currencies and align baselines.
+- 7ab2834: Display retrieval hour alongside exchange rate publication date.
+- 263c746: Add unit test for exchange rate hour display.
 
 The working tree is clean. Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md for reminders and separate feature/test commits when committing authorized work.
