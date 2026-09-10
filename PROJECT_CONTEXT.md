@@ -20,6 +20,10 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
 - Select a baseline from PLN/Poland, USD/United States, EUR/Germany, NOK/Norway,
   or GBP/United Kingdom, plus one or two other currencies. The baseline is
   selected manually, not derived from the Steam profile. Default: PLN vs USD/EUR.
+- The interface presents three numbered steps: wishlist input, currency choices,
+  and comparison results. The Steam profile field and primary/example actions
+  occupy the full-width first row; the currency sidebar is reserved for baseline
+  and comparison choices.
 - Baseline conflicts temporarily hide comparison selections. Switching to a
   non-conflicting baseline restores them. Explicit checkbox edits replace the
   remembered choices. Saved-job restoration restores that run's selections.
@@ -31,8 +35,9 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
 - Table column headers align horizontally and vertically with row data:
   "GAME NAME" offsets for the artwork thumbnail slot to align with game titles,
   the baseline price header aligns with numerical prices, "OTHER STOREFRONTS"
-  aligns vertically on the primary header baseline with converted subtext beneath,
-  and all headers share uniform typography and prominence.
+  and "DIFFERENCE" share the centered primary header baseline, while their
+  secondary conversion and sort labels sit directly beneath without affecting
+  that centering. All headers share uniform typography and prominence.
 - Unavailable products are hidden by default. Uncompared includes missing prices
   and technical failures, subject to the separate unavailable-products toggle.
 - Each regional price retains its own base price, final price, and discount.
