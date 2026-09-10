@@ -151,7 +151,10 @@ test("artwork loads lazily in a fixed slot and falls back without replacing the 
   run(`items = ${JSON.stringify([game("413150","Stardew Valley")])}; render();`);
   const row = get("rows").children[0];
   const frame = row.children[0].children[0].children[0];
+  const gameTitle = row.children[0].children[0].children[1];
   const img = frame.children[1];
+  assert.equal(frame.title, "Steam App ID: 413150");
+  assert.equal(gameTitle.title, "Steam App ID: 413150");
   assert.equal(img.src, "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/413150/header.jpg");
   assert.equal(img.loading, "lazy");
   assert.equal(img.referrerPolicy, "no-referrer");
