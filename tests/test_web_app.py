@@ -14,6 +14,48 @@ PROFILE = "76561198000000000"
 
 
 class WebAppTests(unittest.TestCase):
+    def test_real_http_denial_reaches_job_api_for_wishlist_vanity_rates_and_prices(self):
+        import errno
+        import urllib.error
+        from steam_price_polisher.http_client import UrllibJsonHttpClient
+
+        # Exercise the real HTTP, retry, Steam and rate adapters, not a mocked failure enum.
+        for stage in ("wishlist", "vanity", "rates", "prices", "name_prefetch"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                manager = JobManager(directory, start_worker=False, api_key="secret")
+                manager.gate = Mock()
+                identifier = "https://steamcommunity.com/id/example" if stage == "vanity" else PROFILE
+                job = manager.submit(identifier, ComparisonConfig(), "test",
+                                     order="name" if stage == "name_prefetch" else "priority")
+                raw_client = UrllibJsonHttpClient()
+                denial = urllib.error.URLError(PermissionError(errno.EACCES, "private path"))
+                def respond(request, **kwargs):
+                    url = request.full_url
+                    if stage in {"wishlist", "vanity"} or (stage == "rates" and "api.nbp.pl" in url) or "appdetails" in url:
+                        raise denial
+                    if "GetWishlist" in url:
+                        payload = {"response": {"items": [{"appid": 10}, {"appid": 20}]}}
+                    else:
+                        currency = "USD" if "/usd/" in url else "EUR"
+                        payload = {"code": currency, "table": "A", "rates": [{"mid": 4, "effectiveDate": "2026-09-08"}]}
+                    response = Mock()
+                    response.__enter__ = Mock(return_value=response)
+                    response.__exit__ = Mock(return_value=False)
+                    response.read.return_value = json.dumps(payload).encode()
+                    return response
+                with patch.object(raw_client._opener, "open", side_effect=respond) as requests, patch(
+                    "steam_price_polisher.web_app.UrllibJsonHttpClient", return_value=raw_client
+                ):
+                    manager.execute(job)
+                self.app = WebApplication(manager)
+                result = self.request("/api/jobs/" + job.id, token=job.token)["json"]
+                self.assertEqual(result["state"], "failed")
+                self.assertEqual(result["error_code"], "network_access_denied")
+                self.assertIn("local permissions", result["error"])
+                self.assertNotIn("secret", json.dumps(result))
+                self.assertNotIn("private path", json.dumps(result))
+                self.assertEqual(requests.call_count, {"wishlist": 1, "vanity": 1, "rates": 2, "prices": 4, "name_prefetch": 4}[stage])
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
@@ -111,6 +153,16 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(stored.snapshot()["state"], "failed")
         self.assertNotIn("secret-key", str(stored.snapshot()))
         self.assertEqual(stored.identifier, "")
+
+    def test_local_file_permission_error_is_not_reported_as_network_denial(self):
+        import errno
+        created = self.submit()
+        stored = self.manager.jobs[created["id"]]
+        self.manager.runner = Mock(side_effect=PermissionError(errno.EACCES, "private cache path"))
+        self.manager.execute(stored)
+        self.assertEqual(stored.snapshot()["state"], "failed")
+        self.assertNotEqual(stored.snapshot().get("error_code"), "network_access_denied")
+        self.assertNotIn("private cache path", str(stored.snapshot()))
 
     def test_analysis_integrates_prices_rates_and_cache_resume(self):
         job = self.submit(); stored = self.manager.jobs[job["id"]]

@@ -13,6 +13,19 @@ from steam_price_polisher.presentation import ConsolePresenter
 
 
 class RateMetadataTests(unittest.TestCase):
+    def test_stale_rates_do_not_hide_local_network_denial(self):
+        from steam_price_polisher.http_client import HttpClientError, is_network_access_denied
+        with tempfile.TemporaryDirectory() as directory:
+            cache = SQLiteCache(Path(directory) / "cache.db", clock=lambda: 100)
+            cache.put_exchange_rate("USD", 4, "2026-09-08")
+            http = Mock()
+            http.get_json.side_effect = HttpClientError("blocked", network_access_denied=True)
+            provider = CachedExchangeRateProvider(NbpExchangeRateProvider(http), cache, ttl=10, clock=lambda: 200)
+            with self.assertRaises(ExchangeRateError) as raised:
+                provider.get_rate_details(["USD"])
+            self.assertTrue(is_network_access_denied(raised.exception))
+            self.assertEqual(cache.get_exchange_rate("USD").fetched_at, 100)
+
     def test_nbp_retains_per_currency_dates_and_deduplicates(self):
         http = Mock()
         http.get_json.side_effect = [
