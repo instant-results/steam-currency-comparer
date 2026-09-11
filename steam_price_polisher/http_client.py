@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import http.cookiejar
+import errno
 import json
-import socket
 import ssl
 
 import truststore
@@ -31,6 +31,7 @@ class HttpClientError(RuntimeError):
         transient: bool = False,
         invalid_response: bool = False,
         tls_error: bool = False,
+        network_access_denied: bool = False,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -38,6 +39,36 @@ class HttpClientError(RuntimeError):
         self.transient = transient
         self.invalid_response = invalid_response
         self.tls_error = tls_error
+        self.network_access_denied = network_access_denied
+
+
+NETWORK_ACCESS_MESSAGE = (
+    "This server's network access is blocked by local permissions "
+    "(such as a sandbox or firewall). Restart the server with outbound network "
+    "access to Steam and the exchange-rate service, then retry."
+)
+
+
+def is_network_access_denied(error: BaseException, *, include_os_errors: bool = False) -> bool:
+    """Follow classified transport failures; inspect OS codes only at the HTTP boundary."""
+    pending, seen = [error], set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, HttpClientError) and current.network_access_denied:
+            return True
+        # SSL error numbers use a different namespace (SSL_ERROR_SSL is also 1).
+        if include_os_errors and isinstance(current, OSError) and not isinstance(current, ssl.SSLError) and (
+            current.errno in {errno.EACCES, errno.EPERM, 10013}
+            or getattr(current, "winerror", None) == 10013
+        ):
+            return True
+        pending.extend(value for value in (
+            getattr(current, "reason", None), current.__cause__, current.__context__
+        ) if isinstance(value, BaseException))
+    return False
 
 
 class UrllibJsonHttpClient:
@@ -78,7 +109,11 @@ class UrllibJsonHttpClient:
                 retry_after=retry_after,
                 transient=transient,
             ) from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout, ssl.SSLError) as exc:
+        except OSError as exc:
+            if is_network_access_denied(exc, include_os_errors=True):
+                raise HttpClientError(
+                    NETWORK_ACCESS_MESSAGE, network_access_denied=True,
+                ) from exc
             if isinstance(getattr(exc, "reason", exc), ssl.SSLError):
                 raise HttpClientError(
                     "The server could not verify the secure connection to the upstream service.",
