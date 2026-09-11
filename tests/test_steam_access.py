@@ -27,6 +27,25 @@ class QueueHttpClient:
 
 
 class SteamAccessTests(unittest.TestCase):
+    def test_denied_wishlist_does_not_retry_another_endpoint(self):
+        for identifier, key in (("76561198000000000", ""), ("example", "secret"), ("example", "")):
+            http = QueueHttpClient([HttpClientError("private", network_access_denied=True)])
+            client = SteamClient(http, web_api_key=key)
+            result = client.get_wishlist(identifier)
+            self.assertEqual(result.failure, WishlistFailure.NETWORK_ACCESS_DENIED)
+            self.assertEqual(len(http.urls), 1)
+            self.assertNotIn("private", str(result))
+
+    def test_regional_network_denial_retains_category_and_is_not_retryable(self):
+        from steam_price_polisher.steam_access import SteamAccessError
+        from steam_price_polisher.models import SkipCategory
+        http = QueueHttpClient([HttpClientError("private", network_access_denied=True)])
+        with self.assertRaises(SteamAccessError) as raised:
+            SteamClient(http, request_delay=0).get_regional_price("10", "pl", "PLN")
+        self.assertEqual(raised.exception.category, SkipCategory.NETWORK_ACCESS_DENIED)
+        self.assertFalse(raised.exception.retryable)
+        self.assertNotIn("private", str(raised.exception))
+
     def test_normalizes_supported_identifiers(self):
         examples = {
             "76561198000000000": "76561198000000000",
