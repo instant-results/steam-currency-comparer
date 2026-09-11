@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import Protocol
 
 from .cache import SQLiteCache
-from .http_client import JsonHttpClient
+from .http_client import JsonHttpClient, is_network_access_denied
 from .models import ExchangeRate
 
 
@@ -90,7 +90,9 @@ class CachedExchangeRateProvider:
         if missing:
             try:
                 fetched = self._upstream.get_rate_details(missing)
-            except ExchangeRateError:
+            except ExchangeRateError as exc:
+                if is_network_access_denied(exc):
+                    raise
                 if not all(currency in fallback for currency in missing):
                     raise
                 fetched = {currency: fallback[currency] for currency in missing}

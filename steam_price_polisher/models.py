@@ -17,6 +17,7 @@ class WishlistItem:
 
 
 class WishlistFailure(str, Enum):
+    NETWORK_ACCESS_DENIED = "network_access_denied"
     TLS = "tls"
     REQUEST = "request"
     INVALID_RESPONSE = "invalid_response"
@@ -128,6 +129,7 @@ class SkippedGame:
 
 
 class SkipCategory(str, Enum):
+    NETWORK_ACCESS_DENIED = "network_access_denied"
     NO_REGIONAL_PRICE = "no_regional_price"
     APP_UNAVAILABLE = "app_unavailable"
     TEMPORARY_FAILURE = "temporary_failure"
@@ -138,6 +140,7 @@ class SkipCategory(str, Enum):
     @property
     def label(self) -> str:
         return {
+            SkipCategory.NETWORK_ACCESS_DENIED: "Server network access blocked by local permissions",
             SkipCategory.NO_REGIONAL_PRICE: "No regional price",
             SkipCategory.APP_UNAVAILABLE: "App unavailable",
             SkipCategory.TEMPORARY_FAILURE: "Temporary request failures",

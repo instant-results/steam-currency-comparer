@@ -153,6 +153,9 @@ class AnalysisRunner:
                     self._home.currency,
                 )
             except SteamAccessError as exc:
+                if exc.category is SkipCategory.NETWORK_ACCESS_DENIED:
+                    # Alphabetical prefetch must not repeat a server-wide denial for every game.
+                    raise
                 prepared.append((item, None, exc))
                 continue
             display_name = lookup.result.game_name or f"App {item.app_id}"

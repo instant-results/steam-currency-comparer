@@ -23,8 +23,8 @@ from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
 from .configuration import ComparisonConfig
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
-from .http_client import UrllibJsonHttpClient
-from .models import ComparisonMethodology, WishlistFailure, WishlistItem
+from .http_client import UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
+from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
@@ -218,7 +218,11 @@ class JobManager:
             job.check_cancelled()
         except Cancelled:
             job.update(state="cancelled", message="Comparison cancelled.")
-        except Exception:
+        except Exception as exc:
+            if is_network_access_denied(exc):
+                job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
+                           error_code="network_access_denied", message="Server network access blocked.")
+                return
             # Never return exception strings, URLs, API keys, or local paths.
             logging.getLogger(__name__).warning("Wishlist analysis failed; details withheld from public output.")
             job.update(state="failed", error="Could not complete the comparison. Steam or the exchange-rate service may be unavailable. Try again shortly.",
@@ -245,12 +249,14 @@ class JobManager:
             wishlist = deduplicate_wishlist(wishlist_result.items)
             if wishlist_result.failure is not None:
                 messages = {
+                    WishlistFailure.NETWORK_ACCESS_DENIED: NETWORK_ACCESS_MESSAGE,
                     WishlistFailure.TLS: "The server could not verify its secure connection to Steam. This is a server connection problem, not a wishlist privacy setting.",
                     WishlistFailure.REQUEST: "Steam could not be reached to load your wishlist. Please try again shortly.",
                     WishlistFailure.INVALID_RESPONSE: "Steam returned an unreadable wishlist response. Please try again shortly.",
                     WishlistFailure.VANITY: "Could not resolve that custom profile URL. Try your numeric SteamID64 instead.",
                 }
-                job.update(state="failed", error=messages[wishlist_result.failure], message="Wishlist retrieval failed.")
+                job.update(state="failed", error=messages[wishlist_result.failure],
+                           error_code=wishlist_result.failure.value, message="Wishlist retrieval failed.")
                 return
             if not wishlist:
                 message = "No public wishlist games were found. Check your profile and wishlist privacy settings."
@@ -301,6 +307,10 @@ class JobManager:
                 item["skipped"]["reason"] = progress.skipped.category.label
                 partial |= progress.skipped.category.is_technical_failure
             job.append(item)
+            if progress.skipped and progress.skipped.category is SkipCategory.NETWORK_ACCESS_DENIED:
+                job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
+                           error_code="network_access_denied", message="Server network access blocked.")
+                return
         job.check_cancelled()
         job.update(state="partial" if partial else "complete", message=f"Checked {len(wishlist)} games.")
 
@@ -369,7 +379,7 @@ class WebApplication:
         return respond("404 Not Found", {"error": "Not found."})
 
 
-def create_app():
+def create_app(*, origin=None):
     data = os.environ.get("STEAM_PRICE_POLISHER_DATA_DIR", Path(__file__).resolve().parent.parent / ".steam-price-polisher")
     return WebApplication(JobManager(data, api_key=os.environ.get("STEAM_WEB_API_KEY", "")),
-                          origin=os.environ.get("WEB_ORIGIN", "http://127.0.0.1:8765"))
+                          origin=os.environ.get("WEB_ORIGIN", origin or "http://127.0.0.1:8765"))

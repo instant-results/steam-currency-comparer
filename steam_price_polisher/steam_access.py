@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from urllib.parse import urlencode
 
-from .http_client import HttpClientError, JsonHttpClient
+from .http_client import HttpClientError, JsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import (
     RegionalPriceResult,
     SkipCategory,
@@ -86,6 +86,7 @@ class SteamRequestError(SteamAccessError):
 
 
 class VanityResolutionStatus(str, Enum):
+    NETWORK_ACCESS_DENIED = "network_access_denied"
     RESOLVED = "resolved"
     API_KEY_MISSING = "api_key_missing"
     NOT_FOUND = "not_found"
@@ -158,7 +159,10 @@ class SteamClient:
         )
         try:
             payload = self._http_client.get_json(url)
-        except Exception:
+        except Exception as exc:
+            if is_network_access_denied(exc):
+                return VanityResolution(VanityResolutionStatus.NETWORK_ACCESS_DENIED,
+                                        None, NETWORK_ACCESS_MESSAGE)
             return VanityResolution(
                 VanityResolutionStatus.REQUEST_FAILED,
                 None,
@@ -205,6 +209,9 @@ class SteamClient:
 
         if not re.fullmatch(r"\d+", identifier):
             resolution = self.resolve_vanity_url(identifier)
+            if resolution.status is VanityResolutionStatus.NETWORK_ACCESS_DENIED:
+                return WishlistResult((), "Steam Web API", (resolution.message,),
+                                      WishlistFailure.NETWORK_ACCESS_DENIED)
             if resolution.resolved:
                 lookup_identifier = resolution.steam_id
             else:
@@ -238,6 +245,11 @@ class SteamClient:
                 )
                 return WishlistResult(items, "Steam Web API", tuple(warnings))
             except HttpClientError as exc:
+                if exc.network_access_denied:
+                    local_items = self._load_local_wishlist()
+                    return WishlistResult(local_items, "wishlist.txt" if local_items else "Steam Web API",
+                                          (NETWORK_ACCESS_MESSAGE,),
+                                          None if local_items else WishlistFailure.NETWORK_ACCESS_DENIED)
                 failure = (WishlistFailure.TLS if exc.tls_error else
                            WishlistFailure.INVALID_RESPONSE if exc.invalid_response else WishlistFailure.REQUEST)
                 warnings.append("Steam Web API wishlist retrieval failed.")
@@ -250,6 +262,8 @@ class SteamClient:
             return WishlistResult(local_items, "wishlist.txt", tuple(warnings))
 
         legacy_items, legacy_failure = self._get_legacy_wishlist(lookup_identifier or identifier, warnings)
+        if legacy_failure is WishlistFailure.NETWORK_ACCESS_DENIED:
+            failure = legacy_failure
         return WishlistResult(legacy_items, "legacy Steam store endpoint", tuple(warnings),
                               (failure or legacy_failure) if not legacy_items else legacy_failure)
 
@@ -287,6 +301,8 @@ class SteamClient:
                 payload = self._http_client.get_json(url)
             except HttpClientError as exc:
                 warnings.append("Legacy Steam wishlist retrieval failed.")
+                if exc.network_access_denied:
+                    return (), WishlistFailure.NETWORK_ACCESS_DENIED
                 failure = WishlistFailure.TLS if exc.tls_error else WishlistFailure.REQUEST
                 return (), failure
             if not isinstance(payload, dict) or any(
@@ -342,6 +358,11 @@ class SteamClient:
         try:
             response = self._http_client.get_json(url)
         except HttpClientError as exc:
+            if exc.network_access_denied:
+                raise SteamAccessError(
+                    NETWORK_ACCESS_MESSAGE, category=SkipCategory.NETWORK_ACCESS_DENIED,
+                    app_id=app_id, region=region, retryable=False,
+                ) from exc
             message = f"Regional request failed for app {app_id} ({region}): {exc}"
             if exc.invalid_response:
                 raise SteamProtocolError(
