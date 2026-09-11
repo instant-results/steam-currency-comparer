@@ -69,11 +69,16 @@ class ServerLifecycleTests(unittest.TestCase):
         with PreviewServer(("127.0.0.1", port), lambda: True):
             pass
 
+    def events_for(self, pid):
+        path = Path(self.directory.name) / "logs" / f"events-{pid}.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
     def test_duplicate_rejected_signal_shutdown_and_immediate_restart(self):
         process = self.launch()
         port, _ = self.ready()
         duplicate = self.launch(port)
         self.assertEqual(duplicate.wait(timeout=5), 1)
+        self.assertEqual(self.events_for(duplicate.pid)[-1]["event"], "server_start_failed")
         self.assertIn("existing listener", self.log_path.read_text())
         # A partially sent HTTP request must not block health or shutdown.
         with socket.create_connection(("127.0.0.1", port), timeout=2) as slow:
@@ -81,6 +86,9 @@ class ServerLifecycleTests(unittest.TestCase):
             self.ready()
             process.send_signal(signal.CTRL_BREAK_EVENT if os.name == "nt" else signal.SIGINT)
             self.assertEqual(process.wait(timeout=5), 0)
+        events = self.events_for(process.pid)
+        self.assertEqual([row["event"] for row in events], ["server_started", "server_stopped"])
+        self.assertIn(events[-1]["reason"], {"sigint", "sigbreak"})
         self.assert_port_clear(port)
         self.log_path.write_text("")
         replacement = self.launch(port)
@@ -104,6 +112,7 @@ class ServerLifecycleTests(unittest.TestCase):
         self.wait_until(lambda: "listener closed" in self.log_path.read_text())
         self.assert_port_clear(port)
         # The listener closes before interpreter teardown releases inherited log handles.
+        self.assertEqual(self.events_for(child_pid)[-1]["reason"], "parent_exited")
         if os.name == "nt":
             import ctypes
             from ctypes import wintypes
