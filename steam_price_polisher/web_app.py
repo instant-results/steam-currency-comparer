@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hmac
 import json
-import logging
 import os
 import queue
 import re
@@ -28,6 +27,8 @@ from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCa
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
+from .event_log import (configure_event_logging, runtime_data_directory, emit,
+                        job_context, elapsed_ms, error_metadata)
 
 TERMINAL = {"complete", "partial", "cancelled", "failed"}
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
@@ -106,6 +107,7 @@ class Job:
         self.cancel = threading.Event()
         self.lock = threading.Lock()
         self.updated = time.monotonic()
+        self.created = self.updated
         self.data = {"state": "queued", "message": "Queued — waiting for the current comparison.",
                      "profile": identifier, "home": config.home.region, "regions": [r.region for r in config.alternatives], "order": order,
                      "total": 0, "items": [], "rates": [], "warnings": [], "error": None,
@@ -175,6 +177,7 @@ class JobManager:
                 raise BusyError("The comparison service is busy. Please try again later.")
             job = Job(identifier, config, owner, order)
             self.jobs[job.id] = job
+            emit("job_queued", job_id=job.id)
             self.queue.put_nowait(job)
             return job
 
@@ -195,6 +198,7 @@ class JobManager:
                 return
             job.data["state"] = "cancelling"
             job.data["message"] = "Cancelling — waiting for the current request to finish."
+        emit("job_cancel_requested", job_id=job.id)
 
     def _work(self):
         while True:
@@ -212,23 +216,33 @@ class JobManager:
                 self.queue.task_done()
 
     def execute(self, job):
-        try:
-            job.check_cancelled()
-            self.runner(job)
-            job.check_cancelled()
-        except Cancelled:
-            job.update(state="cancelled", message="Comparison cancelled.")
-        except Exception as exc:
-            if is_network_access_denied(exc):
-                job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
-                           error_code="network_access_denied", message="Server network access blocked.")
-                return
-            # Never return exception strings, URLs, API keys, or local paths.
-            logging.getLogger(__name__).warning("Wishlist analysis failed; details withheld from public output.")
-            job.update(state="failed", error="Could not complete the comparison. Steam or the exchange-rate service may be unavailable. Try again shortly.",
-                       message="Comparison could not be completed.")
-        finally:
-            job.identifier = ""  # Attribution remains only in the private, expiring result.
+        with job_context(job.id):
+            started = time.monotonic()
+            diagnostic = {}
+            emit("job_started", queue_wait_ms=(started - job.created) * 1000)
+            try:
+                job.check_cancelled()
+                self.runner(job)
+                job.check_cancelled()
+            except Cancelled:
+                job.update(state="cancelled", message="Comparison cancelled.")
+            except Exception as exc:
+                diagnostic = error_metadata(exc)
+                if is_network_access_denied(exc):
+                    job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
+                               error_code="network_access_denied", message="Server network access blocked.")
+                else:
+                    # Never return exception strings, URLs, API keys, or local paths.
+                    job.update(state="failed", error="Could not complete the comparison. Steam or the exchange-rate service may be unavailable. Try again shortly.",
+                               message="Comparison could not be completed.")
+            finally:
+                result = job.snapshot()
+                if result["state"] == "failed":
+                    diagnostic.setdefault("category", result.get("error_code") or "comparison_failed")
+                emit("job_failed" if result["state"] == "failed" else "job_finished",
+                     state=result["state"], duration_ms=elapsed_ms(started), total=result["total"],
+                     checked=len(result["items"]), **diagnostic)
+                job.identifier = ""  # Attribution remains only in the private, expiring result.
 
     def _analyze(self, job):
         job.update(state="loading", message="Loading public wishlist…")
@@ -380,6 +394,7 @@ class WebApplication:
 
 
 def create_app(*, origin=None):
-    data = os.environ.get("STEAM_PRICE_POLISHER_DATA_DIR", Path(__file__).resolve().parent.parent / ".steam-price-polisher")
+    data = runtime_data_directory()
+    configure_event_logging(data)
     return WebApplication(JobManager(data, api_key=os.environ.get("STEAM_WEB_API_KEY", "")),
                           origin=os.environ.get("WEB_ORIGIN", origin or "http://127.0.0.1:8765"))

@@ -9,9 +9,26 @@ from socketserver import ThreadingMixIn
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
 
 from steam_price_polisher.web_app import create_app
+from steam_price_polisher.event_log import configure_event_logging, emit, error_metadata
+
+
+class RequestErrorStream:
+    """Replace wsgiref's raw exception dump with one metadata-only event."""
+    reported = False
+
+    def write(self, text):
+        if text.strip() and not self.reported:
+            self.reported = True
+            emit("server_request_failed", **error_metadata(sys.exc_info()[1]))
+
+    def flush(self):
+        pass
 
 
 class QuietHandler(WSGIRequestHandler):
+    def get_stderr(self):
+        return RequestErrorStream()
+
     def setup(self):
         self.request.settimeout(10)
         super().setup()
@@ -33,6 +50,7 @@ class PreviewServer(ThreadingMixIn, WSGIServer):
     def __init__(self, address, parent_alive):
         self.parent_alive = parent_alive
         self.stop_requested = False
+        self.stop_reason = "normal"
         super().__init__(address, QuietHandler)
 
     def server_bind(self):
@@ -41,8 +59,19 @@ class PreviewServer(ThreadingMixIn, WSGIServer):
         super().server_bind()
 
     def service_actions(self):
-        if self.stop_requested or not self.parent_alive():
+        if self.stop_requested:
             raise PreviewStopped()
+        if not self.parent_alive():
+            self.stop_reason = "parent_exited"
+            raise PreviewStopped()
+
+    def handle_error(self, request, client_address):
+        # socketserver's default would print the client address and raw traceback.
+        error = sys.exc_info()[1]
+        event = ("client_connection_closed" if isinstance(error, (
+            TimeoutError, ConnectionResetError, ConnectionAbortedError, BrokenPipeError,
+        )) else "server_request_failed")
+        emit(event, **error_metadata(error))
 
 
 @contextmanager
@@ -77,6 +106,7 @@ def watch_parent():
 def stop_signals(server):
     def request_stop(signum, frame):
         server.stop_requested = True
+        server.stop_reason = signal.Signals(signum).name.lower()
 
     previous = {}
     try:
@@ -96,6 +126,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 0 <= args.port <= 65535:
         parser.error("port must be between 0 and 65535")
+    configure_event_logging()
     try:
         with watch_parent() as parent_alive:
             # Acquire the port before creating a worker or announcing success.
@@ -104,14 +135,19 @@ def main(argv=None):
                 server.set_app(create_app(origin=origin))
                 with stop_signals(server):
                     print(f"Steam Prices Polisher: {origin} (PID {os.getpid()})", flush=True)
+                    emit("server_started", port=server.server_port)
                     try:
                         server.serve_forever(poll_interval=0.2)
-                    except (PreviewStopped, KeyboardInterrupt):
+                    except PreviewStopped:
                         pass
+                    except KeyboardInterrupt:
+                        server.stop_reason = "keyboard_interrupt"
+            emit("server_stopped", port=server.server_port, reason=server.stop_reason)
         print("Steam Prices Polisher stopped; listener closed.", flush=True)
         return 0
     except OSError as exc:
-        print(f"Could not start the preview on port {args.port}: {exc}. "
+        emit("server_start_failed", port=args.port, **error_metadata(exc))
+        print(f"Could not start the preview on port {args.port}. "
               "Check for an existing listener and local socket permissions.", file=sys.stderr)
         return 1
 
