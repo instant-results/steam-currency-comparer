@@ -76,6 +76,7 @@ Python WSGI backend, vanilla HTML/CSS/JavaScript frontend; no frontend build ste
 - steam_access.py, price_service.py: Steam retrieval and price-cache handling.
 - exchange_rates.py, cache.py: NBP rates and SQLite persistence.
 - request_policy.py, http_client.py: pacing, retries, and secure HTTP.
+- event_log.py: structured local diagnostics, rotation, job correlation, and safe metadata.
 - steam_wishlist_compare.py: CLI, still using Poland as baseline.
 - DEPLOYMENT.md: hosting guidance; consult before any deployment work.
 
@@ -112,6 +113,22 @@ wishlist/vanity lookup, regional prices, and exchange rates. Permission denial
 stops the job, including alphabetical prefetch; stale rates do not conceal it.
 HTTP 403, TLS errors, and local file permission errors remain distinct.
 
+## Diagnostic logging
+
+The preview and WSGI factory configure a dedicated event logger. Per-process
+JSON Lines files live under the data directory's `logs/events-<PID>.jsonl`, with
+2 MiB rotation and three backups per process. Old process logs remain until
+removed. Git ignores event files, including rotations. INFO covers lifecycle
+and failures; `STEAM_PRICE_POLISHER_LOG_LEVEL=DEBUG` adds request successes and
+cache provenance to files while console output stays at INFO.
+
+Context-local job IDs connect lifecycle, request, and cache events across worker
+execution. Only allowlisted metadata is recorded: no credentials, profiles,
+game lists/prices, request URLs/headers/bodies, raw exception text, or local
+absolute paths. Unexpected failures include type and project code location.
+File logging failures fall back to console diagnostics without stopping jobs.
+See README.md for usage. The CLI does not automatically configure file logging.
+
 ## Run and verify
 
 From the repository root:
@@ -129,7 +146,7 @@ changes need a browser refresh; backend changes need a verified clean restart,
 which clears in-memory jobs. Avoid triggering full live wishlists for routine
 tests.
 
-Last verified: 87 Python tests and 20 frontend tests, all passing. Tests cover
+Last verified: 98 Python tests and 20 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
 and selection restoration.
@@ -138,9 +155,9 @@ correctness. Use targeted UI verification when needed.
 
 ## Git handoff
 
-The integration branch is `main`. Server lifecycle and network-permission fixes
-are versioned separately from their regression tests and documentation. Use Git
-history for commit details.
+The integration branch is `main`. Structured logging implementation, regression
+tests, and documentation are versioned in separate commits. Use Git history
+for commit details.
 
 Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md
 for reminders and separate feature/test commits when committing authorized work.
