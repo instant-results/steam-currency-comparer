@@ -10,6 +10,7 @@ from typing import Protocol
 from .cache import SQLiteCache
 from .models import PriceStatus, RegionalPriceResult
 from .steam_access import SteamTemporaryError
+from .event_log import emit
 
 
 class LiveRegionalPriceProvider(Protocol):
@@ -72,6 +73,7 @@ class CachedPriceService:
             if price is not None and price.discount_percent and price.discount_percent > 0:
                 ttl = min(ttl, self._sale_ttl)
             if not metadata_missing and self._clock() - cached.fetched_at <= ttl:
+                emit("cache_access", cache_kind="price", source="cache")
                 return PriceLookup(cached.result, "cache")
 
         try:
@@ -82,8 +84,10 @@ class CachedPriceService:
             )
         except SteamTemporaryError:
             if cached is not None and self._use_stale_on_error:
+                emit("cache_access", cache_kind="price", source="stale cache")
                 return PriceLookup(cached.result, "stale cache")
             raise
 
         self._cache.put_price(app_id, region, expected_currency, live)
+        emit("cache_access", cache_kind="price", source="live")
         return PriceLookup(live, "live")

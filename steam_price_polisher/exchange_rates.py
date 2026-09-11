@@ -9,6 +9,7 @@ from typing import Protocol
 from .cache import SQLiteCache
 from .http_client import JsonHttpClient, is_network_access_denied
 from .models import ExchangeRate
+from .event_log import emit
 
 
 class ExchangeRateError(RuntimeError):
@@ -100,4 +101,6 @@ class CachedExchangeRateProvider:
                 for currency, rate in fetched.items():
                     self._cache.put_exchange_rate(currency, rate.rate_to_pln, rate.effective_date)
             rates.update(fetched)
+        for currency in requested:
+            emit("cache_access", cache_kind="exchange_rate", source=rates[currency].cache_status)
         return {currency: rates[currency] for currency in requested}

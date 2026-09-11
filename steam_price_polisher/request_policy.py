@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .http_client import HttpClientError, JsonHttpClient
+from .event_log import emit, elapsed_ms, error_metadata, request_metadata
 
 
 class RequestGate:
@@ -89,14 +90,22 @@ class RetryingJsonHttpClient:
         for attempt in range(self._policy.max_attempts):
             if self._gate is not None:
                 self._gate.wait()
+            started = time.monotonic()
             try:
-                return self._upstream.get_json(url, headers)
+                result = self._upstream.get_json(url, headers)
+                emit("request_completed", **request_metadata(url), attempt=attempt + 1,
+                     duration_ms=elapsed_ms(started))
+                return result
             except HttpClientError as exc:
                 is_last_attempt = attempt + 1 >= self._policy.max_attempts
-                if not exc.transient or is_last_attempt:
+                will_retry = exc.transient and not is_last_attempt
+                delay = self._retry_delay(attempt, exc.retry_after) if will_retry else 0
+                emit("request_failed", **request_metadata(url), **error_metadata(exc),
+                     attempt=attempt + 1, duration_ms=elapsed_ms(started),
+                     will_retry=will_retry, retry_in_ms=delay * 1000)
+                if not will_retry:
                     raise
 
-                delay = self._retry_delay(attempt, exc.retry_after)
                 if self._gate is not None:
                     self._gate.defer(delay)
                 else:

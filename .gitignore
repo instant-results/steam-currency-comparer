@@ -21,6 +21,9 @@ htmlcov/
 wishlist.txt
 .steam-price-polisher/
 
+# Structured diagnostics, including rotations if a custom data directory is used.
+events-*.jsonl*
+
 # Editor and operating-system files
 .idea/
 .vscode/
