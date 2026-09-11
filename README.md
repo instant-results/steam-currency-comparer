@@ -130,6 +130,43 @@ judgment of consumer fairness or a checkout quote:
 Analysis results retain rate records and versioned methodology metadata for UI
 rendering and exports.
 
+## Diagnostic events
+
+The web app and preview write structured JSON Lines events to
+`.steam-price-polisher/logs/events-<PID>.jsonl` by default. If
+`STEAM_PRICE_POLISHER_DATA_DIR` is set, logs live in its `logs` subdirectory.
+Each process has its own file so duplicate startup attempts cannot interfere
+with another server's rotation. Files rotate at 2 MiB, keeping three backups
+per process (about 8 MiB total). Files from previous processes remain available;
+remove those old files when no longer needed. Generated event files are ignored
+by Git. Logging uses Python's standard library; no external service is involved.
+
+Normal logs include server startup, shutdown reason, startup failures, job
+queue/start/cancellation/completion/failure, and upstream request failures with
+service, operation, attempt, timing, status/socket code, and retry decision.
+Successful requests, cache provenance, and idle/closed client connections are
+included only at DEBUG level:
+
+```powershell
+$env:STEAM_PRICE_POLISHER_LOG_LEVEL = "DEBUG"
+python serve_web.py
+```
+
+Restart with `STEAM_PRICE_POLISHER_LOG_LEVEL=INFO` (the default) for normal detail.
+The terminal stays at INFO even in debug mode. Set variables in the launching
+shell; the project does not automatically load `.env`. The CLI does not configure
+file logging automatically.
+
+Events contain a UTC timestamp and process ID. Use `job_id` to connect a job's
+lifecycle to its requests and cache events; it is the internal job ID returned
+when a comparison starts, not its access token. The logger records counts, not
+game lists or prices. It excludes profiles, IP addresses, API keys, cookies,
+tokens, URLs, headers, response bodies, and raw exception text. Unexpected errors
+retain their exception type and an allowlisted project code location, without
+locals, source lines, or absolute paths. Log files are local diagnostics and
+are not served by the web app. File logging failures leave the server running
+with console diagnostics and a fixed warning.
+
 ## Tests
 
 ```powershell
