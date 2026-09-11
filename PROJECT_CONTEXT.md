@@ -1,14 +1,15 @@
 # Steam Prices Polisher — development handoff
 
-Updated: 2026-09-10. This is a current-state summary, not a change log.
+Updated: 2026-09-11. This is a current-state summary, not a change log.
 
 ## Start here
 
 Read AGENTS.md for collaboration preferences and README.md for usage and
 methodology. Inspect Git status and the implementation before changing anything.
 Use Git history for historical details; do not repeat the development history.
-There is no outstanding implementation request at this handoff. Continue with
-the user's next request rather than inventing a new feature or deploying the app.
+Continue with the user's next request rather than inventing a new feature or
+deploying the app. Local-server lifecycle and network-permission error handling
+have been addressed; see the operational notes below.
 
 ## Product and current behavior
 
@@ -57,8 +58,9 @@ and dramatic fragment copy have been eliminated in favor of clear technical pros
 - CSV exports all loaded results, regardless of filters, with optional profile
   attribution off by default. It includes both exchange-rate legs and their
   publication, retrieval, and check times; tokens are never exported.
-- Start and Cancel share a sidebar slot. Profile, baseline, and comparisons are
-  retained with the saved job in the same tab. Example mode compares a curated
+- Start, Cancel, and example actions sit in the full-width wishlist row. Profile,
+  baseline, comparison currencies, and loading order are retained with the saved
+  job in the same tab. Example mode compares a curated
   7-game wishlist (including The Witcher 3) using live Steam prices and official NBP exchange rates.
 
 ## Architecture and constraints
@@ -91,24 +93,43 @@ up to 1,000 games. Jobs expire and are lost on server restart; cached prices rem
 Keep cache files, local wishlists, cookies, and keys out of Git. The web app does
 not use CLI cookies or local wishlist files. HTTPS verification must remain enabled.
 
+## Local server lifecycle and network access
+
+The preview binds exclusively on Windows and rejects duplicate listeners,
+including legacy servers using address reuse. It handles interrupt/termination
+signals, checks the original parent process for exit, and closes the listener
+through context-manager cleanup. Slow HTTP clients run on daemon request threads.
+Keep the launching terminal alive; use the WSGI factory for managed deployments.
+`--port` selects a loopback port (0 requests an available temporary port).
+
+Follow README.md checks before and after starts/restarts. Repeatable subprocess tests cover shutdown,
+parent exit, duplicate launches, and immediate reuse of the released port.
+
+Launch live previews with outbound network access. OS socket permission denial
+(including Windows 10013) becomes a non-retryable `network_access_denied` error,
+with sanitized guidance to restart with outbound access. This propagates through
+wishlist/vanity lookup, regional prices, and exchange rates. Permission denial
+stops the job, including alphabetical prefetch; stale rates do not conceal it.
+HTTP 403, TLS errors, and local file permission errors remain distinct.
+
 ## Run and verify
 
 From the repository root:
 
 ```powershell
-python serve_web.py
 python -m unittest discover -q
 node --test tests/test_web_render.cjs
 node --check web/app.js
 git diff --check
 ```
 
-Preview: http://127.0.0.1:8765/. Check whether it is already running before
-starting another process. Static changes need a browser refresh; backend changes
-need a restart, which clears in-memory jobs. Avoid triggering full live wishlists
-for routine tests.
+After verifying that port 8765 is clear, start the preview separately with
+`python serve_web.py`, then confirm http://127.0.0.1:8765/api/health. Static
+changes need a browser refresh; backend changes need a verified clean restart,
+which clears in-memory jobs. Avoid triggering full live wishlists for routine
+tests.
 
-Last verified: 76 Python tests and 20 frontend tests, all passing. Tests cover
+Last verified: 87 Python tests and 20 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
 and selection restoration.
@@ -117,9 +138,9 @@ correctness. Use targeted UI verification when needed.
 
 ## Git handoff
 
-Branch at handoff: main. Latest implementation commits:
-- 546fcb5: Align table column headers horizontally and vertically with matching typography.
-- 4e9f010: Display price provenance on hover and remove aggregate capsule labels.
+The integration branch is `main`. Server lifecycle and network-permission fixes
+are versioned separately from their regression tests and documentation. Use Git
+history for commit details.
 
 Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md
 for reminders and separate feature/test commits when committing authorized work.

@@ -4,14 +4,7 @@ Compare Steam wishlist prices using a selectable baseline and up to two other
 storefronts. The web app supports PLN (Poland), USD (United States), EUR (Germany),
 NOK (Norway), and GBP (United Kingdom). The default remains PLN against USD/EUR.
 
-## Continuing development
-
-Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the concise current-state
-handoff and [AGENTS.md](AGENTS.md) for collaboration and Git preferences.
-Inspect the current repository state before continuing; Git history contains
-the detailed change history.
-
-## Run the web app
+## Quick start
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -31,6 +24,20 @@ using completed cached prices. The example mode compares a curated sample of 7 p
 games (including The Witcher 3, Cyberpunk 2077, and ELDEN RING) using live Steam store
 prices and official NBP exchange rates; thumbnails load from Steam. Price provenance
 (live, cached, stale) is displayed per-price on hover.
+
+Keep the launching terminal open. Stop the preview with Ctrl+C (or Ctrl+Break on
+Windows); it also exits if the launching process terminates. A second instance
+on the same port is rejected. Before restarting, verify that port 8765 has no
+listeners; after starting, verify exactly one listener and a successful response
+from `/api/health`. Old versions may need their confirmed app process stopped
+explicitly. Use `python serve_web.py --port 8766` to select a different port.
+
+Live Steam and NBP requests require outbound network access from the server.
+When using an agent's network-restricted sandbox, launch the preview with approved
+outbound access. A "network access is blocked by local permissions" error means
+the server's sandbox, firewall, or OS permissions need attention; restarting with
+appropriate access is required before retrying. This is separate from an upstream
+HTTP rejection or outage. Blocked requests are not automatically retried.
 
 The web app supports **public wishlists only**. It ignores Steam cookies and the
 local `wishlist.txt` file. A server-configured API key can resolve vanity URLs.
@@ -120,8 +127,8 @@ judgment of consumer fairness or a checkout quote:
   in the euro area may differ.
 - Regional prices can be cached or fetched at different times.
 
-The analysis result retains rate records and versioned methodology metadata for
-use by the future interactive interface.
+Analysis results retain rate records and versioned methodology metadata for UI
+rendering and exports.
 
 ## Tests
 
@@ -135,12 +142,21 @@ Frontend rendering regression checks (Node.js):
 node --test tests/test_web_render.cjs
 ```
 
+Repeatable preview lifecycle checks (included in the Python suite):
+
+```powershell
+python -m unittest tests.test_server_lifecycle -v
+```
+
+These launch temporary servers on available loopback ports, verify health,
+duplicate-instance rejection, shutdown and restart, and loss of the launching
+process. They use temporary data directories and make no external requests.
+
 ## Profile attribution and sale prices
 
-The current profile and selected regions are restored with the comparison in the
-same browser tab. Each new result also carries private profile attribution until
-its one-hour expiry. Older sessions created before this feature cannot recover
-an identifier that was never stored; start a new comparison once.
+The current profile, selected regions, baseline, and loading order are restored
+with the comparison in the same browser tab. Each result also carries private
+profile attribution until its one-hour expiry.
 
 Each storefront retains its own final price, base price, and discount percentage.
 The comparison uses final prices, including sales. The UI shows sale badges and
@@ -229,12 +245,12 @@ shows a neutral fallback. Hovering over either the artwork or title shows the
 Steam App ID. Images use app IDs already in the results, so there are
 no additional regional price requests. Browsers fetch artwork directly from
 `shared.akamai.steamstatic.com` without a referrer. The image policy allows only
-that external host. Restart the local server after this change to apply the policy.
+that external host.
 
 
 ## Readability and sorting
 
-Foreign final prices now use 16px text. Column headings identify Game name and
+Foreign final prices use 16px text. Column headings identify Game name and
 the baseline storefront. Difference offers independent absolute and percentage sort buttons;
 repeated clicks reverse direction, with unavailable percentages last. Uncompared
 shows contextual help explaining missing prices, failed requests, and the separate
@@ -242,10 +258,10 @@ availability toggle. Storefront labels remain geographic: currency alone does no
 establish identical regional offers.
 
 
-## Five-currency baseline selection
+## Baseline and comparison selection
 
-The flag/header badge is removed. Select a baseline in the left sidebar and up
-to two other currencies below it. The baseline cannot also be an alternative;
+Select a baseline in the left sidebar and up to two other currencies below it.
+The baseline cannot also be an alternative;
 once two alternatives are checked, uncheck one before choosing another. One
 alternative is allowed. Both browser controls and the server enforce the limit.
 Supported pairs are PL/PLN, US/USD, DE/EUR, NO/NOK, and GB/GBP, matching
@@ -261,7 +277,7 @@ legs. Final-price and difference columns now use baseline-neutral names.
 Selections persist with the saved comparison and retry request. Changing form
 choices does not relabel existing results: their baseline remains the one used
 for that run. Old saved requests without a baseline default to Poland. Examples
-use the selected baseline and alternatives. Restart the server for the new API.
+use the selected baseline and alternatives.
 
 
 ## Remembered comparison selections
@@ -273,3 +289,10 @@ wins over a previously hidden currency and the two-alternative limit remains int
 Restoring a saved comparison replaces the preferences with that run's selections.
 Regression tests exercise actual change handlers, repeated switches, explicit
 replacement/deselection, welcome captions, busy state, and saved restoration.
+
+## Continuing development
+
+Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the concise current-state
+handoff and [AGENTS.md](AGENTS.md) for collaboration and Git preferences.
+Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is
+the detailed change history.
