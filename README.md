@@ -14,8 +14,8 @@ python .\serve_web.py
 Open [Steam Prices Polisher](http://127.0.0.1:8765). Install the requirements once; HTTPS uses the operating system certificate store
 with certificate and hostname verification enabled. Add a numeric SteamID64 or supported Steam profile URL, select
 a baseline and one or two comparison storefronts, choose whether games load by
-personal priority, newest wishlist addition, or name, and watch prices arrive.
-Personal priority is the default. Products with no regional price or
+Your Rank, Date Added, or Name, and watch prices arrive. Your Rank is the
+default. Products with no regional price or
 unavailable apps are hidden by default; use **Show unavailable products** to
 reveal them. Technical failures remain visible. Column headers align directly with
 game titles and numerical price columns, enable explicit sorting, and **Reset sorting**
@@ -45,7 +45,7 @@ Jobs are private and temporary. Refresh reconnects within the same browser tab;
 closing the tab or restarting the server loses job access. Completed regional
 prices remain cached. Up to 1,000 games can be analyzed per wishlist.
 
-Priority loads the lowest Steam wishlist priority number first. Date added loads
+Your Rank loads the lowest Steam wishlist priority number first. Date Added loads
 the newest additions first. Items without the selected metadata retain their
 relative order at the end. Steam's current wishlist response usually omits game
 names, so alphabetical loading first resolves the baseline storefront details
