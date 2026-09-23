@@ -27,6 +27,7 @@ from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCa
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
+from .version import __version__
 from .event_log import (configure_event_logging, runtime_data_directory, emit,
                         job_context, elapsed_ms, error_metadata)
 
@@ -353,9 +354,11 @@ class WebApplication:
         if path in ASSETS and method in {"GET", "HEAD"}:
             filename, content_type = ASSETS[path]
             content = (self.assets / filename).read_bytes()
+            if filename == "index.html":
+                content = content.replace(b"{{APP_VERSION}}", __version__.encode("ascii"))
             return respond("200 OK", content if method == "GET" else b"", content_type)
         if path == "/api/health" and method == "GET":
-            return respond("200 OK", {"status": "ok"})
+            return respond("200 OK", {"status": "ok", "version": __version__})
         if method == "POST":
             if environ.get("HTTP_ORIGIN") != self.origin or environ.get("CONTENT_TYPE", "").split(";", 1)[0] != "application/json":
                 return respond("403 Forbidden", {"error": "Use this app to submit a comparison."})

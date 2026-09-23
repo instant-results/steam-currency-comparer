@@ -69,6 +69,7 @@ button, input, select { border-radius: 7px; }
   margin-top: 7px;
 }
 .brandmark {
+  flex-shrink: 0;
   background: var(--blue);
   color: #ffffff;
   width: 43px;
@@ -97,6 +98,7 @@ button, input, select { border-radius: 7px; }
   margin-left: 10px;
 }
 .beta {
+  white-space: nowrap;
   border: 1px solid var(--blue-border);
   color: var(--blue-light);
   background: rgba(59, 130, 246, 0.06);
@@ -844,7 +846,10 @@ progress::-webkit-progress-value {
 }
 @media (max-width: 480px) {
   main { padding: 0 15px; }
-  .topbar { padding: 0 15px; }
+  .topbar { height: auto; min-height: 104px; padding: 16px 15px; gap: 12px; flex-direction: column; align-items: flex-start; }
+  .brand { font-size: 20px; letter-spacing: -0.6px; gap: 9px; line-height: 1.25; }
+  .brand small { font-size: 7px; letter-spacing: 1px; }
+  .toplinks { align-self: flex-end; }
   .toplinks a { display: none; }
   .intro h1 { font-size: 33px; }
   .eyebrow { font-size: 9px; }
