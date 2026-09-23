@@ -12,7 +12,8 @@ python serve_web.py
 ```
 
 Open http://127.0.0.1:8765. The local launcher listens only on the loopback
-interface. Example mode uses invented prices and makes no Steam requests.
+interface. Example mode compares seven selected games using live Steam prices and NBP
+exchange rates; it requires outbound network access.
 
 ## Serve with a production WSGI server
 
