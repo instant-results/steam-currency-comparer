@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 
 from serve_web import PreviewServer, PreviewStopped, stop_signals
+from steam_price_polisher.version import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,7 +63,7 @@ class ServerLifecycleTests(unittest.TestCase):
         port, pid = map(int, matches[-1])
         with self.http.open(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
             self.assertEqual(response.status, 200)
-            self.assertEqual(json.load(response), {"status": "ok"})
+            self.assertEqual(json.load(response), {"status": "ok", "version": __version__})
         return port, pid
 
     def assert_port_clear(self, port):

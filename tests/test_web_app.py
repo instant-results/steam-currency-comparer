@@ -91,6 +91,15 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(self.request(path)["status"], 404)
         self.assertEqual(self.request("/", HTTP_HOST="evil.test")["status"], 400)
 
+    def test_release_version_is_consistent_in_page_and_health(self):
+        from steam_price_polisher.version import __version__
+
+        page = self.request("/")["body"].decode()
+        self.assertIn(f"v{__version__}", page)
+        self.assertNotIn("{{APP_VERSION}}", page)
+        self.assertEqual(self.request("/api/health")["json"],
+                         {"status": "ok", "version": __version__})
+
     def test_job_requires_capability_token_and_can_be_cancelled(self):
         job = self.submit(); path = "/api/jobs/" + job["id"]
         self.assertEqual(self.request(path)["status"], 404)
