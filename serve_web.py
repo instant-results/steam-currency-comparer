@@ -9,6 +9,7 @@ from socketserver import ThreadingMixIn
 from wsgiref.simple_server import WSGIServer, WSGIRequestHandler
 
 from steam_price_polisher.web_app import create_app
+from steam_price_polisher.version import __version__
 from steam_price_polisher.event_log import configure_event_logging, emit, error_metadata
 
 
@@ -134,7 +135,7 @@ def main(argv=None):
                 origin = f"http://127.0.0.1:{server.server_port}"
                 server.set_app(create_app(origin=origin))
                 with stop_signals(server):
-                    print(f"Steam Prices Polisher: {origin} (PID {os.getpid()})", flush=True)
+                    print(f"Steam Currency Comparer v{__version__}: {origin} (PID {os.getpid()})", flush=True)
                     emit("server_started", port=server.server_port)
                     try:
                         server.serve_forever(poll_interval=0.2)
@@ -143,7 +144,7 @@ def main(argv=None):
                     except KeyboardInterrupt:
                         server.stop_reason = "keyboard_interrupt"
             emit("server_stopped", port=server.server_port, reason=server.stop_reason)
-        print("Steam Prices Polisher stopped; listener closed.", flush=True)
+        print("Steam Currency Comparer stopped; listener closed.", flush=True)
         return 0
     except OSError as exc:
         emit("server_start_failed", port=args.port, **error_metadata(exc))
