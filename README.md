@@ -1,335 +1,201 @@
-# Steam Prices Polisher
+# Steam Currency Comparer
 
-Compare Steam wishlist prices using a selectable baseline and up to two other
-storefronts. The web app supports PLN (Poland), USD (United States), EUR (Germany),
-NOK (Norway), and GBP (United Kingdom). The default remains PLN against USD/EUR.
+**Version: 0.1.0-beta.1** · First beta release in preparation.
 
-## Quick start
+Compare the prices of games on your public Steam wishlist across regional Steam
+storefronts. Choose a baseline currency and one or two other storefronts; the app
+converts their prices using National Bank of Poland (NBP) exchange rates and shows
+which games cost more or less in your baseline storefront, including current sales.
+
+This is a **locally run web app**: a small Python server runs on your computer,
+and you use it in your browser. You need Python and a terminal to set it up, but
+no programming knowledge to use it. There is no hosted service or packaged
+installer yet. Independent project; not affiliated with Valve or Steam.
+
+## Preview
+
+![Steam Currency Comparer showing a completed example comparison with regional prices and percentage differences](docs/images/example-comparison.jpg)
+
+Live seven-game example captured on 2026-09-23 with version 0.1.0-beta.1;
+the screenshot shows part of the completed results. Prices and exchange rates
+change over time. No personal Steam profile is used.
+[View the app title and setup screen](docs/images/app-overview.jpg).
+
+## What it does
+
+- Compares Poland (PLN), the United States (USD), Germany (EUR), Norway (NOK),
+  and the United Kingdom (GBP). Any can be the baseline; the default is PLN
+  against USD and EUR.
+- Shows regional final prices, discounts, converted prices, and absolute and
+  percentage differences.
+- Loads games by Your Rank, Date Added, or Name, with search, filters, and
+  result sorting once results arrive.
+- Caches prices and exchange rates, labels stale results, and lets you cancel
+  or retry a comparison.
+- Exports loaded results to CSV, with wishlist attribution optional.
+
+The app compares prices for information. It does not change your Steam account's
+country, modify your wishlist, or purchase games. Displayed regional differences
+are not a guarantee that you can buy at another storefront's price.
+
+## Run locally
+
+### Requirements
+
+- **Python 3.10 or newer**, with pip and support for virtual environments.
+- A web browser and internet access to Steam and NBP.
+- Your **public Steam wishlist**, or use the built-in example to try the app.
+
+No Steam sign-in, Steam cookies, or API key is needed when using a numeric
+SteamID64 or a `/profiles/` URL. Custom `/id/` URLs need optional API-key setup.
+Node.js is only needed for frontend tests, not to run the app.
+
+### 1. Get the project
+
+Download the repository using **Code → Download ZIP** on GitHub and extract it,
+or clone it with Git. Open a terminal in the extracted or cloned project folder
+(the folder containing `serve_web.py` and `requirements.txt`).
+
+### 2. Install and start
+
+Use the commands for your operating system. A virtual environment keeps the
+project's dependencies separate from other Python applications. These commands
+use its Python directly, so activation is not required.
+
+**Windows — PowerShell**
 
 ```powershell
-python -m pip install -r requirements.txt
-python .\serve_web.py
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe serve_web.py
 ```
 
-Open [Steam Prices Polisher](http://127.0.0.1:8765). Install the requirements once; HTTPS uses the operating system certificate store
-with certificate and hostname verification enabled. Add a numeric SteamID64 or supported Steam profile URL, select
-a baseline and one or two comparison storefronts, choose whether games load by
-Your Rank, Date Added, or Name, and watch prices arrive. Your Rank is the
-default. Products with no regional price or
-unavailable apps are hidden by default; use **Show unavailable products** to
-reveal them. Technical failures remain visible. Column headers align directly with
-game titles and numerical price columns, enable explicit sorting, and **Reset sorting**
-restores the selected loading order. Search, filter, or sort results; cancel a run or retry it
-using completed cached prices. The example mode compares a curated sample of 7 popular
-games (including The Witcher 3, Cyberpunk 2077, and ELDEN RING) using live Steam store
-prices and official NBP exchange rates; thumbnails load from Steam. Price provenance
-(live, cached, stale) is displayed per-price on hover.
+If `py` is unavailable but Python is installed, use `python -m venv .venv`
+for the first command. Ensure that interpreter is Python 3.10 or newer.
 
-Keep the launching terminal open. Stop the preview with Ctrl+C (or Ctrl+Break on
-Windows); it also exits if the launching process terminates. A second instance
-on the same port is rejected. Before restarting, verify that port 8765 has no
-listeners; after starting, verify exactly one listener and a successful response
-from `/api/health`. Old versions may need their confirmed app process stopped
-explicitly. Use `python serve_web.py --port 8766` to select a different port.
+**macOS / Linux — terminal**
 
-Live Steam and NBP requests require outbound network access from the server.
-When using an agent's network-restricted sandbox, launch the preview with approved
-outbound access. A "network access is blocked by local permissions" error means
-the server's sandbox, firewall, or OS permissions need attention; restarting with
-appropriate access is required before retrying. This is separate from an upstream
-HTTP rejection or outage. Blocked requests are not automatically retried.
-
-The web app supports **public wishlists only**. It ignores Steam cookies and the
-local `wishlist.txt` file. A server-configured API key can resolve vanity URLs.
-Jobs are private and temporary. Refresh reconnects within the same browser tab;
-closing the tab or restarting the server loses job access. Completed regional
-prices remain cached. Up to 1,000 games can be analyzed per wishlist.
-
-Your Rank loads the lowest Steam wishlist priority number first. Date Added loads
-the newest additions first. Items without the selected metadata retain their
-relative order at the end. Steam's current wishlist response usually omits game
-names, so alphabetical loading first resolves the baseline storefront details
-needed to learn every name; those baseline results are reused during comparison
-instead of being requested twice. The chosen order is retained for refresh and
-retry within the browser tab.
-
-For eventual public hosting, see [DEPLOYMENT.md](DEPLOYMENT.md). The WSGI service
-includes bounded background jobs, input checks, same-origin POST protection,
-private result tokens, and a persistent price cache. Deploy it as one Python
-process behind HTTPS; this local version has not been published.
-
-## Run the command-line prototype
-
-Python 3.10 or newer is required. Numeric SteamID64 values and `/profiles/...`
-URLs work without an API key:
-
-```powershell
-python .\steam_wishlist_compare.py 76561198000000000
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python serve_web.py
 ```
 
-## Choose comparison storefronts
+If your Linux installation reports that `venv` or `ensurepip` is missing,
+install your distribution's Python virtual-environment package, then retry.
 
-The command-line prototype retains Poland (PLN) as its baseline. Select up to two
-of the United States (`us`, USD), Germany (`de`, EUR), Norway (`no`, NOK), or the
-United Kingdom (`gb`, GBP) with `--regions` after the Steam identifier:
+### 3. Open the app
+
+Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)** in your browser.
+
+1. Enter your 17-digit SteamID64 or your numeric Steam profile URL, or click
+   **Try an example comparison** to compare seven selected games without a profile.
+2. Select a baseline and one or two comparison currencies.
+3. Choose the loading order and click **Compare regional prices**.
+
+The example uses live Steam prices and NBP exchange rates, so it also needs
+internet access. A numeric profile URL has the form
+`https://steamcommunity.com/profiles/YOUR_STEAMID64/`; replace `YOUR_STEAMID64`
+with your actual ID. The numeric ID `76561198000000000` used in documentation
+and tests is a placeholder, not a supplied demo profile.
+
+Keep the terminal open while using the app. Stop it with **Ctrl+C**. On later
+visits, run only the final server command for your operating system; repeat
+installation if the project's dependencies change.
+
+## What to expect
+
+- **Public wishlists only**, with at most 1,000 games per comparison in the web app.
+- **Large wishlists take time.** Steam requests are paced at 1.5-second intervals.
+  A cold 100-game comparison across three storefronts needs roughly 7½ minutes
+  of request spacing, plus network delays and retries. Cached prices reduce work.
+- **Name order may start slowly:** it first fetches missing game names from the
+  baseline storefront. Your Rank is the default.
+- **Unavailable products are hidden by default.** Enable **Show unavailable
+  products** to reveal them. Technical failures remain visible.
+- **Results are temporary.** Refresh reconnects in the same tab; closing the tab
+  or restarting the server loses job access. Completed results expire after an hour.
+- **Prices are snapshots.** Regular prices normally refresh after an hour, sale
+  prices after 15 minutes, and exchange rates after 24 hours. Stale fallback is
+  labeled when available.
+
+The comparison uses final prices, including sales, and NBP currency conversion.
+It does not adjust for tax differences or payment-provider fees. Germany is the
+selected EUR storefront, not a guarantee of prices across the euro area.
+See the [comparison methodology](docs/USAGE.md#rates-and-comparison-methodology)
+for the exact interpretation of results.
+
+## Troubleshooting
+
+| Problem | What to check |
+| --- | --- |
+| Python is not found | Install Python 3.10+ and reopen the terminal. On Windows, try `python` if `py` is unavailable. |
+| Missing Python module | Run the dependency-install command above, then start the server using that same virtual environment. |
+| No public wishlist found | Check your wishlist's visibility and use your actual numeric SteamID64. |
+| Custom profile URL cannot be resolved | Use a numeric `/profiles/` URL or configure your own optional Steam Web API key. |
+| Port 8765 is already in use | Stop the existing instance or append `--port 8766` to the server command and open `http://127.0.0.1:8766`. |
+| Network access denied | Allow the server outbound access through your firewall or execution environment, then restart it. |
+
+Custom profile URL setup is covered in the [usage guide](docs/USAGE.md#custom-steam-profile-urls).
+The project does **not** automatically load `.env`; `.env.example` documents
+settings that must be supplied as environment variables.
+
+## Local data and privacy
+
+The web app keeps its price cache and diagnostic logs in `.steam-price-polisher/`
+by default. The cache stores regional prices and exchange rates, not
+profile-to-wishlist links. Logs exclude profiles, API keys, cookies, and job tokens.
+The browser tab stores the current profile and job-access token in session storage;
+private results and profile attribution are held temporarily in server memory.
+
+Steam and NBP receive the requests needed for the comparison, and the browser
+loads game artwork directly from Steam's image CDN. Running locally does not mean
+running offline. The web app never reads local `wishlist.txt` or `STEAM_COOKIE`.
+Keep local data, populated environment files, and credentials out of Git.
+
+## Versioning
+
+The release version is defined in `steam_price_polisher/version.py` and shown
+in the app header, server startup message, and `/api/health` response.
+`0.1.0-beta.1` identifies the first beta of the 0.1.0 release. Increment the beta
+suffix for later prereleases; use `0.1.0` for the corresponding stable release.
+Update this README and the [changelog](CHANGELOG.md) when changing the version. Git tags and
+GitHub releases are created separately when a release is ready to publish.
+
+## For developers
+
+The display name is Steam Currency Comparer. Existing filenames, the
+`steam_price_polisher` package, and `STEAM_PRICE_POLISHER_*` settings retain
+their original names for compatibility.
+
+The backend uses Python WSGI and SQLite; the frontend is plain HTML, CSS, and
+JavaScript with no build step. Wishlist retrieval, regional pricing, exchange
+rates, comparison arithmetic, and request pacing are separate modules in
+`steam_price_polisher/`. Browser assets are in `web/` and regression tests in `tests/`.
+
+Run the Python suite with your virtual environment's interpreter:
 
 ```powershell
-python .\steam_wishlist_compare.py 76561198000000000 --regions de
-python .\steam_wishlist_compare.py 76561198000000000 --regions de us
+# Windows
+.\.venv\Scripts\python.exe -m unittest discover -v
 ```
 
-Without `--regions`, the default is `us de`. Selection order is preserved in
-results. Currency is determined by the storefront; arbitrary currency/region
-pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The web sidebar additionally lets any of the five supported
-storefronts become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
-
-## Custom Steam profile URLs
-
-Steam requires a user Web API key to translate a custom `/id/name` URL into a
-numeric SteamID64. Register a user key at
-<https://steamcommunity.com/dev/apikey>, then expose it only to the current
-process:
-
-```powershell
-$env:STEAM_WEB_API_KEY = "your-key"
-python .\steam_wishlist_compare.py https://steamcommunity.com/id/example
+```sh
+# macOS / Linux
+.venv/bin/python -m unittest discover -v
 ```
 
-The key is not written to the cache or repository. When it is absent, the tool
-explains that vanity resolution was skipped and still tries the legacy wishlist
-endpoint. You can always use a numeric SteamID64 instead.
+Frontend checks require Node.js with its built-in test runner:
 
-Do not commit a populated `.env` file. The project does not automatically load
-`.env`; `.env.example` only documents the supported variables.
-
-## Rates and comparison methodology
-
-The results include each currency's NBP table A mid rate, its publication
-(`effectiveDate`) date, and whether it came from a live request, cache, or stale
-cache. See the [NBP API documentation](https://api.nbp.pl/en.html). The publication
-date is separate from the time the application fetched the rate; currencies can
-have different publication dates.
-
-Rates are cached for 24 hours. If refresh fails and all needed rates have cached
-values, the tool can use them with a visible stale-cache warning. Existing cache
-entries migrate automatically; rates without dates are refreshed, or explicitly
-shown with an unknown date when refresh fails. Fallback does not reset cache age.
-
-`FAIR` means the baseline price is no higher than **every** selected foreign price
-converted to the baseline currency. This is a currency-conversion indicator, not a complete
-judgment of consumer fairness or a checkout quote:
-
-- No VAT or sales-tax adjustment is applied; displayed US and EU prices may
-  have different tax treatment.
-- Payment-provider fees and conversion costs are excluded.
-- Germany is the EUR storefront proxy selected by this tool; prices elsewhere
-  in the euro area may differ.
-- Regional prices can be cached or fetched at different times.
-
-Analysis results retain rate records and versioned methodology metadata for UI
-rendering and exports.
-
-## Diagnostic events
-
-The web app and preview write structured JSON Lines events to
-`.steam-price-polisher/logs/events-<PID>.jsonl` by default. If
-`STEAM_PRICE_POLISHER_DATA_DIR` is set, logs live in its `logs` subdirectory.
-Each process has its own file so duplicate startup attempts cannot interfere
-with another server's rotation. Files rotate at 2 MiB, keeping three backups
-per process (about 8 MiB total). Files from previous processes remain available;
-remove those old files when no longer needed. Generated event files are ignored
-by Git. Logging uses Python's standard library; no external service is involved.
-
-Normal logs include server startup, shutdown reason, startup failures, job
-queue/start/cancellation/completion/failure, and upstream request failures with
-service, operation, attempt, timing, status/socket code, and retry decision.
-Successful requests, cache provenance, and idle/closed client connections are
-included only at DEBUG level:
-
-```powershell
-$env:STEAM_PRICE_POLISHER_LOG_LEVEL = "DEBUG"
-python serve_web.py
-```
-
-Restart with `STEAM_PRICE_POLISHER_LOG_LEVEL=INFO` (the default) for normal detail.
-The terminal stays at INFO even in debug mode. Set variables in the launching
-shell; the project does not automatically load `.env`. The CLI does not configure
-file logging automatically.
-
-Events contain a UTC timestamp and process ID. Use `job_id` to connect a job's
-lifecycle to its requests and cache events; it is the internal job ID returned
-when a comparison starts, not its access token. The logger records counts, not
-game lists or prices. It excludes profiles, IP addresses, API keys, cookies,
-tokens, URLs, headers, response bodies, and raw exception text. Unexpected errors
-retain their exception type and an allowlisted project code location, without
-locals, source lines, or absolute paths. Log files are local diagnostics and
-are not served by the web app. File logging failures leave the server running
-with console diagnostics and a fixed warning.
-
-## Tests
-
-```powershell
-python -m unittest discover -v
-```
-
-Frontend rendering regression checks (Node.js):
-
-```powershell
+```sh
 node --test tests/test_web_render.cjs
+node --check web/app.js
 ```
 
-Repeatable preview lifecycle checks (included in the Python suite):
-
-```powershell
-python -m unittest tests.test_server_lifecycle -v
-```
-
-These launch temporary servers on available loopback ports, verify health,
-duplicate-instance rejection, shutdown and restart, and loss of the launching
-process. They use temporary data directories and make no external requests.
-
-## Profile attribution and sale prices
-
-The current profile, selected regions, baseline, and loading order are restored
-with the comparison in the same browser tab. Each result also carries private
-profile attribution until its one-hour expiry.
-
-Each storefront retains its own final price, base price, and discount percentage.
-The comparison uses final prices, including sales. The UI shows sale badges and
-original-currency base prices; it never copies one region's discount to another.
-Unknown metadata is labeled explicitly. Old price-cache entries are refreshed
-on the next web comparison to obtain sale details. Web price freshness is one
-hour for regular prices and 15 minutes for known sales; stale fallback is still
-possible and clearly labeled. These are snapshots, not guaranteed checkout prices.
-
-Steam policy sources: [Pricing](https://partner.steamgames.com/doc/store/pricing?l=english)
-and [Discounting](https://partner.steamgames.com/doc/marketing/discounts?l=english).
-Publishers set regional base prices; minimum transaction thresholds can affect
-local availability. Discounts reference established base or introductory launch
-prices. The public documentation does not provide a blanket guarantee that every
-regional offer has the same discount, so this tool checks each independently.
-
-## Regional discount assumptions and retrieval cost
-
-Research checked on 2026-09-10, including community observations outside Valve's
-policy documentation:
-
-- During Sekiro's April 2022 promotion, users reported a 50% discount in Western
-  regions but no discount in parts of Asia. See the
-  [contemporaneous Steam Community report](https://steamcommunity.com/discussions/forum/1/3279192886604240573/)
-  and [independent Reddit discussion](https://www.reddit.com/r/Steam/comments/uc1qof/).
-- These are historical user reports about regional offers. They are not a fresh
-  live measurement or proof that the same package can receive different
-  per-currency percentages. Regional publishers/packages are a possible explanation.
-- Accordingly, the app does not assume that every regional offer for one app
-  shares its sale status. It retains the actual returned values for each region.
-
-This does not add a separate discount request. Each existing regional
-`appdetails` response includes the currency, final price, base price (`initial`),
-and `discount_percent`. A cold comparison with PL/US/DE still needs up to three
-price requests per game, whether discounts are inspected or ignored. Missing
-home prices can stop the comparison early; fresh cache entries avoid requests.
-
-Applying a home-region discount to cached foreign base prices could reduce some
-future refresh requests, but those prices would be estimates: base prices and
-availability can change, regional offers can differ, and rounding matters. This
-optimization is not enabled. Preserve observed final prices for the current
-comparison; consider measured concurrency or caching improvements separately.
-
-
-## Discount differences and percentage comparison
-
-Products with unequal known regional discount percentages carry a **Different
-regional discounts** badge and can be isolated with the **Different discounts**
-filter. This includes sale versus no sale. Unknown metadata is not treated as
-zero discount. Hover over the badge for the observed regional percentages;
-cached observations at different times can also explain a mismatch.
-
-Each comparable product shows the absolute baseline-currency difference and percentage:
-`(baseline final price - cheapest selected alternative in baseline currency) / cheapest selected alternative in baseline currency * 100`.
-Negative means cheaper in the baseline storefront. Percentages are rounded to one decimal place;
-a zero reference price shows “Percentage unavailable”. Both additions reuse
-existing results without extra Steam requests.
-
-
-## CSV export
-
-Download CSV exports all currently loaded results, including products hidden by
-filters. A running comparison exports only its completed results so far. There
-is one row per game/storefront and one row for each uncompared game. Wishlist
-profile attribution is optional and off by default; access tokens are never exported.
-
-The UTF-8 CSV includes original/base/final prices, discounts, prices converted to the baseline currency,
-absolute and percentage differences, and exchange-rate provenance. NBP publication
-date, original successful retrieval time, and the comparison's rate-check time
-are separate fields. Timestamps use UTC. A cache check does not imply a new NBP
-request. Older in-memory results without timestamps export blank fields; run a
-new comparison after restarting the server to obtain them. PLN identity conversion
-has no NBP timestamps. Example exports are marked as illustrative data.
-
-CSV is intended for spreadsheets and analysis; numeric values use decimal points.
-Untrusted text starting with spreadsheet formula characters is prefixed with an
-apostrophe. JSON could preserve nested results more naturally, but is not currently
-offered. Export is generated locally in the browser without additional requests.
-
-
-## Storefront thumbnails
-
-Each title links to Steam with a lazy-loaded header thumbnail from Steam's image
-CDN. Fixed image slots and reused rows avoid layout shifts; unavailable artwork
-shows a neutral fallback. Hovering over either the artwork or title shows the
-Steam App ID. Images use app IDs already in the results, so there are
-no additional regional price requests. Browsers fetch artwork directly from
-`shared.akamai.steamstatic.com` without a referrer. The image policy allows only
-that external host.
-
-
-## Readability and sorting
-
-Foreign final prices use 16px text. Column headings identify Game name and
-the baseline storefront. Difference offers independent absolute and percentage sort buttons;
-repeated clicks reverse direction, with unavailable percentages last. Uncompared
-shows contextual help explaining missing prices, failed requests, and the separate
-availability toggle. Storefront labels remain geographic: currency alone does not
-establish identical regional offers.
-
-
-## Baseline and comparison selection
-
-Select a baseline in the left sidebar and up to two other currencies below it.
-The baseline cannot also be an alternative;
-once two alternatives are checked, uncheck one before choosing another. One
-alternative is allowed. Both browser controls and the server enforce the limit.
-Supported pairs are PL/PLN, US/USD, DE/EUR, NO/NOK, and GB/GBP, matching
-[Steam's supported currencies](https://partner.steamgames.com/doc/store/pricing/currencies).
-
-NBP reports PLN per currency unit. The conversion into baseline currency B is
-`rate_to_pln[A] / rate_to_pln[B]`; PLN has an identity rate of 1. The rate notebook
-retains the underlying PLN quotes and dates. CSV additionally includes the
-baseline storefront/currency, derived conversion factor, and baseline rate's
-publication/retrieval/check times and cache status, preserving both conversion
-legs. Final-price and difference columns now use baseline-neutral names.
-
-Selections persist with the saved comparison and retry request. Changing form
-choices does not relabel existing results: their baseline remains the one used
-for that run. Old saved requests without a baseline default to Poland. Examples
-use the selected baseline and alternatives.
-
-
-## Remembered comparison selections
-
-Changing the baseline temporarily excludes conflicting comparison currencies
-without forgetting them. Returning to a non-conflicting baseline restores them.
-Explicit checkbox edits replace the remembered choices, so a newly selected pair
-wins over a previously hidden currency and the two-alternative limit remains intact.
-Restoring a saved comparison replaces the preferences with that run's selections.
-Regression tests exercise actual change handlers, repeated switches, explicit
-replacement/deselection, welcome captions, busy state, and saved restoration.
-
-## Continuing development
-
-Read [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for the concise current-state
-handoff and [AGENTS.md](AGENTS.md) for collaboration and Git preferences.
-Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is
-the detailed change history.
+- [Usage and technical reference](docs/USAGE.md): CLI commands, sale-price handling,
+  CSV fields, sorting, caching, diagnostics, and methodology.
+- [Deployment guidance](DEPLOYMENT.md): requirements and limitations for future
+  public hosting. The local launcher is not the public deployment entry point.
+- [Current project context](PROJECT_CONTEXT.md) and [collaboration guidance](AGENTS.md).
+- [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
+  integration, not an implemented feature.

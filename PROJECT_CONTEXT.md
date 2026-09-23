@@ -1,6 +1,6 @@
-# Steam Prices Polisher — development handoff
+# Steam Currency Comparer — development handoff
 
-Updated: 2026-09-11. This is a current-state summary, not a change log.
+Updated: 2026-09-23. This is a current-state summary, not a change log.
 
 ## Start here
 
@@ -10,6 +10,25 @@ Use Git history for historical details; do not repeat the development history.
 Continue with the user's next request rather than inventing a new feature or
 deploying the app. Local-server lifecycle and network-permission error handling
 have been addressed; see the operational notes below.
+
+## Publication preparation
+
+README.md is the public-facing introduction and installation guide, with direct
+virtual-environment commands for Windows and macOS/Linux. Detailed existing usage
+and implementation notes are retained in docs/USAGE.md. Documentation explicitly
+labels sample profile identifiers as placeholders. The public display name is Steam Currency Comparer. Existing Python package,
+script names, environment variables, and cache paths retain their original names
+for compatibility.
+
+Current version: `0.1.0-beta.1`, defined in `steam_price_polisher/version.py`.
+The server renders it into the header and returns it from `/api/health`.
+The first beta is being prepared; no release tag has been created.
+README screenshots live in docs/images/ and show the built-in seven-game live
+example, captured on 2026-09-23 without a personal profile. The title and version
+badge have been checked at desktop and 320/390 CSS-pixel mobile widths. Mobile
+headers put the version badge on its own row. The GitHub repository is
+https://github.com/instant-results/steam-currency-comparer. Source publication
+is separate from hosting the app or creating a tagged GitHub release.
 
 ## Product and current behavior
 
@@ -79,6 +98,8 @@ Python WSGI backend, vanilla HTML/CSS/JavaScript frontend; no frontend build ste
 - event_log.py: structured local diagnostics, rotation, job correlation, and safe metadata.
 - steam_wishlist_compare.py: CLI, still using Poland as baseline.
 - DEPLOYMENT.md: hosting guidance; consult before any deployment work.
+- docs/STEAM_SORTED_WISHLIST_API.md: implementation-ready research handoff for
+  Steam's richer sorted/filtered wishlist service and additional loading orders.
 
 NBP quotes PLN per unit. Convert A to baseline B using rate[A] / rate[B],
 with PLN = 1. Preserve both source dates and cache provenance. Regional sale
@@ -113,6 +134,18 @@ wishlist/vanity lookup, regional prices, and exchange rates. Permission denial
 stops the job, including alphabetical prefetch; stale rates do not conceal it.
 HTTP 403, TLS errors, and local file permission errors remain distinct.
 
+## Wishlist API research handoff
+
+Steam's current `IWishlistService/GetWishlistSortedFiltered/v1` can return the
+complete wishlist in a requested Steam sort order while enriching a selected
+range with Store Browse name, release, and review data. This could add Release
+Date, Top Selling, and Review Score loading orders and remove alphabetical name
+prefetching. The historical `/wishlistdata/?p=...` fallback redirected to the
+store homepage during anonymous verification and must not be treated as a
+working rich-data contract. No integration has been implemented. See
+`docs/STEAM_SORTED_WISHLIST_API.md` for the observed schema, risks, decisions,
+file map, tests, and acceptance criteria.
+
 ## Diagnostic logging
 
 The preview and WSGI factory configure a dedicated event logger. Per-process
@@ -146,7 +179,7 @@ changes need a browser refresh; backend changes need a verified clean restart,
 which clears in-memory jobs. Avoid triggering full live wishlists for routine
 tests.
 
-Last verified: 98 Python tests and 20 frontend tests, all passing. Tests cover
+Last verified: 99 Python tests and 20 frontend tests, all passing. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
 and selection restoration.
