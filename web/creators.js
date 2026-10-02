@@ -255,6 +255,7 @@
 
   function selectTab(creatorTab) {
     active = creatorTab;
+    $("currencies-step").textContent = active ? "01 / CURRENCIES" : "02 / CURRENCIES";
     $("creators-panel").hidden = !active; $("wishlist-panel").hidden = active;
     $("compare-form").hidden = active;
     for (const [id, selected] of [["wishlist-tab", !active], ["creators-tab", active]]) {

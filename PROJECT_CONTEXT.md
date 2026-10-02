@@ -44,6 +44,8 @@ is intended but has not happened. Use plain, direct UI language describing regio
   and comparison results. The Steam profile field and primary/example actions
   occupy the full-width first row; the currency sidebar is reserved for baseline
   and comparison choices.
+  The shared currency panel is step 02 in the wishlist tab and step 01 in the
+  creator tab, where no profile input is needed.
 - The wishlist row selects the initial loading order: personal priority
   (default, lowest number first), date added (newest first), or name (A-Z).
   Missing metadata remains stable at the end. Alphabetical order may prefetch
