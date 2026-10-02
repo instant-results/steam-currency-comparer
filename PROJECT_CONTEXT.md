@@ -99,6 +99,15 @@ is intended but has not happened. Use plain, direct UI language describing regio
   Desktop statistics align with fixed foreign-price slots using shared column
   widths. A subtle vertical divider separates baseline and foreign prices.
   Narrow creator panels stack statistics and share scrolling for 760px tables.
+  Creator tables omit the final row's bottom rule; its baseline/foreign divider
+  ends at 80% of the row height. Earlier rows keep their full divider.
+  Dividers are drawn on rows, including pending/uncompared rows with merged cells,
+  so newly loaded products extend the line immediately.
+  Catalog expansion uses a centered, shallow filled arrow with a flat top, a soft
+  blue gradient fading toward the top with extra transparency at the top center,
+  no visible border, and white Load more text positioned slightly above center.
+  The baseline/foreign divider sits at 50% of the table width, aligned above the
+  expansion arrow's midpoint; statistics use the same column proportions.
   Opening the creator tab automatically compares three curated games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
