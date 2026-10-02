@@ -50,19 +50,26 @@ Free products, including demos, are removed after Steam identifies them as free
 or returns a zero baseline price. Paid products without a regional price remain
 visible with an explanation. Refresh older saved results to identify free products.
 
-**Load more ↓** checks up to 12 catalog products at a time and shows the non-free ones.
+The centered blue arrow labeled **Load more** checks up to 12 catalog products at
+a time and shows the non-free ones.
 Pages containing only free products still advance; use Load more again to continue.
 Already displayed examples are not duplicated. The button disappears at the end
 of the catalog. Steam's listings can vary by region, and creator-homepage
 membership is not an exhaustive guarantee of every credited developer or publisher.
 Creator search is postponed; only the featured creators are available.
 
+The footer labels the initial curated selection as **featured games**. That label
+disappears once the catalog expands, including after changing the baseline or
+restoring saved results. Expanded footers show the loaded product count and,
+when available, Steam's catalog total. The total may include free products that
+are excluded from the displayed list.
+
 Each creator's icon and name sit above its games, beside an average percentage
 difference for each selected foreign storefront. Each compared, loaded product
 has equal weight: `(baseline price - converted foreign price) / converted foreign
 price * 100`. The mean uses unrounded differences; negative means cheaper in the
 baseline, positive means pricier. Missing, pending, free, and zero-reference
-products do not contribute. Each average shows its own sample count. Beside each
+products do not contribute. Each average shows its own sample count. Below each
 average, the median shows the middle product difference after sorting; with an
 even sample size it averages the two middle differences. Both use the same sample
 and unrounded calculations.
@@ -71,10 +78,20 @@ and pending counts. Cheaper/equal means the baseline price is no higher than eve
 selected converted foreign price. These statistics describe loaded products only,
 including paid DLC and soundtracks; they do not summarize the entire Steam catalog.
 Statistics use existing comparison results without additional requests, update
-when more products load, and retain the results' currencies until refreshed. Desktop statistics align with
-the corresponding foreign-price columns; a subtle divider separates baseline and
-foreign prices. Narrow screens keep statistics above the horizontally scrolling
-tables.
+when more products load, and retain the results' currencies until refreshed.
+
+One shared column-heading row sits above all creators. Desktop statistics align
+with the corresponding foreign-price columns. A 1px divider separates baseline
+and foreign prices at the middle of each game row, above the expansion arrow's
+midpoint. It extends through newly appended rows, including rows awaiting prices,
+and ends at 80% of the final row's height; that row has no bottom horizontal rule.
+Narrow screens stack statistics above tables with synchronized horizontal scrolling.
+The arrow is shallow, has a flat top and no visible border, and fades most strongly
+at its top center; its white label remains accessible to keyboard and screen-reader
+users. The introduction keeps the free-product note, progress status, and statistics
+explanation with consistent text sizing. The exclusion note sits on its own line.
+Currency choices appear in the shared sidebar, numbered **01 / CURRENCIES** in
+this tab and **02 / CURRENCIES** in the wishlist tab.
 
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current sidebar
