@@ -1131,6 +1131,9 @@ td:first-child { min-width: 0; }
 #creators-notice { padding: 12px; border: 1px solid var(--blue-border); font-size: 13px; border-radius: 6px; }
 #creators-notice.error { border-color: var(--orange); color: #ffd19c; }
 .creator-group { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 22px; padding: 24px 0; border-top: 1px solid var(--line); }
+.creator-columns { margin-left: 172px; }
+/* Keep each table's semantic column labels without repeating visible headings. */
+.creator-accessible-head { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }
 .creator-identity h3 { margin: 14px 0 0; font-size: 18px; line-height: 1.35; letter-spacing: -.3px; overflow-wrap: anywhere; }
 .creator-identity a:hover { color: var(--blue-light); }
@@ -1141,8 +1144,9 @@ td:first-child { min-width: 0; }
 .creator-catalog-footer > span { color: var(--muted); font-size: 12px; }
 .creator-catalog-footer button { flex-shrink: 0; }
 .creator-catalog th { font-size: 12px; letter-spacing: .9px; }
-.creator-catalog .header-stack-right > small { right: 0; left: auto; }
+.creator-panel .header-stack-right > small { right: 0; left: auto; }
 @media (max-width: 1200px) {
+  .creator-columns { margin-left: 0; }
   .creator-group { grid-template-columns: 1fr; gap: 18px; }
   .creator-identity { display: grid; grid-template-columns: 64px 1fr; column-gap: 16px; }
   .creator-identity img { grid-row: 1 / 3; }
