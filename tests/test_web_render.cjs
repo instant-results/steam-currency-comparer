@@ -88,6 +88,37 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   assert.equal(ctx.body().children.length, 4);
 });
 
+test("creator catalogs hide free products but retain paid soundtracks and unavailable products", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const zero = game("5", "Free game"); zero.comparison.home_price.amount = 0;
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[
+    {app_id:"4",name:"Demo"},{app_id:"5",name:"Free game"},{app_id:"6",name:"Paid soundtrack"},{app_id:"7",name:"Coming soon"}
+  ],next_start:12,has_more:true,total:30}},items:[
+    {...skipped("4","no_regional_price"),is_free:true},zero,game("6","Paid soundtrack"),skipped("7","no_regional_price")
+  ],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","6","7"]);
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.app_ids,["1","2","3","6","7"]);
+  const restored = creatorSetup({"polisher-creator-job":ctx.storage.get("polisher-creator-job")});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.deepEqual(restored.body().children.map(row => row.dataset.appId),["1","2","3","6","7"]);
+});
+
+test("free-only catalog pages still advance to later paid products", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"4",name:"Demo"}],next_start:12,has_more:true,total:24}},items:[{...skipped("4","no_regional_price"),is_free:true}],rates:[],warnings:[]});
+  const more = ctx.group().children[1].children[1].children[1];
+  more.listeners.click(); await settle();
+  assert.equal(ctx.body().children.length,3);
+  assert.equal(more.hidden,false);
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"5",name:"Paid game"}],next_start:24,has_more:false,total:24}},items:[game("5","Paid game")],rates:[],warnings:[]});
+  more.listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.start,12);
+  assert.equal(ctx.body().children.length,4);
+  assert.equal(more.hidden,true);
+});
+
 test("creator icons fall back to Steam and terminal catalogs hide Load more", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
   const img = ctx.group().children[0].children[0]; img.listeners.error();

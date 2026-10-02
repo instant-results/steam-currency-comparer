@@ -83,12 +83,13 @@ class CreatorApiTests(unittest.TestCase):
         self.assertEqual(result["status"], 202)
         return self.manager.jobs[result["data"]["id"]]
 
-    def execute(self, job):
+    def execute(self, job, free_ids=()):
         with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
             nbp.return_value.get_rate_details.return_value = {
                 "USD": ExchangeRate("USD", 4, "2026-10-02"), "EUR": ExchangeRate("EUR", 4.3, "2026-10-02")}
-            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(
-                StorePrice(region, currency, 10, 20, 50), "Live product")
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: (
+                RegionalPriceResult.no_regional_price("Demo", is_free=True) if app in free_ids else
+                RegionalPriceResult.available(StorePrice(region, currency, 10, 20, 50), "Live product"))
             self.manager.execute(job)
             steam.return_value.get_wishlist.assert_not_called()
             return steam.return_value.get_regional_price.call_count
@@ -119,6 +120,17 @@ class CreatorApiTests(unittest.TestCase):
         self.assertEqual(self.execute(second), 0)
         self.assertEqual(len(second.snapshot()["items"]), 9)
         self.assertTrue(all(item["source_summary"] == "cache 3" for item in second.snapshot()["items"]))
+
+    def test_free_products_are_identified_and_cached_without_alternative_requests(self):
+        job = self.submit(mode="products", app_ids=["10", "11"])
+        self.assertEqual(self.execute(job, free_ids={"10"}), 4)
+        items = job.snapshot()["items"]
+        self.assertTrue(items[0]["is_free"])
+        self.assertFalse(items[1]["is_free"])
+        self.assertEqual(job.snapshot()["state"], "complete")
+        second = self.submit(mode="products", app_ids=["10", "11"])
+        self.assertEqual(self.execute(second, free_ids={"10"}), 0)
+        self.assertTrue(second.snapshot()["items"][0]["is_free"])
 
     def test_catalog_products_use_existing_comparison_pipeline_and_keep_cursor(self):
         job = self.submit(mode="catalog", creator_id="supergiant", start=12)
