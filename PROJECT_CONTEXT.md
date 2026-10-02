@@ -87,6 +87,15 @@ is intended but has not happened. Use plain, direct UI language describing regio
 - One visible heading row sits above all creator groups, aligned with their shared
   table columns. Horizontal scrolling stays synchronized on narrow screens;
   each creator table retains visually hidden column headings for screen readers.
+  Each creator's icon/name appears in a full-width row above its games, alongside
+  per-foreign-storefront mean percentage differences (equal product weight,
+  unrounded calculations, positive = pricier in baseline), medians, and sample counts.
+  Median uses the middle sorted difference, or the mean of the middle two for an
+  even sample size; it shares the average's eligible sample.
+  Missing/pending/free/zero-reference products are excluded from averages. Coverage
+  and cheaper/equal, pricier, uncompared, and pending counts cover loaded products
+  only. Statistics reuse results and their currency settings, updating on load,
+  restoration, and refresh. Paid DLC/soundtracks count alongside games.
   Opening the creator tab automatically compares three curated games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
