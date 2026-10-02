@@ -15,15 +15,120 @@ class Element {
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector() { return new Element("p"); }
 }
-function setup(selectors = {}) {
+function setup(selectors = {}, extras = {}) {
   const elements = new Map();
   const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}});
+  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, run: source => vm.runInContext(source, context)};
 }
 const game = (id, name) => ({app_id:id, name, comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
+
+const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
+function creatorSetup(savedValues = {}) {
+  const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
+  const registry = [{id:"studio",name:"Studio",role:"Developer",homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], timers = new Map();
+  let timerId = 0;
+  const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
+  const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
+  const selectors = {'[name="home"]':radios,'[name="region"]':regions,'[name="region"]:checked':regions.filter(el => el.checked)};
+  const testContext = setup(selectors, {
+    sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
+    setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
+    fetch:async (path, options = {}) => {
+      calls.push({path,body:options.body ? JSON.parse(options.body) : null});
+      let data;
+      if (path === "/api/creators") data = {creators:registry};
+      else if (path === "/api/creator-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path.endsWith("/cancel")) data = {state:"cancelling"};
+      else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
+      return {ok:true,json:async () => data};
+    }
+  });
+  testContext.run(fs.readFileSync("web/creators.js", "utf8"));
+  const group = () => testContext.get("creator-groups").children[0];
+  const body = () => group().children[1].children[0].children[0].children[2];
+  return {...testContext,calls,storage,snapshots,radios,regions,timers,group,body};
+}
+
+test("creator tab automatically compares examples and preserves wishlist results and baseline", async () => {
+  const ctx = creatorSetup();
+  ctx.run(`items = ${JSON.stringify([game("99","My wishlist")])}; resultHome = "gb";`);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("wishlist-panel").hidden, true);
+  assert.equal(ctx.get("compare-form").hidden, true);
+  assert.equal(ctx.body().children.length, 3);
+  assert.equal(ctx.body().children[0].children[1].textContent, "10.00 zł");
+  assert.equal(ctx.calls.find(call => call.path === "/api/creator-jobs").body.mode, "featured");
+  assert.equal(ctx.run("items[0].app_id"), "99");
+  assert.equal(ctx.run("resultHome"), "gb");
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal(ctx.get("compare-form").hidden, false);
+  assert.equal(ctx.get("creators-panel").hidden, true);
+  assert.ok(ctx.storage.has("polisher-creator-job"));
+});
+
+test("expanded catalogs retain soundtracks, avoid duplicate examples, and refresh displayed IDs", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const retainedRow = ctx.body().children[0];
+  ctx.snapshots.push({state:"complete",message:"Checked catalog.",catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Original Soundtrack"}],next_start:12,has_more:true,total:30}},items:[game("4","Original Soundtrack")],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","4"]);
+  assert.equal(ctx.body().children[0], retainedRow);
+  const expanded = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(expanded.mode, "catalog"); assert.equal(expanded.start, 0);
+  ctx.radios.forEach(el => el.checked = el.value === "gb");
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(refreshed.mode, "products"); assert.deepEqual(refreshed.app_ids, ["1","2","3","4"]);
+  assert.equal(refreshed.home, "gb");
+  assert.equal(JSON.parse(ctx.storage.get("polisher-creator-job")).catalogs[0].nextStart, 0);
+  assert.equal(ctx.body().children.length, 4);
+});
+
+test("creator icons fall back to Steam and terminal catalogs hide Load more", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const img = ctx.group().children[0].children[0]; img.listeners.error();
+  assert.equal(img.src, "/steam-logo.svg");
+  assert.equal(img.referrerPolicy, "no-referrer");
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[],next_start:12,has_more:false,total:3}},items:[],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(ctx.group().children[1].children[1].children[1].hidden, true);
+});
+
+test("restored creator results keep expanded products and running jobs reconnect", async () => {
+  const saved = {home:"gb",regions:["us"],request:{mode:"catalog"},job:{id:"a".repeat(32),token:"b".repeat(43)},
+    catalogs:[{id:"studio",products:[{app_id:"4",name:"Soundtrack"}],nextStart:12,hasMore:true,total:30}],
+    results:[game("4","Soundtrack")],rates:[]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.body().children.length, 1);
+  assert.equal(ctx.body().children[0].children[1].textContent, "10.00 GBP");
+  assert.ok(ctx.radios.find(el => el.value === "gb").checked);
+  assert.ok(ctx.calls.some(call => call.path.startsWith("/api/jobs/")));
+  assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
+});
+
+test("creator comparisons wait behind a wishlist and lock shared controls while running", async () => {
+  const ctx = creatorSetup(); ctx.run("running = true;");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
+  assert.match(ctx.get("creators-progress").textContent, /Waiting for your wishlist/);
+  ctx.run("running = false;");
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  [...ctx.timers.values()][0](); await settle();
+  assert.equal(ctx.run("window.creatorPane.busy"), true);
+  assert.ok(ctx.radios.every(el => el.disabled));
+  assert.equal(ctx.get("analyze").disabled, true);
+  assert.equal(ctx.get("retry").disabled, true);
+  ctx.run('items = [{app_id:"existing-wishlist"}];');
+  await ctx.run('start({identifier:"example",regions:["us"],home:"pl"})');
+  assert.equal(ctx.run('items[0].app_id'), "existing-wishlist");
+  ctx.get("creators-cancel").listeners.click(); await settle();
+  assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+});
 
 test("default hides unavailable products while retaining technical failures", () => {
   const {get,run} = setup();

@@ -1,0 +1,157 @@
+import io
+import json
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
+from steam_price_polisher.creators import (
+    CATALOG_CACHE_TTL, CATALOG_PAGE_SIZE, FEATURED_CREATORS, CreatorCatalogService, parse_catalog,
+)
+from steam_price_polisher.http_client import HttpClientError
+from steam_price_polisher.models import ExchangeRate, RegionalPriceResult, StorePrice
+from steam_price_polisher.web_app import JobManager, WebApplication
+
+
+def catalog_payload(start=0, total=3, products=None):
+    products = products or [("1145360", "Hades"), ("2950840", "Hades II Original Soundtrack"), ("10", "A &amp; B")]
+    # Steam includes app IDs on both the hover wrapper and the product link.
+    html = "".join(f'<div><a data-ds-appid="{app_id}"></a><a class="store_capsule price_inline" '
+                   f'data-ds-appid="{app_id}"><img alt="{name}"></a></div>' for app_id, name in products)
+    return {"success": 1, "start": str(start), "pagesize": str(CATALOG_PAGE_SIZE),
+            "total_count": total, "results_html": html}
+
+
+class CatalogTests(unittest.TestCase):
+    def test_parses_products_once_without_filtering_soundtracks_and_decodes_names(self):
+        page = parse_catalog(catalog_payload(), 0)
+        self.assertEqual([item["app_id"] for item in page["products"]], ["1145360", "2950840", "10"])
+        self.assertEqual(page["products"][2]["name"], "A & B")
+        self.assertFalse(page["has_more"])
+        self.assertEqual(page["next_start"], CATALOG_PAGE_SIZE)
+
+    def test_advances_steam_cursor_and_rejects_broken_or_wrong_pages(self):
+        page = parse_catalog(catalog_payload(start=12, total=40), 12)
+        self.assertEqual(page["next_start"], 24)
+        self.assertTrue(page["has_more"])
+        for changes in ({"start": 0}, {"pagesize": 0}, {"pagesize": True}, {"total_count": -1},
+                        {"results_html": "<script>private()</script>"}, {"success": False},
+                        {"results_html": '<a class="store_capsule" data-ds-appid="../secret"><img alt="Bad"></a>'}):
+            with self.subTest(changes=changes), self.assertRaises(HttpClientError):
+                parse_catalog({**catalog_payload(start=12, total=40), **changes}, 12)
+
+    def test_page_cache_is_region_specific_and_denial_never_uses_stale_fallback(self):
+        clock = Mock(return_value=0)
+        service = CreatorCatalogService(clock)
+        client = Mock()
+        client.get_json.return_value = catalog_payload()
+        self.assertEqual(service.get_page(client, "supergiant", "pl", 0)["source"], "live")
+        self.assertEqual(service.get_page(client, "supergiant", "pl", 0)["source"], "cache")
+        service.get_page(client, "supergiant", "gb", 0)
+        self.assertEqual(client.get_json.call_count, 2)
+        self.assertIn("cc=GB", client.get_json.call_args.args[0])
+        clock.return_value = CATALOG_CACHE_TTL + 1
+        client.get_json.side_effect = HttpClientError("outage", transient=True)
+        self.assertEqual(service.get_page(client, "supergiant", "pl", 0)["source"], "stale cache")
+        client.get_json.side_effect = HttpClientError("denied", network_access_denied=True)
+        with self.assertRaises(HttpClientError):
+            service.get_page(client, "supergiant", "pl", 0)
+
+
+class CreatorApiTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.manager = JobManager(self.directory.name, start_worker=False)
+        self.manager.gate = Mock()
+        self.app = WebApplication(self.manager)
+
+    def request(self, path, method="GET", body=None, token="", **overrides):
+        raw = json.dumps(body).encode() if body is not None else b""
+        environ = {"REQUEST_METHOD": method, "PATH_INFO": path, "HTTP_HOST": "127.0.0.1:8765",
+                   "HTTP_ORIGIN": "http://127.0.0.1:8765", "CONTENT_TYPE": "application/json",
+                   "CONTENT_LENGTH": str(len(raw)), "wsgi.input": io.BytesIO(raw),
+                   "HTTP_AUTHORIZATION": "Bearer " + token, "REMOTE_ADDR": "creator-test", **overrides}
+        response = {}
+        def start(status, headers):
+            response.update(status=int(status.split()[0]), headers=dict(headers))
+        data = b"".join(self.app(environ, start))
+        response["data"] = json.loads(data) if response["headers"]["Content-Type"].startswith("application/json") else data
+        return response
+
+    def submit(self, **source):
+        result = self.request("/api/creator-jobs", "POST", {"mode": "featured", "home": "pl", "regions": ["us", "de"], **source})
+        self.assertEqual(result["status"], 202)
+        return self.manager.jobs[result["data"]["id"]]
+
+    def execute(self, job):
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            nbp.return_value.get_rate_details.return_value = {
+                "USD": ExchangeRate("USD", 4, "2026-10-02"), "EUR": ExchangeRate("EUR", 4.3, "2026-10-02")}
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(
+                StorePrice(region, currency, 10, 20, 50), "Live product")
+            self.manager.execute(job)
+            steam.return_value.get_wishlist.assert_not_called()
+            return steam.return_value.get_regional_price.call_count
+
+    def test_registry_and_assets_are_public_but_jobs_require_private_tokens(self):
+        registry = self.request("/api/creators")["data"]["creators"]
+        self.assertEqual(len(registry), 3)
+        self.assertTrue(all(len(creator["examples"]) == 3 for creator in registry))
+        for asset in ("/creators.js", "/steam-logo.svg"):
+            self.assertEqual(self.request(asset)["status"], 200)
+        job = self.submit()
+        self.assertEqual(self.request("/api/jobs/" + job.id)["status"], 404)
+        result = self.request("/api/jobs/" + job.id, token=job.token)["data"]
+        self.assertEqual(result["profile"], "")
+        self.assertEqual(result["source"], "creators")
+        self.assertEqual(self.request("/api/jobs/" + job.id + "/cancel", "POST", {}, job.token)["data"]["state"], "cancelling")
+
+    def test_featured_prices_reuse_normal_cache_and_have_creator_membership(self):
+        job = self.submit()
+        self.assertEqual(self.execute(job), 27)
+        data = job.snapshot()
+        self.assertEqual(data["state"], "complete")
+        self.assertEqual(len(data["items"]), 9)
+        self.assertEqual(data["items"][0]["creator_ids"], ["supergiant"])
+        expected = [item.app_id for creator in FEATURED_CREATORS for item in creator.examples]
+        self.assertEqual([item["app_id"] for item in data["items"]], expected)
+        second = self.submit(mode="products", app_ids=expected)
+        self.assertEqual(self.execute(second), 0)
+        self.assertEqual(len(second.snapshot()["items"]), 9)
+        self.assertTrue(all(item["source_summary"] == "cache 3" for item in second.snapshot()["items"]))
+
+    def test_catalog_products_use_existing_comparison_pipeline_and_keep_cursor(self):
+        job = self.submit(mode="catalog", creator_id="supergiant", start=12)
+        with patch.object(self.manager.catalogs, "get_page", return_value={**parse_catalog(catalog_payload(start=12, total=40), 12), "source": "live"}) as get_page:
+            self.execute(job)
+        self.assertEqual(job.snapshot()["state"], "complete")
+        self.assertEqual(job.snapshot()["catalogs"]["supergiant"]["next_start"], 24)
+        self.assertIn("2950840", [item["app_id"] for item in job.snapshot()["items"]])
+        self.assertEqual(get_page.call_args.args[1:], ("supergiant", "pl", 12))
+
+    def test_catalog_permission_denial_stops_without_price_requests(self):
+        job = self.submit(mode="catalog", creator_id="supergiant")
+        with patch.object(self.manager.catalogs, "get_page", side_effect=HttpClientError("private detail", network_access_denied=True)):
+            self.manager.execute(job)
+        self.assertEqual(job.snapshot()["error_code"], "network_access_denied")
+        self.assertEqual(job.snapshot()["items"], [])
+        self.assertNotIn("private detail", json.dumps(job.snapshot()))
+
+    def test_request_validation_and_origin_checks_prevent_arbitrary_catalog_urls(self):
+        invalid = ({"creator_id": "https://localhost/secret", "mode": "catalog"}, {"mode": []},
+                   {"mode": "catalog", "creator_id": "supergiant", "start": True},
+                   {"mode": "catalog", "creator_id": "supergiant", "start": -1},
+                   {"mode": "featured", "start": 0}, {"mode": "search"}, {"regions": []},
+                   {"mode": "products", "app_ids": ["../private"]},
+                   {"mode": "products", "app_ids": ["10", "10"]}, {"mode": "products", "app_ids": [10]},
+                   {"mode": "products", "app_ids": []}, {"mode": "products", "app_ids": [str(i) for i in range(1001)]})
+        for changes in invalid:
+            with self.subTest(changes=changes):
+                self.assertEqual(self.request("/api/creator-jobs", "POST", {"mode": "featured", "regions": ["us"], **changes})["status"], 400)
+        self.assertEqual(self.request("/api/creator-jobs", "POST", {"mode": "featured", "regions": ["us"]}, HTTP_ORIGIN="https://evil.test")["status"], 403)
+        self.assertFalse(self.manager.jobs)
+
+    def test_wishlist_and_creators_share_the_worker_busy_limit(self):
+        self.submit()
+        response = self.request("/api/jobs", "POST", {"identifier": "example", "regions": ["us"]})
+        self.assertEqual(response["status"], 429)
