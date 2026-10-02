@@ -70,7 +70,7 @@
       link.href = creator.homepage; link.target = "_blank"; link.rel = "noopener noreferrer";
       title.append(link); identity.append(icon, title, node("p", creator.role, "hint"));
       const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap");
-      const table = node("table"), columns = node("colgroup"), head = node("thead"), body = node("tbody");
+      const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
       table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
       for (const name of ["game", "home", "foreign", "difference"]) columns.append(node("col", undefined, `${name}-column`));
       head.append(tableHeading(creatorHome)); table.append(columns, head, body); wrap.append(table);
@@ -81,12 +81,21 @@
       footer.append(count, more); catalog.append(wrap, footer); section.append(identity, catalog);
       $("creator-groups").append(section);
       groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-        body, head, count, more, rowCache: new Map()});
+        body, head, wrap, count, more, rowCache: new Map()});
+      wrap.addEventListener("scroll", () => syncColumns(wrap));
     }
     renderGroups();
   }
 
+  function syncColumns(source) {
+    // One shared heading follows every catalog when narrow screens require scrolling.
+    for (const wrap of [$("creator-columns-scroll"), ...[...groups.values()].map(group => group.wrap)]) {
+      if (wrap.scrollLeft !== source.scrollLeft) wrap.scrollLeft = source.scrollLeft;
+    }
+  }
+
   function renderGroups() {
+    $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
     $("creators-settings").textContent = `Comparisons: ${storefronts[creatorHome].name} (${storefronts[creatorHome].currency}) against ${creatorRegions.map(id => storefronts[id].currency).join(" and ")}.`;
     for (const group of groups.values()) {
       // Preserve unavailable paid products; missing prices alone do not mean free.
@@ -260,6 +269,7 @@
   }
 
   window.creatorPane = {get active() { return active; }, get busy() { return busy; }, refreshControls};
+  $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
   $("wishlist-tab").addEventListener("click", () => selectTab(false));
   $("creators-tab").addEventListener("click", () => selectTab(true));
   for (const [id, creatorTab] of [["wishlist-tab", false], ["creators-tab", true]]) {

@@ -82,7 +82,10 @@ is intended but has not happened. Use plain, direct UI language describing regio
   job in the same tab. Example mode compares a curated
   7-game wishlist (including The Witcher 3) using live Steam prices and official NBP exchange rates.
 
-- Opening the creator tab automatically compares three curated games each from
+- One visible heading row sits above all creator groups, aligned with their shared
+  table columns. Horizontal scrolling stays synchronized on narrow screens;
+  each creator table retains visually hidden column headings for screen readers.
+  Opening the creator tab automatically compares three curated games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
   products, including paid DLC/soundtracks, without duplicating featured examples.
