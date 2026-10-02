@@ -35,7 +35,48 @@ retry within the browser tab.
 For eventual public hosting, see [DEPLOYMENT.md](../DEPLOYMENT.md). The WSGI service
 includes bounded background jobs, input checks, same-origin POST protection,
 private result tokens, and a persistent price cache. Deploy it as one Python
-process behind HTTPS; this local version has not been published.
+process behind HTTPS. The source is published on GitHub; the app has not been
+deployed as a public service.
+
+## Developer and publisher catalogs
+
+Open **Developers & publishers** beside **Your wishlist**. The tab automatically
+compares three selected games each from Supergiant Games, CD PROJEKT RED, and
+Devolver Digital, using the sidebar's baseline and comparison currencies.
+Names and artwork appear immediately; prices and differences fill in as requests
+complete. Featured examples are games; expanded catalogs also include DLC,
+soundtracks, demos, and other products linked to the creator's Steam homepage.
+Products without a regional price remain visible with an explanation.
+
+**Load more ↓** adds up to 12 catalog products at a time and compares their prices.
+Already displayed examples are not duplicated. The button disappears at the end
+of the catalog. Steam's listings can vary by region, and creator-homepage
+membership is not an exhaustive guarantee of every credited developer or publisher.
+Creator search is postponed; only the featured creators are available.
+
+Currency selections are shared between tabs. Existing results keep the currencies
+used for that comparison; **Refresh comparisons** applies the current sidebar
+choices to all displayed creator products, including expanded pages. Changing the
+baseline restarts catalog pagination to avoid skipping region-specific entries. Use it to
+retry incomplete prices after cancellation or a request failure. It reuses fresh
+cached prices, so refreshing does not force a new Steam request for every price.
+Only one comparison can run per connection; creator examples wait for an active
+wishlist comparison, and both use the same paced background worker.
+
+Wishlist and creator results remain separate. The active tab, creator results,
+catalog position, and job access token are saved in the same tab's session storage
+to survive refresh. Server jobs still expire after an hour or disappear on restart;
+completed creator results saved in the tab can remain visible until refreshed.
+Prices and NBP rates use the existing shared SQLite cache. Creator catalog pages
+are cached in server memory for six hours (up to 128 pages); a failed refresh can
+use a labeled stale catalog, except when network access is denied.
+
+Icons come from Steam's avatar CDN, with the bundled official Steam logo as a
+fallback. Game artwork continues to use Steam's image CDN. Catalog integration
+uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
+it is not a documented Steamworks API contract. Malformed pages fail visibly
+instead of executing or forwarding Steam HTML. CSV export remains on the wishlist
+tab. The CLI does not provide creator browsing.
 
 ## Run the command-line prototype
 
@@ -80,7 +121,9 @@ python .\steam_wishlist_compare.py https://steamcommunity.com/id/example
 
 The key is not written to the cache or repository. When it is absent, the tool
 explains that vanity resolution was skipped and still tries the legacy wishlist
-endpoint. You can always use a numeric SteamID64 instead.
+endpoint. That fallback is not a reliable workaround: the 2026-09-12 research
+probe received a store-homepage redirect instead of wishlist JSON. Prefer a
+numeric SteamID64 when vanity resolution is not configured.
 
 Do not commit a populated `.env` file. The project does not automatically load
 `.env`; `.env.example` only documents the supported variables.
@@ -248,7 +291,9 @@ date, original successful retrieval time, and the comparison's rate-check time
 are separate fields. Timestamps use UTC. A cache check does not imply a new NBP
 request. Older in-memory results without timestamps export blank fields; run a
 new comparison after restarting the server to obtain them. PLN identity conversion
-has no NBP timestamps. Example exports are marked as illustrative data.
+has no NBP timestamps. Example exports carry an `example_data` flag identifying the
+curated game selection; their prices and exchange rates come from the same live
+and cached sources as normal comparisons.
 
 CSV is intended for spreadsheets and analysis; numeric values use decimal points.
 Untrusted text starting with spreadsheet formula characters is prefixed with an
