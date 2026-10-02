@@ -121,12 +121,66 @@ test("free-only catalog pages still advance to later paid products", async () =>
 
 test("creator icons fall back to Steam and terminal catalogs hide Load more", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
-  const img = ctx.group().children[0].children[0]; img.listeners.error();
+  const img = ctx.group().children[0].children[0].children[0]; img.listeners.error();
   assert.equal(img.src, "/steam-logo.svg");
   assert.equal(img.referrerPolicy, "no-referrer");
   ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[],next_start:12,has_more:false,total:3}},items:[],rates:[],warnings:[]});
   ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
   assert.equal(ctx.group().children[1].children[1].children[1].hidden, true);
+});
+
+test("creator averages weight products equally and update after loading more", async () => {
+  const comparison = (id, home, usd, eur, fair = false) => ({app_id:id,name:id,comparison:{
+    home_price:{amount:home},alternatives:[{region:"us",currency:"USD",original_amount:usd,rate_to_home:1,amount_in_home:usd},
+      {region:"de",currency:"EUR",original_amount:eur,rate_to_home:1,amount_in_home:eur}],is_fair:fair}});
+  const saved = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Unavailable"}],nextStart:0,hasMore:true,total:null}],
+    results:[comparison("1",120,100,150),comparison("2",20,10,0),skipped("3","no_regional_price")]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const statistics = () => ctx.group().children[0].children[1];
+  assert.equal(statistics().children[0].children[0].textContent,"Average PLN vs USD");
+  assert.equal(statistics().children[0].children[1].textContent,"+60.0%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"+60.0%");
+  assert.equal(statistics().children[0].children[2].textContent,"2 products compared");
+  assert.equal(statistics().children[1].children[1].textContent,"−20.0%");
+  assert.equal(statistics().children[1].children[3].children[1].textContent,"−20.0%");
+  assert.equal(statistics().children[1].children[2].textContent,"1 product compared");
+  assert.match(statistics().children[2].textContent,/2 of 3 compared · 0 cheaper\/equal · 2 pricier · 1 uncompared/);
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Soundtrack"},{app_id:"5",name:"Demo"}],next_start:12,has_more:false,total:5}},
+    items:[comparison("4",30,60,40,true),{...skipped("5","no_regional_price"),is_free:true}],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(statistics().children[0].children[1].textContent,"+23.3%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"+20.0%");
+  assert.equal(statistics().children[1].children[1].textContent,"−22.5%");
+  assert.equal(statistics().children[1].children[3].children[1].textContent,"−22.5%");
+  assert.match(statistics().children[2].textContent,/3 of 4 compared · 1 cheaper\/equal · 2 pricier · 1 uncompared/);
+  ctx.radios.forEach(el => el.checked = el.value === "gb");
+  assert.equal(statistics().children[0].children[0].textContent,"Average PLN vs USD");
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{},items:[comparison("1",40,100,50,true)],rates:[],warnings:[]});
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(statistics().children[0].children[0].textContent,"Average GBP vs USD");
+  assert.equal(statistics().children[0].children[1].textContent,"−60.0%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"−60.0%");
+  assert.match(statistics().children[2].textContent,/1 of 4 compared.*3 pending/);
+});
+
+test("creator statistics show no average while results are pending or reference prices are zero", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  let stats = ctx.group().children[0].children[1];
+  assert.equal(stats.children[0].children[1].textContent,"—");
+  assert.equal(stats.children[0].children[3].children[1].textContent,"—");
+  assert.match(stats.children[2].textContent,/0 of 3 compared.*3 pending/);
+  const zero = game("1","First"); zero.comparison.alternatives[0].amount_in_home = 0;
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{},items:[zero,skipped("2","app_unavailable")],rates:[],warnings:[]});
+  [...ctx.timers.values()][0](); await settle();
+  stats = ctx.group().children[0].children[1];
+  assert.equal(stats.children[0].children[1].textContent,"—");
+  assert.equal(stats.children[0].children[2].textContent,"0 products compared");
+  assert.equal(stats.children[0].children[3].children[1].textContent,"—");
+  assert.match(stats.children[2].textContent,/1 of 3 compared.*1 uncompared · 1 pending/);
 });
 
 test("restored creator results keep expanded products and running jobs reconnect", async () => {
