@@ -1,6 +1,6 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-02. This is a current-state summary, not a change log.
+Updated: 2026-10-03. This is a current-state summary, not a change log.
 
 ## Start here
 
@@ -85,8 +85,12 @@ is intended but has not happened. Use plain, direct UI language describing regio
   7-game wishlist (including The Witcher 3) using live Steam prices and official NBP exchange rates.
 
 - One visible heading row sits above all creator groups, aligned with their shared
-  table columns. Horizontal scrolling stays synchronized on narrow screens;
-  each creator table retains visually hidden column headings for screen readers.
+  table columns. Horizontal scrolling stays synchronized on narrow screens.
+  The creator introduction keeps the free-product note, progress status, and
+  statistics explanation with consistent hint typography and compact spacing;
+  the missing/zero-reference exclusion note sits on its own line with a small gap.
+  currency choices are shown in the shared currency panel.
+  Each creator table retains visually hidden column headings for screen readers.
   Each creator's icon/name appears in a full-width row above its games, alongside
   per-foreign-storefront mean percentage differences (equal product weight,
   unrounded calculations, positive = pricier in baseline), medians, and sample counts.
@@ -276,7 +280,8 @@ store. HTTPS verification remained enabled; never disable it to resolve a
 certificate error. Sandbox restrictions can also require approved network/Git
 write access.
 
-The creator-tab implementation and the earlier Markdown refresh are uncommitted.
+The creator-tab implementation and catalog styling are committed locally on
+`codex/developer-publisher-catalogs`, including the creator heading cleanup.
 The app version has not been bumped; no tag or deployment was created.
 Follow AGENTS.md for commit reminders;
 commit/push only when authorized for the current work, and keep feature and test

@@ -141,7 +141,6 @@
 
   function renderGroups() {
     $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
-    $("creators-settings").textContent = `Comparisons: ${storefronts[creatorHome].name} (${storefronts[creatorHome].currency}) against ${creatorRegions.map(id => storefronts[id].currency).join(" and ")}.`;
     for (const group of groups.values()) {
       // Preserve unavailable paid products; missing prices alone do not mean free.
       group.products = group.products.filter(product => {
