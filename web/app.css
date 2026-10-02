@@ -1126,8 +1126,9 @@ td:first-child { min-width: 0; }
   font-size: 13px; padding: 9px 12px;
 }
 .creator-actions button:hover:not(:disabled) { background: var(--blue-subtle); }
-#creators-settings { margin-top: 20px; }
-#creators-progress { font-size: 13px; color: var(--muted); min-height: 20px; margin: 12px 0 22px; }
+#creators-progress { margin: 12px 0 0; }
+.creator-statistics-help { margin: 12px 0 18px; }
+.creator-statistics-help > span { display: block; margin-top: 4px; }
 #creators-notice { padding: 12px; border: 1px solid var(--blue-border); font-size: 13px; border-radius: 6px; }
 #creators-notice.error { border-color: var(--orange); color: #ffd19c; }
 .creator-group { padding: 24px 0; border-top: 1px solid var(--line); }
