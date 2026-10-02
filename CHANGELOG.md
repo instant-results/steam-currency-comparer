@@ -1,21 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.2.0-beta — 2026-10-03
 
-- Align creator statistics with foreign-price columns, use consistent currency
-  slots, and separate baseline and foreign prices with a subtle divider.
-
-- Creator identity rows above games, with average and median percentage differences per
-  comparison currency, sample sizes, and comparison coverage for loaded products.
-
-- Hide free products, including demos, from creator catalogs after checking,
-  while retaining paid products with missing prices and paid DLC/soundtracks.
+First beta of the 0.2 development milestone, adding developer and publisher catalog comparisons.
+This version has not been tagged, published as a GitHub release, or deployed.
 
 - Developer and publisher tab with featured creators, icons, and regional price
   comparisons for three selected games per creator.
 - Expandable Steam catalogs, shared price caching, cancellation, refresh of
   displayed products, and separate saved results for each tab. Creator search
   is postponed.
+- Hide free products, including demos, after checking, while retaining paid
+  products with missing prices and paid DLC/soundtracks.
+- Creator identity rows above games, with average and median percentage
+  differences per comparison currency, sample sizes, and coverage of loaded products.
+- One shared column-heading row, aligned statistics and foreign-price slots,
+  and synchronized horizontal scrolling on narrow screens.
+- Centered flat-topped Load more arrow with a soft blue gradient, extra top-center
+  transparency, white label, and no visible border. The 1px price divider aligns
+  with its midpoint, extends through pending and appended rows, and stops at
+  80% of the last row; the final horizontal rule is removed.
+- Compact creator introduction with consistent text sizing, no redundant currency
+  or catalog descriptions, and a separate statistics exclusion note.
+- Currency setup numbering follows the active tab. The featured-games footer
+  label is limited to the curated selection and remains absent after catalog
+  expansion, baseline changes, and restoring saved results.
 
 ## 0.1.0-beta.1 — source published 2026-09-23
 

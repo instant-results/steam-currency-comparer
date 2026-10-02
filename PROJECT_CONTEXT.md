@@ -10,6 +10,9 @@ Use Git history for historical details; do not repeat the development history.
 Continue with the user's next request rather than inventing a new feature or
 deploying the app. Local-server lifecycle and network-permission error handling
 have been addressed; see the operational notes below.
+The user considers the creator-tab frontend work sufficient for now. Preserve
+the current layout; creator search remains postponed. No further visual changes
+or new integrations are planned without a user request.
 
 ## Publication and version
 
@@ -20,8 +23,12 @@ labels sample profile identifiers as placeholders. The public display name is St
 script names, environment variables, and cache paths retain their original names
 for compatibility.
 
-Current version: `0.1.0-beta.1`, defined in `steam_price_polisher/version.py`.
+Current version: `0.2.0-beta`, defined in `steam_price_polisher/version.py`.
 The server renders it into the header and returns it from `/api/health`.
+The intended first stable release is `1.0.0`. README.md's Versioning section
+defines the convention: `0.MINOR.PATCH-beta` during development, minor bumps for
+substantial features (resetting patch to zero), patch bumps for fixes/refinements,
+and an unnumbered `-beta` suffix. Historical `0.1.0-beta.1` references are preserved.
 The source beta was pushed to GitHub on 2026-09-23. No release tag was created
 during that publication; there are no tags in the current local repository.
 README screenshots live in docs/images/ and show the built-in seven-game live
@@ -89,7 +96,7 @@ is intended but has not happened. Use plain, direct UI language describing regio
   The creator introduction keeps the free-product note, progress status, and
   statistics explanation with consistent hint typography and compact spacing;
   the missing/zero-reference exclusion note sits on its own line with a small gap.
-  currency choices are shown in the shared currency panel.
+  Currency choices are shown in the shared currency panel.
   Each creator table retains visually hidden column headings for screen readers.
   Each creator's icon/name appears in a full-width row above its games, alongside
   per-foreign-storefront mean percentage differences (equal product weight,
@@ -238,14 +245,19 @@ changes need a browser refresh; backend changes need a verified clean restart,
 which clears in-memory jobs. Avoid triggering full live wishlists for routine
 tests.
 
-Verified locally on 2026-10-02: 108 Python tests and 25 frontend tests pass;
-both frontend scripts also pass syntax checks. Live creator directory/catalog
+The latest frontend regression run on 2026-10-03 passed all 29 checks, including
+expanded footer labels after baseline changes and restoring older saved sessions.
+Both frontend scripts passed syntax checks on 2026-10-03. The last Python suite
+run on 2026-10-02 passed 108 tests; backend code has not changed during subsequent
+frontend refinements. Live creator directory/catalog
 probes and featured regional comparisons were verified for this extension;
 the sorted wishlist API has not been re-probed. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
 render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
 creator parsing/pagination/cache/validation, independent tab results/restoration,
-and selection restoration.
+selection restoration, creator averages/medians, and coverage counts. Targeted
+browser checks verified the heading spacing, arrow appearance and centering,
+divider extension through pending/expanded rows, and corrected footer labels.
 Frontend tests use a minimal DOM harness; they do not establish browser visual
 correctness. Use targeted UI verification when needed.
 
@@ -271,10 +283,10 @@ correctness. Use targeted UI verification when needed.
 `main` tracks `origin/main` at
 https://github.com/instant-results/steam-currency-comparer.git. The last confirmed
 push was `9dbc37d` on 2026-09-23, covering branding/versioning, separate tests,
-API research, public documentation, and screenshots. At the start of this
-2026-10-02 documentation refresh, local HEAD and the local `origin/main` tracking
-ref both pointed there and the working tree was clean. The remote was not fetched
-again for this refresh; inspect actual status before starting new work.
+API research, public documentation, and screenshots. Current development is on
+`codex/developer-publisher-catalogs`. Creator features and UI refinements are
+committed locally, with regression tests in separate commits. The remote was not
+fetched or pushed during this handoff update; inspect actual status before work.
 
 On this Windows machine, the successful push used
 `git -c http.sslBackend=schannel push -u origin main` to use the Windows trust
@@ -284,7 +296,9 @@ write access.
 
 The creator-tab implementation and catalog styling are committed locally on
 `codex/developer-publisher-catalogs`, including the creator heading cleanup.
-The app version has not been bumped; no tag or deployment was created.
+The footer-label fix is `af5d15d`; its regression checks are `3155e8c`.
+README.md, docs/USAGE.md, and CHANGELOG.md describe the completed tab behavior.
+Version 0.2.0-beta covers the completed creator-tab work; no tag, push, or deployment was created.
 Follow AGENTS.md for commit reminders;
 commit/push only when authorized for the current work, and keep feature and test
 changes in separate coherent commits. Do not infer that an old preview is still

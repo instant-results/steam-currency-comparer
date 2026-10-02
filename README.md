@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.1.0-beta.1** · Public source beta for local use.
+**Version: 0.2.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -37,10 +37,12 @@ change over time. No personal Steam profile is used.
 - Exports loaded results to CSV, with wishlist attribution optional.
 - A **Developers & publishers** tab compares three featured games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Expand their Steam
-  catalogs to compare more products without providing a wishlist.
-- A **Developers & publishers** tab compares three featured games each from
-  Supergiant Games, CD PROJEKT RED, and Devolver Digital. Expand their Steam
-  catalogs to compare more products without providing a wishlist.
+  catalogs with **Load more** to compare more games, paid DLC, and soundtracks
+  without providing a wishlist. Free products are hidden after checking.
+- Each creator's summary shows average and median percentage differences for
+  each comparison currency, sample sizes, and coverage of loaded products.
+  These statistics update as more products load; they cover the displayed
+  selection rather than the entire catalog. Creator search is postponed.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -172,12 +174,31 @@ Keep local data, populated environment files, and credentials out of Git.
 
 ## Versioning
 
-The release version is defined in `steam_price_polisher/version.py` and shown
-in the app header, server startup message, and `/api/health` response.
-`0.1.0-beta.1` identifies the first beta of the 0.1.0 release. Increment the beta
-suffix for later prereleases; use `0.1.0` for the corresponding stable release.
-Update this README and the [changelog](CHANGELOG.md) when changing the version. Git tags and
-GitHub releases are created separately when a release is ready to publish.
+The version is defined in `steam_price_polisher/version.py` and shown in the app
+header, server startup message, and `/api/health` response. The intended first
+stable release is **1.0.0**.
+
+During development toward that release, use **0.MINOR.PATCH-beta**:
+
+- Increment **MINOR** for a substantial new feature and reset PATCH to zero:
+  `0.1.0-beta` → `0.2.0-beta`.
+- Increment **PATCH** for fixes and refinements within the current feature
+  milestone: `0.2.0-beta` → `0.2.1-beta`.
+- Keep the **-beta** suffix while the app is in beta. Do not append an iteration
+  number such as `.1`; version bumps use MINOR or PATCH instead.
+- Use **1.0.0**, without the beta suffix, when the app reaches the intended stable
+  release. After that, use patch versions for fixes, minor versions for compatible
+  features, and major versions for incompatible changes.
+
+The current `0.2.0-beta` marks the developer/publisher catalog milestone.
+It does not imply a planned stable `0.2.0` release. The historical
+`0.1.0-beta.1` version predates this convention and remains unchanged in earlier
+release notes and screenshot captions.
+
+Update this README, the [changelog](CHANGELOG.md), and
+[project context](PROJECT_CONTEXT.md) when changing the version. Git tags,
+GitHub releases, and deployment are separate actions; a version bump or commit
+does not publish the app.
 
 ## For developers
 
@@ -207,6 +228,7 @@ Frontend checks require Node.js with its built-in test runner:
 ```sh
 node --test tests/test_web_render.cjs
 node --check web/app.js
+node --check web/creators.js
 ```
 
 - [Usage and technical reference](docs/USAGE.md): CLI commands, sale-price handling,
