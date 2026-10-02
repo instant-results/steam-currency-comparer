@@ -116,6 +116,8 @@ is intended but has not happened. Use plain, direct UI language describing regio
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
   products, including paid DLC/soundtracks, without duplicating featured examples.
+  The footer's featured-games label is limited to the initial curated selection;
+  expanded catalogs retain their expanded status across currency changes and restore.
   Free products (including demos) are removed after checking Steam's free flag or
   a zero baseline price; missing prices alone do not imply free. The free flag is
   persisted in the price cache (schema version 5); old missing-price cache entries
