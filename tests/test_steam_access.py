@@ -207,6 +207,18 @@ class SteamAccessTests(unittest.TestCase):
         self.assertEqual(result.price.amount, 49.99)
         self.assertEqual(result.price.currency, "PLN")
 
+    def test_free_product_is_distinct_from_missing_paid_price(self):
+        client = SteamClient(QueueHttpClient([
+            {"10": {"success": True, "data": {"name": "Demo", "is_free": True}}},
+            {"11": {"success": True, "data": {"name": "Unreleased game", "is_free": False}}},
+        ]), request_delay=0, sleep=lambda _: None)
+        free = client.get_regional_price("10", "pl", "PLN")
+        missing = client.get_regional_price("11", "pl", "PLN")
+        self.assertEqual(free.status, PriceStatus.NO_REGIONAL_PRICE)
+        self.assertTrue(free.is_free)
+        self.assertEqual(missing.status, PriceStatus.NO_REGIONAL_PRICE)
+        self.assertFalse(missing.is_free)
+
     def test_success_false_is_an_explicit_unavailable_result(self):
         client = SteamClient(
             QueueHttpClient([{"10": {"success": False}}]),

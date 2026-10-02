@@ -52,6 +52,19 @@ class CacheTests(unittest.TestCase):
             clock=self.clock,
         )
 
+    def test_old_missing_price_is_rechecked_and_free_flag_survives_reopen(self):
+        self.cache.put_price("10", "pl", "PLN", RegionalPriceResult.no_regional_price("Demo"))
+        free = RegionalPriceResult.no_regional_price("Demo", is_free=True)
+        live = FakePriceProvider(free)
+        service = CachedPriceService(live, self.cache, clock=self.clock, require_sale_metadata=True)
+        self.assertEqual(service.get_regional_price("10", "pl", "PLN").source, "live")
+        reopened = SQLiteCache(Path(self.temp_directory.name) / "cache.sqlite3", clock=self.clock)
+        service = CachedPriceService(live, reopened, clock=self.clock, require_sale_metadata=True)
+        lookup = service.get_regional_price("10", "pl", "PLN")
+        self.assertEqual(lookup.source, "cache")
+        self.assertTrue(lookup.result.is_free)
+        self.assertEqual(live.calls, 1)
+
     def test_price_is_loaded_from_cache_on_repeated_lookup(self):
         live_result = RegionalPriceResult.available(
             StorePrice("pl", "PLN", 49.99),
