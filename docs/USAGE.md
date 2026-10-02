@@ -71,7 +71,10 @@ and pending counts. Cheaper/equal means the baseline price is no higher than eve
 selected converted foreign price. These statistics describe loaded products only,
 including paid DLC and soundtracks; they do not summarize the entire Steam catalog.
 Statistics use existing comparison results without additional requests, update
-when more products load, and retain the results' currencies until refreshed.
+when more products load, and retain the results' currencies until refreshed. Desktop statistics align with
+the corresponding foreign-price columns; a subtle divider separates baseline and
+foreign prices. Narrow screens keep statistics above the horizontally scrolling
+tables.
 
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current sidebar
