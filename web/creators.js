@@ -14,7 +14,7 @@
     try {
       sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest,
         home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
-          products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total})),
+          products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded})),
         results: [...results.values()], rates: creatorRates}));
     } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
   }
@@ -87,7 +87,7 @@
       footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
       $("creator-groups").append(section);
       groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-        body, head, wrap, statistics, count, more, rowCache: new Map()});
+        expanded: false, body, head, wrap, statistics, count, more, rowCache: new Map()});
       wrap.addEventListener("scroll", () => syncColumns(wrap));
     }
     renderGroups();
@@ -165,7 +165,7 @@
         if (group.body.children[index] !== cached.row) group.body.insertBefore(cached.row, group.body.children[index] || null);
       }
       group.more.hidden = !group.hasMore;
-      group.count.textContent = `${group.products.length} products shown${group.total == null ? " · featured games" : ` · ${group.total} in Steam catalog`}`;
+      group.count.textContent = `${group.products.length} products shown${group.total != null ? ` · ${group.total} in Steam catalog` : group.expanded ? "" : " · featured games"}`;
     }
     if (active && creatorRates.length) renderRates(creatorRates, $("rates"));
     refreshControls();
@@ -175,6 +175,7 @@
     for (const [id, page] of Object.entries(data.catalogs || {})) {
       const group = groups.get(id);
       if (!group) continue;
+      group.expanded = true;
       const known = new Set(group.products.map(item => item.app_id));
       for (const product of page.products) if (!known.has(product.app_id)) {
         group.products.push(product); known.add(product.app_id);
@@ -268,6 +269,9 @@
       if (!group || !Array.isArray(catalog.products) || !Number.isInteger(catalog.nextStart) || catalog.nextStart < 0) continue;
       group.products = catalog.products.filter(item => /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string");
       group.nextStart = catalog.nextStart; group.hasMore = catalog.hasMore; group.total = catalog.total;
+      const featuredIds = new Set(creators.find(creator => creator.id === catalog.id).examples.map(product => product.app_id));
+      group.expanded = catalog.expanded === true || catalog.nextStart > 0 || catalog.total != null ||
+        group.products.some(product => !featuredIds.has(product.app_id));
     }
     if (saved.job && /^[A-Za-z0-9_-]{32}$/.test(saved.job.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.job.token)) {
       creatorJob = saved.job; savedRequest = saved.request; setCreatorBusy(true); pollCreators();
