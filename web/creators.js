@@ -79,7 +79,9 @@
       for (const name of ["game", "home", "foreign", "difference"]) columns.append(node("col", undefined, `${name}-column`));
       head.append(tableHeading(creatorHome)); table.append(columns, head, body); wrap.append(table);
       const footer = node("div", undefined, "creator-catalog-footer"), count = node("span", "Three featured games");
-      const more = node("button", "Load more ↓"); more.type = "button";
+      const more = node("button", undefined, "creator-load-more"); more.type = "button";
+      more.append(node("span", "Load more"));
+      more.title = `Load more products from ${creator.name}`;
       more.setAttribute("aria-label", `Load more products from ${creator.name}`);
       more.addEventListener("click", () => loadMore(creator.id));
       footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
