@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hide free products, including demos, from creator catalogs after checking,
+  while retaining paid products with missing prices and paid DLC/soundtracks.
+
 - Developer and publisher tab with featured creators, icons, and regional price
   comparisons for three selected games per creator.
 - Expandable Steam catalogs, shared price caching, cancellation, refresh of

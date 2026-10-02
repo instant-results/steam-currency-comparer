@@ -427,11 +427,14 @@ class SteamClient:
                 app_id=app_id,
                 region=region,
             )
+        if data.get("is_free") is True:
+            return RegionalPriceResult.no_regional_price(game_name, "Free product", is_free=True)
         price_overview = data.get("price_overview")
         if price_overview is None:
             return RegionalPriceResult.no_regional_price(
                 game_name,
                 f"Steam supplied no regional price for {region}.",
+                is_free=False,
             )
         if not isinstance(price_overview, dict):
             raise SteamProtocolError(

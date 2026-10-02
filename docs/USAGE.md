@@ -45,10 +45,13 @@ compares three selected games each from Supergiant Games, CD PROJEKT RED, and
 Devolver Digital, using the sidebar's baseline and comparison currencies.
 Names and artwork appear immediately; prices and differences fill in as requests
 complete. Featured examples are games; expanded catalogs also include DLC,
-soundtracks, demos, and other products linked to the creator's Steam homepage.
-Products without a regional price remain visible with an explanation.
+soundtracks, and other products linked to the creator's Steam homepage.
+Free products, including demos, are removed after Steam identifies them as free
+or returns a zero baseline price. Paid products without a regional price remain
+visible with an explanation. Refresh older saved results to identify free products.
 
-**Load more ↓** adds up to 12 catalog products at a time and compares their prices.
+**Load more ↓** checks up to 12 catalog products at a time and shows the non-free ones.
+Pages containing only free products still advance; use Load more again to continue.
 Already displayed examples are not duplicated. The button disappears at the end
 of the catalog. Steam's listings can vary by region, and creator-homepage
 membership is not an exhaustive guarantee of every credited developer or publisher.

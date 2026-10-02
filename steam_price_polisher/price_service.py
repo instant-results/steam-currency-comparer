@@ -70,6 +70,10 @@ class CachedPriceService:
             metadata_missing = self._require_sale_metadata and price is not None and (
                 price.base_amount is None or price.discount_percent is None
             )
+            # Old missing-price cache entries cannot distinguish free products.
+            metadata_missing |= self._require_sale_metadata and (
+                cached.result.status is PriceStatus.NO_REGIONAL_PRICE and cached.result.is_free is None
+            )
             if price is not None and price.discount_percent and price.discount_percent > 0:
                 ttl = min(ttl, self._sale_ttl)
             if not metadata_missing and self._clock() - cached.fetched_at <= ttl:

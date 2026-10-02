@@ -89,6 +89,11 @@
   function renderGroups() {
     $("creators-settings").textContent = `Comparisons: ${storefronts[creatorHome].name} (${storefronts[creatorHome].currency}) against ${creatorRegions.map(id => storefronts[id].currency).join(" and ")}.`;
     for (const group of groups.values()) {
+      // Preserve unavailable paid products; missing prices alone do not mean free.
+      group.products = group.products.filter(product => {
+        const item = results.get(product.app_id);
+        return !item?.is_free && item?.comparison?.home_price?.amount !== 0;
+      });
       group.head.replaceChildren(tableHeading(creatorHome));
       const displayedIds = new Set(group.products.map(item => item.app_id));
       for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
