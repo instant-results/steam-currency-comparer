@@ -2,6 +2,9 @@
 
 Research verified: 2026-09-12. This is an implementation brief, not a claim
 that Valve guarantees every observed response detail indefinitely.
+Implementation status checked against the repository on 2026-10-02: still not
+integrated. The live API observations remain dated 2026-09-12 and were not
+re-probed during the documentation refresh; revalidate before implementation.
 
 ## Objective
 

@@ -1,9 +1,11 @@
 # Steam Currency Comparer
 
-**Version: 0.1.0-beta.1** · First beta release in preparation.
+**Version: 0.1.0-beta.1** · Public source beta for local use.
 
-Compare the prices of games on your public Steam wishlist across regional Steam
-storefronts. Choose a baseline currency and one or two other storefronts; the app
+[GitHub repository](https://github.com/instant-results/steam-currency-comparer)
+
+Compare the prices of games on your public Steam wishlist, or browse featured
+developer and publisher catalogs, across regional Steam storefronts. Choose a baseline currency and one or two other storefronts; the app
 converts their prices using National Bank of Poland (NBP) exchange rates and shows
 which games cost more or less in your baseline storefront, including current sales.
 
@@ -33,6 +35,12 @@ change over time. No personal Steam profile is used.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
 - Exports loaded results to CSV, with wishlist attribution optional.
+- A **Developers & publishers** tab compares three featured games each from
+  Supergiant Games, CD PROJEKT RED, and Devolver Digital. Expand their Steam
+  catalogs to compare more products without providing a wishlist.
+- A **Developers & publishers** tab compares three featured games each from
+  Supergiant Games, CD PROJEKT RED, and Devolver Digital. Expand their Steam
+  catalogs to compare more products without providing a wishlist.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -53,8 +61,15 @@ Node.js is only needed for frontend tests, not to run the app.
 ### 1. Get the project
 
 Download the repository using **Code → Download ZIP** on GitHub and extract it,
-or clone it with Git. Open a terminal in the extracted or cloned project folder
-(the folder containing `serve_web.py` and `requirements.txt`).
+or clone it with Git:
+
+```sh
+git clone https://github.com/instant-results/steam-currency-comparer.git
+cd steam-currency-comparer
+```
+
+Open a terminal in the extracted or cloned project folder (the folder containing
+`serve_web.py` and `requirements.txt`).
 
 ### 2. Install and start
 
@@ -114,7 +129,8 @@ installation if the project's dependencies change.
 - **Unavailable products are hidden by default.** Enable **Show unavailable
   products** to reveal them. Technical failures remain visible.
 - **Results are temporary.** Refresh reconnects in the same tab; closing the tab
-  or restarting the server loses job access. Completed results expire after an hour.
+  or restarting the server loses job access. Server results expire after an hour;
+  completed creator results saved in the tab remain visible until refreshed or closed.
 - **Prices are snapshots.** Regular prices normally refresh after an hour, sale
   prices after 15 minutes, and exchange rates after 24 hours. Stale fallback is
   labeled when available.
@@ -145,8 +161,9 @@ settings that must be supplied as environment variables.
 The web app keeps its price cache and diagnostic logs in `.steam-price-polisher/`
 by default. The cache stores regional prices and exchange rates, not
 profile-to-wishlist links. Logs exclude profiles, API keys, cookies, and job tokens.
-The browser tab stores the current profile and job-access token in session storage;
-private results and profile attribution are held temporarily in server memory.
+The browser tab stores the current profile and job-access token in session storage,
+plus separate creator results and catalog positions. Private wishlist results and
+profile attribution are held temporarily in server memory.
 
 Steam and NBP receive the requests needed for the comparison, and the browser
 loads game artwork directly from Steam's image CDN. Running locally does not mean
