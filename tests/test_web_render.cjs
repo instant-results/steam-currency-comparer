@@ -72,6 +72,8 @@ test("creator tab automatically compares examples and preserves wishlist results
 
 test("expanded catalogs retain soundtracks, avoid duplicate examples, and refresh displayed IDs", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const count = () => ctx.group().children[1].children[1].children[0].textContent;
+  assert.match(count(), /featured games/);
   const retainedRow = ctx.body().children[0];
   ctx.snapshots.push({state:"complete",message:"Checked catalog.",catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Original Soundtrack"}],next_start:12,has_more:true,total:30}},items:[game("4","Original Soundtrack")],rates:[],warnings:[]});
   ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
@@ -79,6 +81,7 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   assert.equal(ctx.body().children[0], retainedRow);
   const expanded = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
   assert.equal(expanded.mode, "catalog"); assert.equal(expanded.start, 0);
+  assert.doesNotMatch(count(), /featured games/);
   ctx.radios.forEach(el => el.checked = el.value === "gb");
   ctx.get("creators-refresh").listeners.click(); await settle();
   const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
@@ -86,6 +89,12 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   assert.equal(refreshed.home, "gb");
   assert.equal(JSON.parse(ctx.storage.get("polisher-creator-job")).catalogs[0].nextStart, 0);
   assert.equal(ctx.body().children.length, 4);
+  assert.equal(count(), "4 products shown");
+  const saved = JSON.parse(ctx.storage.get("polisher-creator-job"));
+  delete saved.catalogs[0].expanded; // Older saved sessions have no explicit expansion flag.
+  const restored = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.group().children[1].children[1].children[0].textContent, "4 products shown");
 });
 
 test("creator catalogs hide free products but retain paid soundtracks and unavailable products", async () => {
