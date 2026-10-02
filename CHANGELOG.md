@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Creator identity rows above games, with average and median percentage differences per
+  comparison currency, sample sizes, and comparison coverage for loaded products.
+
 - Hide free products, including demos, from creator catalogs after checking,
   while retaining paid products with missing prices and paid DLC/soundtracks.
 

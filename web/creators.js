@@ -69,6 +69,10 @@
       const link = node("a", creator.name + " ↗");
       link.href = creator.homepage; link.target = "_blank"; link.rel = "noopener noreferrer";
       title.append(link); identity.append(icon, title, node("p", creator.role, "hint"));
+      const heading = node("div", undefined, "creator-group-heading");
+      const statistics = node("div", undefined, "creator-statistics");
+      statistics.setAttribute("aria-label", `${creator.name} statistics for loaded products`);
+      heading.append(identity, statistics);
       const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap");
       const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
       table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
@@ -78,10 +82,10 @@
       const more = node("button", "Load more ↓"); more.type = "button";
       more.setAttribute("aria-label", `Load more products from ${creator.name}`);
       more.addEventListener("click", () => loadMore(creator.id));
-      footer.append(count, more); catalog.append(wrap, footer); section.append(identity, catalog);
+      footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
       $("creator-groups").append(section);
       groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-        body, head, wrap, count, more, rowCache: new Map()});
+        body, head, wrap, statistics, count, more, rowCache: new Map()});
       wrap.addEventListener("scroll", () => syncColumns(wrap));
     }
     renderGroups();
@@ -94,6 +98,45 @@
     }
   }
 
+  function renderStatistics(group) {
+    const loaded = [...new Set(group.products.map(product => product.app_id))].map(id => results.get(id));
+    const compared = loaded.filter(item => item?.comparison);
+    const uncompared = loaded.filter(item => item?.skipped).length;
+    const pending = loaded.length - compared.length - uncompared;
+    group.statistics.replaceChildren();
+    for (const region of creatorRegions) {
+      const differences = [];
+      for (const item of compared) {
+        const home = item.comparison.home_price.amount;
+        const reference = item.comparison.alternatives.find(price => price.region === region)?.amount_in_home;
+        if (!Number.isFinite(home) || !Number.isFinite(reference) || reference <= 0) continue;
+        const difference = (home - reference) / reference * 100;
+        if (Number.isFinite(difference)) differences.push(difference);
+      }
+      const average = differences.length ? differences.reduce((sum, value) => sum + value / differences.length, 0) : null;
+      const sorted = [...differences].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      const median = !sorted.length ? null : sorted.length % 2 ? sorted[middle]
+        : sorted[middle - 1] / 2 + sorted[middle] / 2;
+      const metric = node("div", undefined, "creator-statistic");
+      metric.append(node("span", `Average ${storefronts[creatorHome].currency} vs ${storefronts[region].currency}`, "creator-statistic-label"));
+      metric.title = `Mean of each product's (baseline price − ${storefronts[region].name} price converted to ${storefronts[creatorHome].currency}) / converted price × 100. Each product has equal weight. Zero reference prices are excluded.`;
+      const value = node("strong", average == null ? "—" : percentageLabel(average),
+        "creator-statistic-value" + (average == null ? "" : average > 0 ? " pricier" : " cheaper"));
+      metric.append(value, node("small", `${differences.length} ${differences.length === 1 ? "product" : "products"} compared`));
+      const medianRow = node("div", undefined, "creator-statistic-median");
+      medianRow.title = "Middle product percentage difference after sorting; for an even number of products, the mean of the two middle differences. Uses the same products as the average.";
+      medianRow.append(node("span", "Median"), node("strong", median == null ? "—" : percentageLabel(median),
+        "creator-statistic-value" + (median == null ? "" : median > 0 ? " pricier" : " cheaper")));
+      metric.append(medianRow);
+      group.statistics.append(metric);
+    }
+    const cheaper = compared.filter(item => item.comparison.is_fair).length;
+    const coverage = node("p", `${compared.length} of ${loaded.length} compared · ${cheaper} cheaper/equal · ${compared.length - cheaper} pricier · ${uncompared} uncompared${pending ? ` · ${pending} pending` : ""}`, "creator-statistics-coverage");
+    coverage.title = "Cheaper/equal means the baseline price is no higher than every selected converted foreign price. Pricier means it exceeds at least one. Counts cover only loaded non-free products.";
+    group.statistics.append(coverage);
+  }
+
   function renderGroups() {
     $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
     $("creators-settings").textContent = `Comparisons: ${storefronts[creatorHome].name} (${storefronts[creatorHome].currency}) against ${creatorRegions.map(id => storefronts[id].currency).join(" and ")}.`;
@@ -103,6 +146,7 @@
         const item = results.get(product.app_id);
         return !item?.is_free && item?.comparison?.home_price?.amount !== 0;
       });
+      renderStatistics(group);
       group.head.replaceChildren(tableHeading(creatorHome));
       const displayedIds = new Set(group.products.map(item => item.app_id));
       for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();

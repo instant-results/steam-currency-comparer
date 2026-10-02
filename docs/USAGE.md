@@ -57,6 +57,22 @@ of the catalog. Steam's listings can vary by region, and creator-homepage
 membership is not an exhaustive guarantee of every credited developer or publisher.
 Creator search is postponed; only the featured creators are available.
 
+Each creator's icon and name sit above its games, beside an average percentage
+difference for each selected foreign storefront. Each compared, loaded product
+has equal weight: `(baseline price - converted foreign price) / converted foreign
+price * 100`. The mean uses unrounded differences; negative means cheaper in the
+baseline, positive means pricier. Missing, pending, free, and zero-reference
+products do not contribute. Each average shows its own sample count. Beside each
+average, the median shows the middle product difference after sorting; with an
+even sample size it averages the two middle differences. Both use the same sample
+and unrounded calculations.
+The header also reports comparison coverage and cheaper/equal, pricier, uncompared,
+and pending counts. Cheaper/equal means the baseline price is no higher than every
+selected converted foreign price. These statistics describe loaded products only,
+including paid DLC and soundtracks; they do not summarize the entire Steam catalog.
+Statistics use existing comparison results without additional requests, update
+when more products load, and retain the results' currencies until refreshed.
+
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current sidebar
 choices to all displayed creator products, including expanded pages. Changing the
