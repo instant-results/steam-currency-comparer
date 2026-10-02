@@ -85,7 +85,12 @@ is intended but has not happened. Use plain, direct UI language describing regio
 - Opening the creator tab automatically compares three curated games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
-  products, including DLC/soundtracks/demos, without duplicating featured examples.
+  products, including paid DLC/soundtracks, without duplicating featured examples.
+  Free products (including demos) are removed after checking Steam's free flag or
+  a zero baseline price; missing prices alone do not imply free. The free flag is
+  persisted in the price cache (schema version 5); old missing-price cache entries
+  are rechecked on web comparisons. Refresh old saved creator results to classify
+  free products. Free-only pages advance normally and can require another Load more.
   Refresh compares all displayed products with the current form currencies;
   expanded pages otherwise retain the existing run's currencies. A baseline change
   restarts catalog pagination while retaining displayed products. Unavailable

@@ -31,6 +31,7 @@ class AnalysisProgress:
     cache_hits: int
     stale_cache_hits: int
     live_requests: int
+    is_free: bool = False
 
     @property
     def status(self) -> str:
@@ -284,6 +285,7 @@ class AnalysisRunner:
             cache_hits,
             stale_hits,
             live_requests,
+            any(lookup.result.is_free is True for lookup in lookups),
         )
 
     def _skipped_from_error(
