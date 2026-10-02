@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Align creator statistics with foreign-price columns, use consistent currency
+  slots, and separate baseline and foreign prices with a subtle divider.
+
 - Creator identity rows above games, with average and median percentage differences per
   comparison currency, sample sizes, and comparison coverage for loaded products.
 

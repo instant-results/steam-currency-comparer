@@ -96,6 +96,9 @@ is intended but has not happened. Use plain, direct UI language describing regio
   and cheaper/equal, pricier, uncompared, and pending counts cover loaded products
   only. Statistics reuse results and their currency settings, updating on load,
   restoration, and refresh. Paid DLC/soundtracks count alongside games.
+  Desktop statistics align with fixed foreign-price slots using shared column
+  widths. A subtle vertical divider separates baseline and foreign prices.
+  Narrow creator panels stack statistics and share scrolling for 760px tables.
   Opening the creator tab automatically compares three curated games each from
   Supergiant Games, CD PROJEKT RED, and Devolver Digital. Icons use the Steam avatar
   CDN with an official Steam-logo fallback. Load more appends pages of up to 12
