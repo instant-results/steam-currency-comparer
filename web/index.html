@@ -21,6 +21,11 @@
 </div>
 <div class="results-panel creator-panel" id="creators-panel" role="tabpanel" aria-labelledby="creators-tab" hidden>
 <div class="creator-panel-heading"><div><p class="eyebrow">EXPLORE THEIR CATALOGS</p><h2>Developers &amp; publishers</h2><p class="hint">Free products, including demos, are hidden after checking.</p></div><div class="creator-actions"><button id="creators-refresh" type="button">Refresh comparisons ↻</button><button id="creators-cancel" type="button" hidden>Cancel comparison ■</button></div></div>
+<section class="creator-search" aria-labelledby="creator-search-label">
+<form id="creator-search-form"><label id="creator-search-label" for="creator-query">Find a developer or publisher</label><div class="creator-search-controls"><input id="creator-query" type="search" minlength="2" maxlength="100" required placeholder="e.g. ConcernedApe or Valve" autocomplete="off" aria-describedby="creator-search-help"><button id="creator-search-submit" type="submit">Search Steam</button></div></form>
+<p id="creator-search-help" class="hint">Search for a creator homepage, or use an exact name as listed on a game's store page. Your featured creators stay below.</p>
+<p id="creator-search-status" class="hint" role="status" aria-live="polite"></p><div id="creator-search-results" class="creator-search-results"></div>
+</section>
 <p id="creators-notice" role="status" aria-live="polite" hidden></p><p id="creators-progress" class="hint" role="status" aria-live="polite">Open this tab to load comparisons.</p>
 <p class="hint creator-statistics-help">Averages and medians cover loaded products only, with equal weight per product. Negative means cheaper in the baseline; positive means pricier.<span>Missing and zero reference prices are excluded.</span></p>
 <div class="creator-columns"><div id="creator-columns-scroll" class="table-wrap"><table aria-hidden="true"><colgroup><col class="game-column"><col class="home-column"><col class="foreign-column"><col class="difference-column"></colgroup><thead id="creator-columns-head"></thead></table></div></div>
