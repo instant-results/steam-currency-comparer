@@ -22,13 +22,14 @@ from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
 from .configuration import ComparisonConfig
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
-from .http_client import UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
+from .http_client import HttpClientError, UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
 from .version import __version__
-from .creators import CREATORS, FEATURED_CREATORS, CreatorCatalogService
+from .creators import (CREATORS, FEATURED_CREATORS, CreatorCatalogService, CreatorSearchService,
+                       validate_selector, validate_search_term, selector_id)
 from .event_log import (configure_event_logging, runtime_data_directory, emit,
                         job_context, elapsed_ms, error_metadata)
 
@@ -104,7 +105,7 @@ def rates_to_baseline(rates, currency):
 
 
 def validate_creator_request(payload):
-    if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids"}:
+    if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids", "selector"}:
         raise InputError("Supply creator comparison settings.")
     if not isinstance(payload["mode"], str) or payload["mode"] not in {"featured", "catalog", "products"}:
         raise InputError("Choose featured games or a creator catalog.")
@@ -122,8 +123,13 @@ def validate_creator_request(payload):
         source["app_ids"] = list(app_ids)
     elif payload["mode"] == "catalog":
         creator_id, start = payload.get("creator_id"), payload.get("start", 0)
-        if not isinstance(creator_id, str) or creator_id not in CREATORS:
-            raise InputError("Choose a featured creator.")
+        if "selector" in payload:
+            selector = validate_selector(payload["selector"])
+            if creator_id != selector_id(selector):
+                raise InputError("Creator selection does not match its ID.")
+            source["selector"] = selector
+        elif not isinstance(creator_id, str) or creator_id not in CREATORS:
+            raise InputError("Choose a developer or publisher from search.")
         if isinstance(start, bool) or not isinstance(start, int) or not 0 <= start <= 100_000:
             raise InputError("Invalid catalog page.")
         source.update(creator_id=creator_id, start=start)
@@ -131,6 +137,8 @@ def validate_creator_request(payload):
         raise InputError("Featured comparisons do not take a catalog page.")
     if payload["mode"] != "products" and "app_ids" in payload:
         raise InputError("This comparison does not take product IDs.")
+    if payload["mode"] != "catalog" and "selector" in payload:
+        raise InputError("Only catalog comparisons take a creator selection.")
     return config, source
 
 
@@ -195,6 +203,7 @@ class JobManager:
         self.queue = queue.Queue(maxsize=max_jobs)
         self.gate = RequestGate(1.5)
         self.catalogs = CreatorCatalogService(time.monotonic)
+        self.creator_search = CreatorSearchService(time.monotonic)
         self.runner = runner or self._analyze
         self.thread = None
         if start_worker:
@@ -308,9 +317,11 @@ class JobManager:
                                            "total": None, "next_start": 0, "has_more": True}
             else:
                 creator_id = job.creator_request["creator_id"]
-                page = self.catalogs.get_page(client(self.gate), creator_id, job.config.home.region,
+                creator = (self.creator_search.resolve(client(self.gate), job.creator_request["selector"], job.config.home.region)
+                           if "selector" in job.creator_request else CREATORS[creator_id])
+                page = self.catalogs.get_page(client(self.gate), creator if "selector" in job.creator_request else creator_id, job.config.home.region,
                                               job.creator_request["start"])
-                catalogs[creator_id] = page
+                catalogs[creator_id] = {**page, "creator": creator.public()}
                 if page["source"] == "stale cache":
                     catalog_warnings.append("Steam's catalog could not be refreshed. Showing a cached catalog page.")
             if job.creator_request["mode"] != "products":
@@ -351,6 +362,10 @@ class JobManager:
                 return
             if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
                 raise ValueError("Invalid app ID")
+        if job.creator_request and not wishlist:
+            job.update(state="complete", total=0, warnings=catalog_warnings,
+                       message="No individual products found on this catalog page. Try Load more if available, or check the exact name.")
+            return
         job.update(total=len(wishlist), message="Getting exchange rates…")
         cache = SQLiteCache(self.data_directory / "cache.sqlite3")
         rates = CachedExchangeRateProvider(NbpExchangeRateProvider(client()), cache).get_rate_details(tuple(dict.fromkeys((*job.config.currencies, job.config.home.currency))))
@@ -442,6 +457,28 @@ class WebApplication:
                 payload = json.loads(environ["wsgi.input"].read(length))
             except (ValueError, UnicodeDecodeError):
                 return respond("400 Bad Request", {"error": "Invalid request body."})
+            if path == "/api/creators/search":
+                try:
+                    if not isinstance(payload, dict) or set(payload) != {"query", "home"}:
+                        raise ValueError("Supply a creator name and storefront.")
+                    term = validate_search_term(payload["query"])
+                    home = payload["home"]
+                    if not isinstance(home, str) or home not in {"pl", "us", "de", "no", "gb"}:
+                        raise ValueError("Choose a supported storefront.")
+                except ValueError as exc:
+                    return respond("400 Bad Request", {"error": str(exc)})
+                service = self.manager.creator_search
+                if not service.lock.acquire(blocking=False):
+                    return respond("429 Too Many Requests", {"error": "A creator search is in progress. Try again shortly."})
+                try:
+                    client = RetryingJsonHttpClient(UrllibJsonHttpClient(timeout=15), gate=self.manager.gate,
+                                                     policy=RetryPolicy(max_attempts=2, maximum_delay=5))
+                    return respond("200 OK", service.search(client, term, home))
+                except HttpClientError as exc:
+                    return respond("503 Service Unavailable", {"error": NETWORK_ACCESS_MESSAGE if is_network_access_denied(exc)
+                                   else "Steam creator search is unavailable. Please try again shortly."})
+                finally:
+                    service.lock.release()
             if path in {"/api/jobs", "/api/creator-jobs"}:
                 try:
                     creator_request = None
