@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.2.0-beta** · Beta for local use.
+**Version: 0.3.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -42,7 +42,10 @@ change over time. No personal Steam profile is used.
 - Each creator's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
   These statistics update as more products load; they cover the displayed
-  selection rather than the entire catalog. Creator search is postponed.
+  selection rather than the entire catalog.
+- Search Steam for more creator homepages, or compare products by an exact
+  developer/publisher name. Add results alongside the featured creators;
+  selections and expanded catalogs survive refresh in the same tab.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -190,8 +193,8 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.2.0-beta` marks the developer/publisher catalog milestone.
-It does not imply a planned stable `0.2.0` release. The historical
+The current `0.3.0-beta` adds creator search and exact-name catalog comparisons.
+It does not imply a planned stable `0.3.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
 

@@ -10,9 +10,9 @@ Use Git history for historical details; do not repeat the development history.
 Continue with the user's next request rather than inventing a new feature or
 deploying the app. Local-server lifecycle and network-permission error handling
 have been addressed; see the operational notes below.
-The user considers the creator-tab frontend work sufficient for now. Preserve
-the current layout; creator search remains postponed. No further visual changes
-or new integrations are planned without a user request.
+The user authorized creator search with a new frontend block. Preserve the existing
+table layout and typography. Featured creators still load initially; name search
+adds dynamic creator homepages or exact-name Developer/Publisher catalogs.
 
 ## Publication and version
 
@@ -23,7 +23,7 @@ labels sample profile identifiers as placeholders. The public display name is St
 script names, environment variables, and cache paths retain their original names
 for compatibility.
 
-Current version: `0.2.0-beta`, defined in `steam_price_polisher/version.py`.
+Current version: `0.3.0-beta`, defined in `steam_price_polisher/version.py`.
 The server renders it into the header and returns it from `/api/health`.
 The intended first stable release is `1.0.0`. README.md's Versioning section
 defines the convention: `0.MINOR.PATCH-beta` during development, minor bumps for
@@ -134,7 +134,7 @@ is intended but has not happened. Use plain, direct UI language describing regio
   expanded pages otherwise retain the existing run's currencies. A baseline change
   restarts catalog pagination while retaining displayed products. Unavailable
   products stay visible. Both tabs share the paced worker, owner limits, and price
-  cache; creator examples wait for an active wishlist. Search is postponed.
+  cache; creator examples wait for an active wishlist. Search is now implemented.
   Creator results, catalog cursors, active tab, and job token use separate tab
   session storage. Saved completed creator results can outlive server jobs and
   need an explicit refresh for a new price check. CSV stays on the wishlist tab.
@@ -178,6 +178,23 @@ up to 1,000 games. Jobs expire and are lost on server restart; cached prices rem
 
 Keep cache files, local wishlists, cookies, and keys out of Git. The web app does
 not use CLI cookies or local wishlist files. HTTPS verification must remain enabled.
+
+## Creator search
+
+POST /api/creators/search takes query/home and returns Steam homepage suggestions
+plus explicit exact-name Developer/Publisher fallback choices. It shares the Steam
+request gate, uses one concurrent search slot, and caches 128 queries for ten minutes.
+Dynamic catalog jobs carry validated selectors; homepage IDs are resolved through
+StoreBrowse/GetItems before catalog loading. Credit catalogs use search/results JSON
+and a separate HTML extraction mode; app IDs only, packages/bundles skipped. Both
+reuse existing price comparisons and six-hour catalog caching. Empty search catalogs
+complete without price/rate requests. No arbitrary upstream URL is accepted.
+
+The new search block appends selected creators without rebuilding existing rows.
+Featured creators remain hardcoded. Up to 20 groups persist in session storage;
+saved dynamic links are reconstructed from selectors. Existing results keep their
+currencies until refreshed. Search itself can run during comparison; Add waits.
+Read docs/STEAM_CREATOR_SEARCH.md for live probes, sources, and compatibility limits.
 
 ## Local server lifecycle and network access
 
@@ -245,11 +262,10 @@ changes need a browser refresh; backend changes need a verified clean restart,
 which clears in-memory jobs. Avoid triggering full live wishlists for routine
 tests.
 
-The latest frontend regression run on 2026-10-03 passed all 29 checks, including
+The latest frontend regression run on 2026-10-03 passed all 33 checks, including
 expanded footer labels after baseline changes and restoring older saved sessions.
-Both frontend scripts passed syntax checks on 2026-10-03. The last Python suite
-run on 2026-10-02 passed 108 tests; backend code has not changed during subsequent
-frontend refinements. Live creator directory/catalog
+Both frontend scripts passed syntax checks on 2026-10-03. The Python suite passed
+120 tests on 2026-10-03 after adding creator search. Live creator directory/catalog
 probes and featured regional comparisons were verified for this extension;
 the sorted wishlist API has not been re-probed. Tests cover
 configuration combinations, cross rates, API validation, caching/failures,
@@ -260,14 +276,21 @@ browser checks verified the heading spacing, arrow appearance and centering,
 divider extension through pending/expanded rows, and corrected footer labels.
 Frontend tests use a minimal DOM harness; they do not establish browser visual
 correctness. Use targeted UI verification when needed.
+Live browser checks verified ConcernedApe discovery, homepage and developer-credit
+comparisons, preservation of the featured three, and restoration of all five groups
+after reload. Desktop and 390px mobile search layouts were checked with no browser
+console errors. The older preview on 8765 was stopped at the user's request;
+the updated preview uses 8766. Verify listener/health state before reusing it.
 
 ## Open work and decisions
 
 - Future hosting means a free public website with a few non-intrusive ads,
   potentially covering costs. No paid tiers, billing, or accounts have been
   requested. See DEPLOYMENT.md for service gaps; no hosting or ads are implemented.
-- The sorted wishlist API remains research only. Creator search is postponed;
-  the creator directory is curated. Do not start either integration without a request.
+- The sorted wishlist API remains research only. Creator search now uses Steam suggestions
+  and exact-name product filters; see docs/STEAM_CREATOR_SEARCH.md for contracts and limits.
+- Potential TODO: maintain a searchable local creator directory with aliases. Deferred
+  at the user's request; do not implement it now.
 - No license file or GitHub Actions workflow is tracked. Licensing and CI remain
   open decisions; do not describe the repository as licensed open source.
 - The README screenshots show a partial results view and an overview captured
@@ -298,7 +321,8 @@ The creator-tab implementation and catalog styling are committed locally on
 `codex/developer-publisher-catalogs`, including the creator heading cleanup.
 The footer-label fix is `af5d15d`; its regression checks are `3155e8c`.
 README.md, docs/USAGE.md, and CHANGELOG.md describe the completed tab behavior.
-Version 0.2.0-beta covers the completed creator-tab work; no tag, push, or deployment was created.
+Version 0.3.0-beta adds creator search. Implementation, regression tests, and documentation
+are committed separately for this work; no tag, push, or deployment is requested.
 Follow AGENTS.md for commit reminders;
 commit/push only when authorized for the current work, and keep feature and test
 changes in separate coherent commits. Do not infer that an old preview is still

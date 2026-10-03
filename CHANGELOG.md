@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0-beta — 2026-10-03
+
+- Search Steam creator homepages by name and add catalogs beside the featured three.
+- Exact-name Developer and Publisher catalog fallbacks, with separate identities.
+- Bounded discovery caching, validated selectors, and restored dynamic creator groups.
+- Preserve the existing comparison pipeline, statistics, pagination, and table alignment.
+- Research notes cover API probes, prior implementations, limitations, and a deferred local-directory TODO.
+
+No tag, push, GitHub release, or deployment was created.
+
 ## 0.2.0-beta — 2026-10-03
 
 First beta of the 0.2 development milestone, adding developer and publisher catalog comparisons.
