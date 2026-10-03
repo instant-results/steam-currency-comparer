@@ -6,13 +6,14 @@
   let creators = [], creatorJob = null, pollTimer = null, autoTimer = null;
   let creatorHome = "pl", creatorRegions = ["us", "de"], creatorRates = [];
   let savedRequest = null, cancelRequested = false;
+  let searching = false, searchChoices = [];
   const groups = new Map(), results = new Map();
   const storageKey = "polisher-creator-job";
   const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
 
   function save() {
     try {
-      sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest,
+      sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
         home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
           products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded})),
         results: [...results.values()], rates: creatorRates}));
@@ -31,6 +32,12 @@
     $("creators-cancel").disabled = !creatorJob || cancelRequested;
     $("creators-cancel").textContent = cancelRequested ? "Cancelling…" : "Cancel comparison ■";
     for (const group of groups.values()) group.more.disabled = busy || running;
+    $("creator-search-submit").disabled = searching || !initialized;
+    for (const {creator, button} of searchChoices) {
+      const added = groups.has(creator.id);
+      button.textContent = added ? "Added" : "Add & compare";
+      button.disabled = added || busy || running || !initialized;
+    }
   }
 
   function setCreatorBusy(value) {
@@ -55,8 +62,8 @@
   }
 
   function buildGroups() {
-    $("creator-groups").replaceChildren();
     for (const creator of creators) {
+      if (groups.has(creator.id)) continue;
       const section = node("section", undefined, "creator-group");
       section.setAttribute("aria-labelledby", `creator-${creator.id}`);
       const identity = node("div", undefined, "creator-identity");
@@ -87,7 +94,7 @@
       footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
       $("creator-groups").append(section);
       groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-        expanded: false, body, head, wrap, statistics, count, more, rowCache: new Map()});
+        expanded: !!creator.selector, body, head, wrap, statistics, count, more, rowCache: new Map()});
       wrap.addEventListener("scroll", () => syncColumns(wrap));
     }
     renderGroups();
@@ -183,7 +190,7 @@
       group.nextStart = page.next_start; group.hasMore = page.has_more; group.total = page.total;
     }
     for (const item of data.items) results.set(item.app_id, item);
-    creatorRates = data.rates;
+    if (data.rates?.length) creatorRates = data.rates;
     renderGroups(); save();
   }
 
@@ -248,7 +255,59 @@
 
   function loadMore(id) {
     // Expanded pages retain the currency choices of their featured comparisons.
-    startCreators({home: creatorHome, regions: creatorRegions, mode: "catalog", creator_id: id, start: groups.get(id).nextStart});
+    const creator = creators.find(c => c.id === id);
+    startCreators({home: creatorHome, regions: creatorRegions, mode: "catalog", creator_id: id,
+      ...(creator.selector ? {selector: creator.selector} : {}), start: groups.get(id).nextStart});
+  }
+
+  function safeCreator(value) {
+    if (!value || typeof value.name !== "string" || !value.name.trim() || value.name.length > 200) return null;
+    const selector = value.selector;
+    if (!selector || typeof value.id !== "string") return null;
+    let homepage, role;
+    if (selector.kind === "homepage" && /^[1-9][0-9]{0,9}$/.test(selector.clan_id) &&
+        Number(selector.clan_id) <= 4294967295 && value.id === `steam-${selector.clan_id}`) {
+      homepage = `https://store.steampowered.com/curator/${selector.clan_id}/`; role = "Creator homepage";
+    } else if (["developer", "publisher"].includes(selector.kind) && typeof selector.name === "string" &&
+        selector.name.length >= 2 && selector.name.length <= 100 && value.name === selector.name &&
+        new RegExp(`^${selector.kind}-[a-f0-9]{24}$`).test(value.id)) {
+      homepage = `https://store.steampowered.com/search/?${selector.kind}=${encodeURIComponent(selector.name)}`;
+      role = `${selector.kind === "developer" ? "Developer" : "Publisher"} credit`;
+    } else return null;
+    return {id: value.id, name: value.name, selector, homepage, role, icon: "", examples: []};
+  }
+
+  async function searchCreators(event) {
+    event.preventDefault();
+    if (searching || !initialized) return;
+    const query = $("creator-query").value.trim();
+    if (query.length < 2 || query.length > 100) {
+      $("creator-search-status").textContent = "Enter a name between 2 and 100 characters."; return;
+    }
+    searching = true; searchChoices = []; $("creator-search-results").replaceChildren(); refreshControls();
+    $("creator-search-status").textContent = "Searching Steam…";
+    try {
+      const data = await request("/api/creators/search", {method: "POST", body: JSON.stringify({query, home: selectedHome()})});
+      $("creator-search-status").textContent = data.creators.length
+        ? "Choose a homepage, or search products by the exact developer or publisher name."
+        : "No matching creator homepages. You can still try the exact name listed on a game's store page.";
+      for (const candidate of [...data.creators, ...data.exact_matches]) {
+        const creator = creators.find(c => c.id === candidate.id) || safeCreator(candidate);
+        if (!creator) continue;
+        const row = node("div", undefined, "creator-search-result"), label = node("div");
+        label.append(node("strong", creator.name), node("small", creator.selector?.kind === "developer" ? "Products listing this exact developer name"
+          : creator.selector?.kind === "publisher" ? "Products listing this exact publisher name" : "Steam creator homepage"));
+        const button = node("button", "Add & compare"); button.type = "button";
+        button.setAttribute("aria-label", `Add and compare ${creator.name}, ${creator.role}`);
+        button.addEventListener("click", () => {
+          if (busy || running || groups.has(creator.id)) return;
+          if (creators.length >= 20) { message("Up to 20 creators can be displayed in one tab. Open a new tab to start another selection.", true); return; }
+          creators.push(creator); buildGroups(); save(); loadMore(creator.id);
+        });
+        searchChoices.push({creator, button}); row.append(label, button); $("creator-search-results").append(row);
+      }
+    } catch (error) { $("creator-search-status").textContent = error.message; }
+    finally { searching = false; refreshControls(); }
   }
 
   function restore(saved) {
@@ -256,6 +315,11 @@
         saved.regions.length < 1 || saved.regions.length > 2 || new Set(saved.regions).size !== saved.regions.length ||
         saved.regions.some(id => !Object.hasOwn(storefronts, id) || id === saved.home)) return false;
     creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
+    for (const value of Array.isArray(saved.creators) ? saved.creators.slice(0, 17) : []) {
+      const creator = safeCreator(value);
+      if (creator && !creators.some(c => c.id === creator.id)) creators.push(creator);
+    }
+    buildGroups();
     savedRequest = saved.request;
     if (active) {
       preferredComparisons = [...creatorRegions];
@@ -331,6 +395,7 @@
     });
   }
   $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
+  $("creator-search-form").addEventListener("submit", searchCreators);
   $("creators-cancel").addEventListener("click", async () => {
     if (!creatorJob) return;
     cancelRequested = true; refreshControls();
