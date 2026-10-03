@@ -29,7 +29,7 @@ const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setIm
 function creatorSetup(savedValues = {}) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",role:"Developer",homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
-  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], timers = new Map();
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], searches = [], timers = new Map();
   let timerId = 0;
   const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
@@ -41,6 +41,10 @@ function creatorSetup(savedValues = {}) {
       calls.push({path,body:options.body ? JSON.parse(options.body) : null});
       let data;
       if (path === "/api/creators") data = {creators:registry};
+      else if (path === "/api/creators/search") {
+        data = searches.shift() || {creators: [], exact_matches: []};
+        if (data.error) return {ok:false, json:async () => data};
+      }
       else if (path === "/api/creator-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
@@ -50,8 +54,75 @@ function creatorSetup(savedValues = {}) {
   testContext.run(fs.readFileSync("web/creators.js", "utf8"));
   const group = () => testContext.get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,calls,storage,snapshots,radios,regions,timers,group,body};
+  return {...testContext,calls,storage,snapshots,searches,radios,regions,timers,group,body};
 }
+
+test("creator search adds a dynamic homepage while retaining featured rows and restores its catalog", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const retained = ctx.body().children[0];
+  const creator = {id:"steam-32938395",name:"ConcernedApe",selector:{kind:"homepage",clan_id:"32938395"}};
+  ctx.searches.push({creators:[creator],exact_matches:[]});
+  ctx.get("creator-query").value = "ConcernedApe";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  const button = ctx.get("creator-search-results").children[0].children[1];
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{[creator.id]:{
+    products:[{app_id:"4",name:"Stardew Valley"}],next_start:12,has_more:true,total:15}},
+    items:[game("4","Stardew Valley")],rates:[],warnings:[]});
+  button.listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  assert.equal(ctx.body().children[0],retained);
+  assert.equal(button.textContent,"Added");
+  assert.equal(button.disabled,true);
+  const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(submitted.selector,creator.selector);
+  assert.equal(submitted.creator_id,creator.id);
+  const restored = creatorSetup({"polisher-creator-job":ctx.storage.get("polisher-creator-job")});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length,2);
+  const dynamic = restored.get("creator-groups").children[1];
+  assert.equal(dynamic.children[1].children[0].children[0].children[2].children.length,1);
+  dynamic.children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(restored.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.start,12);
+});
+
+test("creator search distinguishes empty matches, failures, and exact-name roles", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-query").value = "A & B";
+  ctx.searches.push({creators:[],exact_matches:[{id:"publisher-"+"a".repeat(24),name:"A & B",selector:{kind:"publisher",name:"A & B"}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.match(ctx.get("creator-search-status").textContent,/No matching creator homepages/);
+  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"A & B");
+  ctx.run("running = true; window.creatorPane.refreshControls();");
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].disabled,true);
+  ctx.run("running = false;");
+  ctx.searches.push({error:"Steam is unavailable"});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("creator-search-status").textContent,"Steam is unavailable");
+  assert.equal(ctx.get("creator-search-results").children.length,0);
+  assert.equal(ctx.get("creator-search-submit").disabled,false);
+});
+
+test("saved dynamic creators cannot inject links and preserve exact-name selectors", async () => {
+  const good = {id:"developer-"+"a".repeat(24),name:"A & B",homepage:"javascript:alert(1)",icon:"https://evil.test",selector:{kind:"developer",name:"A & B"}};
+  const saved = {home:"pl",regions:["us"],request:{mode:"featured"},creators:[good,
+    {id:"evil",name:"Bad",selector:{kind:"homepage",clan_id:"1/../secret"}}],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  const identity = ctx.get("creator-groups").children[1].children[0].children[0];
+  assert.equal(identity.children[0].src,"/steam-logo.svg");
+  assert.equal(identity.children[1].children[0].href,"https://store.steampowered.com/search/?developer=A%20%26%20B");
+});
+
+test("an empty added catalog preserves the exchange rates for existing comparisons", async () => {
+  const saved = {home:"pl",regions:["us"],request:{mode:"featured"},
+    rates:[{currency:"USD",rate_to_pln:4,cache_status:"cache"}],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"No products",catalogs:{studio:{products:[],next_start:12,has_more:false,total:0}},items:[],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(JSON.parse(ctx.storage.get("polisher-creator-job")).rates[0].rate_to_pln,4);
+});
 
 test("creator tab automatically compares examples and preserves wishlist results and baseline", async () => {
   const ctx = creatorSetup();
