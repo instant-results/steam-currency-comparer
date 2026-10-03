@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 from steam_price_polisher.creators import (
     CATALOG_CACHE_TTL, CATALOG_PAGE_SIZE, FEATURED_CREATORS, CreatorCatalogService, parse_catalog,
+    CreatorSearchService, credit_creator, validate_selector, selector_id,
 )
 from steam_price_polisher.http_client import HttpClientError
 from steam_price_polisher.models import ExchangeRate, RegionalPriceResult, StorePrice
@@ -22,6 +23,33 @@ def catalog_payload(start=0, total=3, products=None):
 
 
 class CatalogTests(unittest.TestCase):
+    def test_credit_catalog_preserves_names_and_skips_bundles_without_stalling(self):
+        payload = {"success": 1, "start": 12, "total_count": 40, "results_html":
+                   '<a class="search_result_row" data-ds-appid="10"><span class="title">A &amp; B</span></a>'
+                   '<a class="search_result_row" data-ds-appid="11" href="https://store.steampowered.com/bundle/123/Bundle/"></a>'}
+        page = parse_catalog(payload, 12, search=True)
+        self.assertEqual(page["products"], [{"app_id": "10", "name": "A & B", "date_added": None, "priority": None}])
+        self.assertEqual(page["next_start"], 24)
+        self.assertTrue(page["has_more"])
+        empty = parse_catalog({"success": 1, "start": -1, "total_count": 0, "results_html": ""}, 0, search=True)
+        self.assertFalse(empty["has_more"])
+        for change in ({"start": 0}, {"results_html": "<html>Unexpected</html>"},
+                       {"results_html": '<a class="search_result_row" data-ds-appid="../x"></a>'}):
+            with self.subTest(change=change), self.assertRaises(HttpClientError):
+                parse_catalog({**payload, **change}, 12, search=True)
+
+    def test_credit_catalog_encodes_name_and_separates_role_cache(self):
+        from urllib.parse import parse_qs, urlsplit
+        service, client = CreatorCatalogService(lambda: 0), Mock()
+        client.get_json.return_value = {"success": 1, "start": -1, "total_count": 0, "results_html": ""}
+        for kind in ("developer", "publisher"):
+            creator = credit_creator({"kind": kind, "name": "A & B / Studio"})
+            service.get_page(client, creator, "gb", 0)
+            query = parse_qs(urlsplit(client.get_json.call_args.args[0]).query)
+            self.assertEqual(query[kind], ["A & B / Studio"])
+            self.assertEqual(query["cc"], ["GB"])
+        self.assertEqual(client.get_json.call_count, 2)
+
     def test_parses_products_once_without_filtering_soundtracks_and_decodes_names(self):
         page = parse_catalog(catalog_payload(), 0)
         self.assertEqual([item["app_id"] for item in page["products"]], ["1145360", "2950840", "10"])
@@ -55,6 +83,59 @@ class CatalogTests(unittest.TestCase):
         client.get_json.side_effect = HttpClientError("denied", network_access_denied=True)
         with self.assertRaises(HttpClientError):
             service.get_page(client, "supergiant", "pl", 0)
+
+
+class CreatorSearchTests(unittest.TestCase):
+    def setUp(self):
+        self.clock, self.client = Mock(return_value=0), Mock()
+        self.service = CreatorSearchService(self.clock)
+        self.item = {"item_type": 5, "id": 32938395, "success": 1, "name": "ConcernedApe",
+                     "store_url_path": "developer/ConcernedApe"}
+        self.client.get_json.return_value = {"response": {"metadata": {"count": 1}, "store_items": [self.item]}}
+
+    def test_search_filters_noncreators_deduplicates_and_caches_by_region(self):
+        self.client.get_json.return_value["response"]["store_items"] += [self.item, {"item_type": 0},
+            {**self.item, "store_url_path": "franchise/Example"}, {**self.item, "store_url_path": "https://evil.test/"}]
+        data = self.service.search(self.client, "ConcernedApe", "pl")
+        self.assertEqual(len(data["creators"]), 1)
+        self.assertEqual(data["creators"][0]["selector"], {"kind": "homepage", "clan_id": "32938395"})
+        self.assertEqual([c["selector"]["kind"] for c in data["exact_matches"]], ["developer", "publisher"])
+        self.service.search(self.client, "concernedape", "pl")
+        self.assertEqual(self.client.get_json.call_count, 1)
+        self.service.search(self.client, "ConcernedApe", "gb")
+        self.clock.return_value = 601
+        self.service.search(self.client, "ConcernedApe", "pl")
+        self.assertEqual(self.client.get_json.call_count, 3)
+
+    def test_empty_search_is_distinct_from_malformed_and_denied_responses(self):
+        self.client.get_json.return_value = {"response": {"metadata": {"count": 0}}}
+        self.assertEqual(self.service.search(self.client, "no such studio", "pl")["creators"], [])
+        for payload in ({}, {"response": {}}, {"response": {"metadata": {}, "store_items": "bad"}}):
+            self.client.get_json.return_value = payload
+            with self.assertRaises(HttpClientError):
+                self.service.search(self.client, "different", "pl")
+        self.clock.return_value = 601
+        self.client.get_json.side_effect = HttpClientError("denied", network_access_denied=True)
+        with self.assertRaises(HttpClientError):
+            self.service.search(self.client, "no such studio", "pl")
+
+    def test_resolve_checks_id_and_rejects_arbitrary_curators(self):
+        selected = {"kind": "homepage", "clan_id": "32938395"}
+        self.assertEqual(self.service.resolve(self.client, selected, "pl").name, "ConcernedApe")
+        self.client.get_json.return_value["response"]["store_items"] = [{**self.item, "store_url_path": "curator/32938395"}]
+        with self.assertRaises(HttpClientError):
+            self.service.resolve(self.client, selected, "pl")
+        self.client.get_json.return_value["response"]["store_items"] = [{**self.item, "id": 123}]
+        with self.assertRaises(HttpClientError):
+            self.service.resolve(self.client, selected, "pl")
+
+    def test_selectors_reject_urls_unknown_fields_and_invalid_ids(self):
+        for value in (None, {}, {"kind": []}, {"kind": "homepage", "clan_id": "1/../2"},
+                      {"kind": "homepage", "clan_id": "4294967296"}, {"kind": "developer", "name": "a"},
+                      {"kind": "developer", "name": "bad\ud800"},
+                      {"kind": "publisher", "name": "Good", "url": "https://evil.test"}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_selector(value)
 
 
 class CreatorApiTests(unittest.TestCase):
@@ -167,3 +248,42 @@ class CreatorApiTests(unittest.TestCase):
         self.submit()
         response = self.request("/api/jobs", "POST", {"identifier": "example", "regions": ["us"]})
         self.assertEqual(response["status"], 429)
+
+    def test_creator_search_validates_origin_inputs_busy_state_and_sanitizes_failure(self):
+        path, body = "/api/creators/search", {"query": "Valve", "home": "pl"}
+        with patch.object(self.manager.creator_search, "search", return_value={"creators": [], "exact_matches": []}) as search:
+            self.assertEqual(self.request(path, "POST", body)["status"], 200)
+            search.assert_called_once()
+            self.assertEqual(self.request(path, "POST", body, HTTP_ORIGIN="https://evil.test")["status"], 403)
+            for changes in ({"query": "x"}, {"home": "xx"}, {"home": []}, {"query": []}, {"url": "https://evil.test"}):
+                self.assertEqual(self.request(path, "POST", {**body, **changes})["status"], 400)
+            with self.manager.creator_search.lock:
+                self.assertEqual(self.request(path, "POST", body)["status"], 429)
+        with patch.object(self.manager.creator_search, "search", side_effect=HttpClientError("secret URL")):
+            response = self.request(path, "POST", body)
+        self.assertEqual(response["status"], 503)
+        self.assertNotIn("secret", json.dumps(response))
+        self.assertFalse(self.manager.creator_search.lock.locked())
+
+    def test_dynamic_homepage_uses_existing_pipeline_and_revalidates_identity(self):
+        selector = {"kind": "homepage", "clan_id": "32938395"}
+        job = self.submit(mode="catalog", creator_id=selector_id(selector), selector=selector)
+        creator = credit_creator({"kind": "developer", "name": "Example"})
+        with patch.object(self.manager.creator_search, "resolve", return_value=creator) as resolve, patch.object(
+                self.manager.catalogs, "get_page", return_value={**parse_catalog(catalog_payload(), 0), "source": "live"}):
+            self.execute(job)
+        resolve.assert_called_once()
+        self.assertEqual(job.snapshot()["state"], "complete")
+        self.assertEqual(job.snapshot()["items"][0]["creator_ids"], [selector_id(selector)])
+        response = self.request("/api/creator-jobs", "POST", {"mode": "catalog", "regions": ["us"], "creator_id": "wrong", "selector": selector})
+        self.assertEqual(response["status"], 400)
+
+    def test_empty_dynamic_catalog_finishes_without_rate_or_price_requests(self):
+        selector = {"kind": "developer", "name": "Unknown studio"}
+        job = self.submit(mode="catalog", creator_id=selector_id(selector), selector=selector)
+        with patch.object(self.manager.catalogs, "get_page", return_value={"products": [], "total": 0,
+                "has_more": False, "next_start": 12, "source": "live"}), patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            self.manager.execute(job)
+        nbp.assert_not_called()
+        self.assertEqual(job.snapshot()["state"], "complete")
+        self.assertEqual(job.snapshot()["items"], [])
