@@ -56,7 +56,25 @@ Pages containing only free products still advance; use Load more again to contin
 Already displayed examples are not duplicated. The button disappears at the end
 of the catalog. Steam's listings can vary by region, and creator-homepage
 membership is not an exhaustive guarantee of every credited developer or publisher.
-Creator search is postponed; only the featured creators are available.
+Use **Find a developer or publisher** to search by name, then choose **Add & compare**.
+Matching Steam creator homepages appear first. The Developer and Publisher
+exact-name options search products attributed to the entered name on their store
+pages; they are fallback searches, not confirmed company matches. Use the complete
+credited name. A homepage can group several credited names, so these catalogs can differ.
+
+The initial three creators stay visible. New selections append below them and
+use the currencies of the displayed comparisons; use **Refresh comparisons** to
+apply changed sidebar choices. Search remains available during a comparison,
+but adding a creator waits until the current comparison finishes or is cancelled.
+Up to 20 creators can be displayed in one tab. Selected creators and catalog
+positions survive reload in that tab. Homepage suggestions may omit studios;
+exact-name results depend on spelling and Steam filters. Package/bundle entries
+are skipped while their pagination positions still advance. New creator icons use
+the Steam-logo fallback. The search field takes names, not pasted URLs.
+
+Search needs no Steam login or API key. Discovery uses a ten-minute bounded cache;
+searching alone does not fetch regional prices. See the
+[creator-search research and implementation notes](STEAM_CREATOR_SEARCH.md).
 
 The footer labels the initial curated selection as **featured games**. That label
 disappears once the catalog expands, including after changing the baseline or
