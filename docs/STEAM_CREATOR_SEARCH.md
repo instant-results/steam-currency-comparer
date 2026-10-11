@@ -26,15 +26,17 @@ Probes found Supergiant Games (3584665), Devolver Digital (6638525), ConcernedAp
 
 ## Exact-name fallback
 
-Search also offers Developer and Publisher options for the entered name. These attempt product searches by store-page attribution; they are not verified company matches. Names and roles remain separate. Spelling and Steam's own filter semantics affect coverage.
+The Developers and Publishers tabs send a role with each search. Search checks the first product-search page for that role against suggested names and the entered exact name. Only nonempty regional catalogs are offered through Add & compare. Steam homepages help discover names internally; they are not a third role or a selectable catalog source in the interface. This confirms Steam attribution rather than a company's legal identity. Spelling and Steam's own filter semantics affect coverage. Role checks use a bounded six-hour catalog cache; failed or stale checks produce a search error rather than unverified buttons.
 
 `https://store.steampowered.com/search/results/` accepts `developer=NAME` or `publisher=NAME`, `start`, `count=12`, `cc`, `l=english`, `json=1`, `ignore_preferences=1`, and `infinite=1`. JSON contains `success`, `results_html`, `total_count`, and `start`, without `pagesize`. Empty searches returned `total_count: 0` and `start: -1`.
+
+Live Valve checks on 2026-10-03 returned 25 rows despite `count=12`; `start=12` returned the first page again, while `start=25` advanced correctly. The parser bounds search pages to 50 rows and advances by at least the returned row count, including skipped entries.
 
 The parser extracts individual app IDs and title text from `search_result_row` links. Packages and bundles are skipped while pagination advances through their slots. Steam HTML/scripts are never forwarded or executed. Totals can include these skipped entries and free products. Regional availability and Steam's own catalog filters apply.
 
 ## Integration
 
-- `POST /api/creators/search` takes `{query, home}`, with a 2-100 character name. It requires the app origin and JSON content type, shares Steam pacing, allows one concurrent discovery request, and caches up to 128 queries for ten minutes. Failures remain errors rather than stale search results.
+- `POST /api/creators/search` takes `{query, home, role}`, with role developer or publisher (the legacy role-less API remains compatible), with a 2-100 character name. It requires the app origin and JSON content type, shares Steam pacing, allows one concurrent discovery request, and caches up to 128 queries for ten minutes. Failures remain errors rather than stale search results.
 - The featured three creators remain hardcoded for initial loading.
 - Homepage selectors carry numeric clan IDs; credit selectors carry role/name. Catalog requests accept no arbitrary URLs. Query names are encoded. Homepage and credit catalog IDs stay distinct.
 - Added creators persist with their catalog cursors/results in the tab; at most 20 creators are displayed. Saved links are reconstructed from validated selectors.
@@ -44,3 +46,7 @@ The parser extracts individual app IDs and title text from `search_result_row` l
 ## Potential TODO (deferred)
 
 Consider a locally maintained searchable developer/publisher directory with aliases and predictable ranking if Steam suggestions prove insufficient. Evaluate sources, completeness, refresh costs, and maintenance first. No crawler or persistent company index is included now.
+
+## Role tabs (0.4.0-beta)
+
+The frontend keeps independent developer and publisher state and session keys. Featured registry role entries have exact-name selectors, so expansion uses product credits. Old homepage selectors are excluded from migration; explicit role selections retain their compatible catalog positions. Internal creator filenames and legacy API routes remain for compatibility.

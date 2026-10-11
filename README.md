@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.3.0-beta** · Beta for local use.
+**Version: 0.4.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -35,17 +35,17 @@ change over time. No personal Steam profile is used.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
 - Exports loaded results to CSV, with wishlist attribution optional.
-- A **Developers & publishers** tab compares three featured games each from
-  Supergiant Games, CD PROJEKT RED, and Devolver Digital. Expand their Steam
-  catalogs with **Load more** to compare more games, paid DLC, and soundtracks
-  without providing a wishlist. Free products are hidden after checking.
-- Each creator's summary shows average and median percentage differences for
+- Separate **Developers** and **Publishers** tabs compare featured games without
+  a wishlist. Developers starts with Supergiant Games and CD PROJEKT RED;
+  Publishers also includes Devolver Digital. **Load more** expands the products
+  credited to each name in that role, including paid DLC and soundtracks.
+  Free products are hidden after checking.
+- Each catalog's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
-  These statistics update as more products load; they cover the displayed
-  selection rather than the entire catalog.
-- Search Steam for more creator homepages, or compare products by an exact
-  developer/publisher name. Add results alongside the featured creators;
-  selections and expanded catalogs survive refresh in the same tab.
+  Statistics cover the displayed selection rather than the entire catalog.
+- Each tab searches its own role and offers **Add & compare** for matching names.
+  Developer and publisher selections, results, and catalog positions are saved
+  independently in the same browser tab. There is no separate creator category.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -135,7 +135,7 @@ installation if the project's dependencies change.
   products** to reveal them. Technical failures remain visible.
 - **Results are temporary.** Refresh reconnects in the same tab; closing the tab
   or restarting the server loses job access. Server results expire after an hour;
-  completed creator results saved in the tab remain visible until refreshed or closed.
+  completed catalog results saved in the tab remain visible until refreshed or closed.
 - **Prices are snapshots.** Regular prices normally refresh after an hour, sale
   prices after 15 minutes, and exchange rates after 24 hours. Stale fallback is
   labeled when available.
@@ -167,7 +167,7 @@ The web app keeps its price cache and diagnostic logs in `.steam-price-polisher/
 by default. The cache stores regional prices and exchange rates, not
 profile-to-wishlist links. Logs exclude profiles, API keys, cookies, and job tokens.
 The browser tab stores the current profile and job-access token in session storage,
-plus separate creator results and catalog positions. Private wishlist results and
+plus separate developer and publisher results and catalog positions. Private wishlist results and
 profile attribution are held temporarily in server memory.
 
 Steam and NBP receive the requests needed for the comparison, and the browser
@@ -193,8 +193,8 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.3.0-beta` adds creator search and exact-name catalog comparisons.
-It does not imply a planned stable `0.3.0` release. The historical
+The current `0.4.0-beta` separates developer and publisher searches and catalogs.
+It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
 
