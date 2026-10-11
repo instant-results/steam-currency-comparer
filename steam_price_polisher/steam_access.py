@@ -6,7 +6,7 @@ import re
 import math
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlencode
@@ -349,7 +349,7 @@ class SteamClient:
             {
                 "appids": app_id,
                 "cc": region,
-                "filters": "price_overview,basic",
+                "filters": "price_overview,basic,developers,publishers",
             }
         )
         url = f"https://store.steampowered.com/api/appdetails?{query}"
@@ -427,15 +427,20 @@ class SteamClient:
                 app_id=app_id,
                 region=region,
             )
+        def credits(key):
+            values = data.get(key)
+            return tuple(dict.fromkeys(value.strip() for value in values
+                         if isinstance(value, str) and value.strip())) if isinstance(values, list) else ()
+        metadata = {"developers": credits("developers"), "publishers": credits("publishers")}
         if data.get("is_free") is True:
-            return RegionalPriceResult.no_regional_price(game_name, "Free product", is_free=True)
+            return replace(RegionalPriceResult.no_regional_price(game_name, "Free product", is_free=True), **metadata)
         price_overview = data.get("price_overview")
         if price_overview is None:
-            return RegionalPriceResult.no_regional_price(
+            return replace(RegionalPriceResult.no_regional_price(
                 game_name,
                 f"Steam supplied no regional price for {region}.",
                 is_free=False,
-            )
+            ), **metadata)
         if not isinstance(price_overview, dict):
             raise SteamProtocolError(
                 f"Steam returned invalid price data for app {app_id} ({region}).",
@@ -487,4 +492,4 @@ class SteamClient:
             raise SteamProtocolError("Steam returned an invalid discount percentage.", app_id=app_id, region=region)
         price = StorePrice(region, expected, amount,
                            float(initial) / 100 if initial is not None else None, discount)
-        return RegionalPriceResult.available(price, game_name)
+        return replace(RegionalPriceResult.available(price, game_name), **metadata)

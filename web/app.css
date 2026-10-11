@@ -1213,3 +1213,6 @@ td:first-child { min-width: 0; }
   .creator-catalog-footer > span { grid-column: 1; }
   .creator-load-more { grid-column: 1; grid-row: 2; width: 52.5%; }
 }
+
+.catalog-credit-toggle { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.catalog-credit { display: block; color: var(--muted); margin-top: 0.4rem; overflow-wrap: anywhere; }

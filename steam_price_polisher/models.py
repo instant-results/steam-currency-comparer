@@ -55,6 +55,8 @@ class RegionalPriceResult:
     game_name: str | None = None
     detail: str | None = None
     is_free: bool | None = None
+    developers: tuple[str, ...] | None = None
+    publishers: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.status is PriceStatus.AVAILABLE and self.price is None:
