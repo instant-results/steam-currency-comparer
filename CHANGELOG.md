@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1-beta — 2026-10-11
+
+- Feature Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios (Poland) as publishers, with games developed by different studios.
+- Add Polish developer Techland with Dying Light, Dying Light 2, and Call of Juarez: Gunslinger.
+- Curate publisher examples independently of developer self-publishing roles.
+- Replace retired defaults in saved sessions while retaining user-added catalogs and their cursors.
+
 ## 0.4.0-beta — 2026-10-11
 
 - Split Developers and Publishers into separate tabs with role-specific searches and catalogs.

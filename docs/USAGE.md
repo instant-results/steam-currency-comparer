@@ -41,8 +41,10 @@ deployed as a public service.
 ## Developer and publisher catalogs
 
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
-with three selected games each from Supergiant Games and CD PROJEKT RED;
-Publishers also includes Devolver Digital. Each tab compares its starting games
+with three selected games each from Supergiant Games, CD PROJEKT RED, and Techland.
+Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios
+(Poland), with examples developed by other studios. See [featured catalogs](FEATURED_CATALOGS.md)
+for the selected games and verification sources. Each tab compares its starting games
 using the sidebar's baseline and comparison currencies.
 Names and artwork appear immediately; prices and differences fill in as requests
 complete. **Load more** expands products whose Steam store pages credit that
@@ -68,6 +70,8 @@ searching alone does not fetch regional prices.
 The two catalog tabs keep independent results, selections, catalog positions,
 and searches when switching tabs. Completed comparisons and selected catalogs
 survive reload in the same browser tab. Up to 20 catalogs can appear per role.
+When defaults change, former featured entries are replaced while user-added
+catalogs and their pagination remain. New defaults are compared automatically.
 Older combined-tab selections migrate only when they carry an explicit developer
 or publisher selector; old homepage catalogs are not assigned a role.
 New entries use the Steam-logo fallback. Existing results retain their comparison

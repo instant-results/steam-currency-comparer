@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.0-beta** · Beta for local use.
+**Version: 0.4.1-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -36,8 +36,9 @@ change over time. No personal Steam profile is used.
   or retry a comparison.
 - Exports loaded results to CSV, with wishlist attribution optional.
 - Separate **Developers** and **Publishers** tabs compare featured games without
-  a wishlist. Developers starts with Supergiant Games and CD PROJEKT RED;
-  Publishers also includes Devolver Digital. **Load more** expands the products
+  a wishlist. Developers starts with Supergiant Games, CD PROJEKT RED, and
+  Techland. Publishers starts with Devolver Digital (US), THQ Nordic (Austria),
+  and 11 bit studios (Poland). **Load more** expands the products
   credited to each name in that role, including paid DLC and soundtracks.
   Free products are hidden after checking.
 - Each catalog's summary shows average and median percentage differences for
@@ -193,7 +194,7 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.0-beta` separates developer and publisher searches and catalogs.
+The current `0.4.1-beta` refreshes the featured developer and publisher examples.
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
