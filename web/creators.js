@@ -35,6 +35,7 @@
     }
 
     function refreshControls() {
+      $("creators-export").disabled = ![...groups.values()].some(group => group.products.some(product => results.has(product.app_id)));
       $("creators-refresh").disabled = busy || running || otherBusy() || !initialized;
       $("creators-cancel").hidden = !busy;
       $("creators-cancel").disabled = !creatorJob || cancelRequested;
@@ -106,6 +107,18 @@
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
       renderGroups();
+    }
+
+    function catalogCsv(exportedAt = new Date().toISOString()) {
+      const exportItems = creators.flatMap(creator => (groups.get(creator.id)?.products || [])
+        .filter(product => results.has(product.app_id))
+        .map(product => ({...results.get(product.app_id), catalog_name: creator.name})));
+      return buildPriceCsv(exportItems, creatorHome, creatorRates, {extraColumns: [
+        {name: "catalog_role", value: () => kind},
+        {name: "catalog_name", value: item => item.catalog_name},
+        {name: "developers", value: item => (item.developers || []).join("; ")},
+        {name: "publishers", value: item => (item.publishers || []).join("; ")}
+      ]}, exportedAt);
     }
 
     function syncColumns(source) {
@@ -426,6 +439,7 @@
     }
 
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
+    $("creators-export").addEventListener("click", () => downloadCsv(catalogCsv(), `steam-${plural}-comparison.csv`));
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
     $("creator-show-credits").addEventListener("change", () => { renderGroups(); save(); });
