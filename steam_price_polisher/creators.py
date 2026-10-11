@@ -50,6 +50,31 @@ FEATURED_CREATORS = (
 )
 CREATORS = {creator.id: creator for creator in FEATURED_CREATORS}
 
+# Examples are selected independently by role, rather than including every
+# self-publishing developer in the publisher tab. The legacy registry stays compatible.
+FEATURED_DEVELOPERS = (
+    FEATURED_CREATORS[0], FEATURED_CREATORS[1],
+    Creator("techland", "Techland", "Developer", "",
+            "https://store.steampowered.com/developer/Techland/",
+            "https://avatars.fastly.steamstatic.com/009ddefda0c89fb7009af91bd1d92791d257d372_full.jpg",
+            (WishlistItem("239140", "Dying Light"),
+             WishlistItem("534380", "Dying Light 2 Stay Human: Reloaded Edition"),
+             WishlistItem("204450", "Call of Juarez: Gunslinger"))),
+)
+FEATURED_PUBLISHERS = (
+    FEATURED_CREATORS[2],
+    Creator("thq-nordic", "THQ Nordic", "Publisher", "",
+            "https://store.steampowered.com/publisher/THQNordic/",
+            "https://avatars.fastly.steamstatic.com/60cefdca3dddffcd8acabf489140d19c0033b88c_full.jpg",
+            (WishlistItem("228380", "Wreckfest"), WishlistItem("610370", "Desperados III"),
+             WishlistItem("1084160", "Jagged Alliance 3"))),
+    Creator("11-bit", "11 bit studios", "Publisher", "",
+            "https://store.steampowered.com/developer/11bitstudios/",
+            "https://avatars.fastly.steamstatic.com/ec8f3d00d38cbdf1a6e10ee881e89bfaa0739bba_full.jpg",
+            (WishlistItem("606150", "Moonlighter"), WishlistItem("330020", "Children of Morta"),
+             WishlistItem("731040", "The Invincible"))),
+)
+
 
 class CatalogParser(HTMLParser):
     """Extract product IDs and image labels; never forward Steam HTML to clients."""
@@ -204,9 +229,10 @@ def credit_creator(selector):
 
 def featured_by_role(kind):
     """Curated starting games; expansion follows the selected attribution role."""
+    featured = {"developer": FEATURED_DEVELOPERS, "publisher": FEATURED_PUBLISHERS}[kind]
     return [replace(credit_creator({"kind": kind, "name": creator.name}),
                     icon=creator.icon, examples=creator.examples)
-            for creator in FEATURED_CREATORS if kind in creator.role.lower()]
+            for creator in featured]
 
 
 def _api_url(method, payload):

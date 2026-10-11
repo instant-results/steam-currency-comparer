@@ -13,7 +13,8 @@
     let creatorHome = "pl", creatorRegions = ["us", "de"], creatorRates = [];
     let savedRequest = null, cancelRequested = false;
     let searching = false, searchChoices = [];
-    const groups = new Map(), results = new Map();
+    const groups = new Map(), results = new Map(), defaultIds = new Set();
+    let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
     const otherBusy = () => [...panes.values()].some(pane => pane.kind !== kind && pane.busy);
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
@@ -21,7 +22,7 @@
     function save() {
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
-          home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
+          featuredIds: [...defaultIds], home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded})),
           results: [...results.values()], rates: creatorRates}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
@@ -212,6 +213,7 @@
         if (terminal.has(data.state)) {
           setCreatorBusy(false);
           creatorJob = null; save();
+          if (defaultsChanged && active) waitForWishlist();
           if (data.state === "cancelled") message("Comparison cancelled. Use Refresh comparisons to finish checking displayed products.");
           else if (data.state === "partial") message("Some products could not be compared. Refresh comparisons to retry using cached prices.");
         } else pollTimer = setTimeout(pollCreators, 1200);
@@ -258,6 +260,7 @@
       }
       creatorHome = selected.home; creatorRegions = selected.regions; creatorRates = []; results.clear();
       if (active) renderRates([], $("rates"));
+      defaultsChanged = false;
       renderGroups(); startCreators({...selected, mode, ...(mode === "products" ? {app_ids: appIds} : {})});
     }
 
@@ -330,8 +333,13 @@
       if (!saved || !Object.hasOwn(storefronts, saved.home) || !Array.isArray(saved.regions) ||
           saved.regions.length < 1 || saved.regions.length > 2 || new Set(saved.regions).size !== saved.regions.length ||
           saved.regions.some(id => !Object.hasOwn(storefronts, id) || id === saved.home)) return false;
+      const oldDefaults = Array.isArray(saved.featuredIds) ? saved.featuredIds
+        : (saved.creators || []).filter(value => value.examples?.length).map(value => value.id);
+      defaultsChanged = oldDefaults.length > 0 && (oldDefaults.length !== defaultIds.size ||
+        [...defaultIds].some(id => !oldDefaults.includes(id)));
       creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
       for (const value of Array.isArray(saved.creators) ? saved.creators.slice(0, 20) : []) {
+        if ((oldDefaults.includes(value.id) || value.examples?.length) && !defaultIds.has(value.id)) continue;
         const creator = safeCreator(value);
         if (creator && !creators.some(c => c.id === creator.id)) creators.push(creator);
       }
@@ -363,7 +371,9 @@
       if (initialized || initializing) return;
       initializing = true;
       try {
-        const data = await request("/api/creators"); creators = data[plural]; buildGroups(); initialized = true;
+        const data = await request("/api/creators"); creators = data[plural];
+        for (const creator of creators) defaultIds.add(creator.id);
+        buildGroups(); initialized = true;
         let restored = false;
         try {
           let saved = JSON.parse(sessionStorage.getItem(storageKey) || "null");
@@ -380,7 +390,7 @@
           restored = restore(saved);
           if (restored) save();
         } catch (_) { /* Ignore invalid saved state. */ }
-        if (!restored) {
+        if (!restored || (defaultsChanged && !creatorJob)) {
           if (running || otherBusy()) {
             $("creators-progress").textContent = "Waiting for the current comparison to finish…";
             waitForWishlist();
@@ -401,7 +411,7 @@
       if (active) {
         renderRates(creatorRates, $("rates"));
         initialize();
-        if (initialized && !savedRequest && !busy) waitForWishlist();
+        if (initialized && (!savedRequest || defaultsChanged) && !busy) waitForWishlist();
       } else clearTimeout(autoTimer);
     }
 
