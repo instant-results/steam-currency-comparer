@@ -1,3 +1,4 @@
+from dataclasses import replace
 import sqlite3
 import tempfile
 import unittest
@@ -43,6 +44,21 @@ class FakeRateProvider:
 
 
 class CacheTests(unittest.TestCase):
+    def test_catalog_credits_refresh_old_cache_and_survive_reopen(self):
+        old = RegionalPriceResult.available(StorePrice("pl", "PLN", 10, 10, 0), "Game")
+        self.cache.put_price("10", "pl", "PLN", old)
+        live = FakePriceProvider(replace(old, developers=("Studio",), publishers=("Publisher", "Co-publisher")))
+        service = CachedPriceService(live, self.cache, clock=self.clock, require_credits=True)
+        self.assertEqual(service.get_regional_price("10", "pl", "PLN").source, "live")
+        reopened = SQLiteCache(Path(self.temp_directory.name) / "cache.sqlite3", clock=self.clock)
+        service = CachedPriceService(live, reopened, clock=self.clock, require_credits=True)
+        result = service.get_regional_price("10", "pl", "PLN")
+        self.assertEqual(result.source, "cache")
+        self.assertEqual(result.result.publishers, ("Publisher", "Co-publisher"))
+        self.assertEqual(result.result.developers, ("Studio",))
+        self.assertEqual(live.calls, 1)
+
+
     def setUp(self):
         self.temp_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_directory.cleanup)

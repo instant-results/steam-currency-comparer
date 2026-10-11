@@ -1,3 +1,4 @@
+from dataclasses import replace
 import io
 import json
 import tempfile
@@ -223,8 +224,8 @@ class CreatorApiTests(unittest.TestCase):
             nbp.return_value.get_rate_details.return_value = {
                 "USD": ExchangeRate("USD", 4, "2026-10-02"), "EUR": ExchangeRate("EUR", 4.3, "2026-10-02")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: (
-                RegionalPriceResult.no_regional_price("Demo", is_free=True) if app in free_ids else
-                RegionalPriceResult.available(StorePrice(region, currency, 10, 20, 50), "Live product"))
+                replace(RegionalPriceResult.no_regional_price("Demo", is_free=True), developers=(), publishers=()) if app in free_ids else
+                replace(RegionalPriceResult.available(StorePrice(region, currency, 10, 20, 50), "Live product"), developers=("Studio",), publishers=("Publisher",)))
             self.manager.execute(job)
             steam.return_value.get_wishlist.assert_not_called()
             return steam.return_value.get_regional_price.call_count
@@ -249,6 +250,8 @@ class CreatorApiTests(unittest.TestCase):
         self.assertEqual(data["state"], "complete")
         self.assertEqual(len(data["items"]), 9)
         self.assertEqual(data["items"][0]["creator_ids"], ["supergiant"])
+        self.assertEqual(data["items"][0]["developers"], ("Studio",))
+        self.assertEqual(data["items"][0]["publishers"], ("Publisher",))
         expected = [item.app_id for creator in FEATURED_CREATORS for item in creator.examples]
         self.assertEqual([item["app_id"] for item in data["items"]], expected)
         second = self.submit(mode="products", app_ids=expected)
