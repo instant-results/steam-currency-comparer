@@ -138,8 +138,8 @@ Icons come from Steam's avatar CDN, with the bundled official Steam logo as a
 fallback. Game artwork continues to use Steam's image CDN. Catalog integration
 uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
 it is not a documented Steamworks API contract. Malformed pages fail visibly
-instead of executing or forwarding Steam HTML. CSV export remains on the wishlist
-tab. The CLI does not provide creator browsing.
+instead of executing or forwarding Steam HTML. Each catalog tab has a CSV
+download below its catalog list. The CLI does not provide creator browsing.
 
 ## Run the command-line prototype
 
@@ -347,6 +347,15 @@ Download CSV exports all currently loaded results, including products hidden by
 filters. A running comparison exports only its completed results so far. There
 is one row per game/storefront and one row for each uncompared game. Wishlist
 profile attribution is optional and off by default; access tokens are never exported.
+
+Developer and publisher tabs export all checked, non-free products in their
+selected catalogs, including uncompared products. Both `developers` and
+`publishers` columns are always included, regardless of the display checkbox;
+multiple names are separated by semicolons, and unavailable credits are blank.
+`catalog_role` and `catalog_name` identify membership. A product belonging to
+several selected catalogs has separate rows for each catalog. Unchecked pending
+products are omitted during a comparison. Catalog exports retain the currency
+choices of their own results and contain no wishlist profile or job credentials.
 
 The UTF-8 CSV includes original/base/final prices, discounts, prices converted to the baseline currency,
 absolute and percentage differences, and exchange-rate provenance. NBP publication
