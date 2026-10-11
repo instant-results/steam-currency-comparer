@@ -28,7 +28,7 @@ from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
 from .version import __version__
-from .creators import (CREATORS, FEATURED_CREATORS, CreatorCatalogService, CreatorSearchService,
+from .creators import (CREATORS, FEATURED_CREATORS, CreatorCatalogService, CreatorSearchService, featured_by_role,
                        validate_selector, validate_search_term, selector_id)
 from .event_log import (configure_event_logging, runtime_data_directory, emit,
                         job_context, elapsed_ms, error_metadata)
@@ -106,9 +106,9 @@ def rates_to_baseline(rates, currency):
 
 def validate_creator_request(payload):
     if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids", "selector"}:
-        raise InputError("Supply creator comparison settings.")
+        raise InputError("Supply catalog comparison settings.")
     if not isinstance(payload["mode"], str) or payload["mode"] not in {"featured", "catalog", "products"}:
-        raise InputError("Choose featured games or a creator catalog.")
+        raise InputError("Choose featured games or a catalog.")
     regions = payload["regions"]
     if not isinstance(regions, list):
         raise InputError("Choose one or two comparison storefronts.")
@@ -294,7 +294,7 @@ class JobManager:
                 job.identifier = ""  # Attribution remains only in the private, expiring result.
 
     def _analyze(self, job):
-        job.update(state="loading", message="Loading creator products…" if job.creator_request else "Loading public wishlist…")
+        job.update(state="loading", message="Loading catalog products…" if job.creator_request else "Loading public wishlist…")
         def sleep(seconds):
             if job.cancel.wait(seconds):
                 raise Cancelled()
@@ -307,7 +307,7 @@ class JobManager:
         creator_membership = {}
         catalog_warnings = []
         if job.creator_request:
-            job.update(message="Loading creator catalog…")
+            job.update(message="Loading catalog…")
             catalogs = {}
             if job.creator_request["mode"] == "products":
                 wishlist = tuple(WishlistItem(app_id) for app_id in job.creator_request["app_ids"])
@@ -388,7 +388,7 @@ class JobManager:
             "name": "Loading game names to prepare alphabetical order…",
         }
         job.update(state="running", rates=rate_rows, warnings=warnings,
-                   message="Comparing creator products…" if job.creator_request else order_messages[job.order])
+                   message="Comparing catalog products…" if job.creator_request else order_messages[job.order])
         runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(
@@ -446,7 +446,9 @@ class WebApplication:
         if path == "/api/health" and method == "GET":
             return respond("200 OK", {"status": "ok", "version": __version__})
         if path == "/api/creators" and method == "GET":
-            return respond("200 OK", {"creators": [creator.public() for creator in FEATURED_CREATORS]})
+            return respond("200 OK", {"creators": [creator.public() for creator in FEATURED_CREATORS],
+                                       "developers": [c.public() for c in featured_by_role("developer")],
+                                       "publishers": [c.public() for c in featured_by_role("publisher")]})
         if method == "POST":
             if environ.get("HTTP_ORIGIN") != self.origin or environ.get("CONTENT_TYPE", "").split(";", 1)[0] != "application/json":
                 return respond("403 Forbidden", {"error": "Use this app to submit a comparison."})
@@ -459,8 +461,11 @@ class WebApplication:
                 return respond("400 Bad Request", {"error": "Invalid request body."})
             if path == "/api/creators/search":
                 try:
-                    if not isinstance(payload, dict) or set(payload) != {"query", "home"}:
-                        raise ValueError("Supply a creator name and storefront.")
+                    if not isinstance(payload, dict) or set(payload) not in ({"query", "home"}, {"query", "home", "role"}):
+                        raise ValueError("Supply a developer or publisher name and storefront.")
+                    role = payload.get("role")
+                    if "role" in payload and role not in ("developer", "publisher"):
+                        raise ValueError("Choose developers or publishers.")
                     term = validate_search_term(payload["query"])
                     home = payload["home"]
                     if not isinstance(home, str) or home not in {"pl", "us", "de", "no", "gb"}:
@@ -469,14 +474,14 @@ class WebApplication:
                     return respond("400 Bad Request", {"error": str(exc)})
                 service = self.manager.creator_search
                 if not service.lock.acquire(blocking=False):
-                    return respond("429 Too Many Requests", {"error": "A creator search is in progress. Try again shortly."})
+                    return respond("429 Too Many Requests", {"error": "A catalog search is in progress. Try again shortly."})
                 try:
                     client = RetryingJsonHttpClient(UrllibJsonHttpClient(timeout=15), gate=self.manager.gate,
                                                      policy=RetryPolicy(max_attempts=2, maximum_delay=5))
-                    return respond("200 OK", service.search(client, term, home))
+                    return respond("200 OK", service.search(client, term, home, role))
                 except HttpClientError as exc:
                     return respond("503 Service Unavailable", {"error": NETWORK_ACCESS_MESSAGE if is_network_access_denied(exc)
-                                   else "Steam creator search is unavailable. Please try again shortly."})
+                                   else "Steam developer/publisher search is unavailable. Please try again shortly."})
                 finally:
                     service.lock.release()
             if path in {"/api/jobs", "/api/creator-jobs"}:

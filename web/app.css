@@ -1108,7 +1108,7 @@ td:first-child { min-width: 0; }
 
 .empty-caption .welcome-currency { color: inherit; margin: 0; }
 
-.comparison-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+.comparison-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .comparison-tabs button {
   background: transparent; color: var(--muted); border: 1px solid var(--line);
   padding: 11px 18px; font-size: 14px;
@@ -1163,9 +1163,11 @@ td:first-child { min-width: 0; }
 .creator-search-result > div { min-width: 0; overflow-wrap: anywhere; }
 .creator-search-result small { display: block; color: var(--muted); }
 .creator-search-result button { flex-shrink: 0; }
+.creator-search-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 @media (max-width: 600px) {
   .creator-search-controls { flex-direction: column; }
-  .creator-search-result { align-items: flex-start; }
+  .creator-search-result { flex-direction: column; align-items: stretch; }
+  .creator-search-actions { justify-content: flex-start; }
 }
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }
 .creator-identity h3 { margin: 5px 0 0; font-size: 18px; line-height: 1.35; letter-spacing: -.3px; overflow-wrap: anywhere; }
