@@ -14,6 +14,7 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector() { return new Element("p"); }
+  focus() { this.focused = true; }
 }
 function setup(selectors = {}, extras = {}) {
   const elements = new Map();
@@ -26,9 +27,9 @@ const game = (id, name) => ({app_id:id, name, comparison:{home_price:{amount:10}
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
 
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
-function creatorSetup(savedValues = {}) {
+function creatorSetup(savedValues = {}, kind = "developer") {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
-  const registry = [{id:"studio",name:"Studio",role:"Developer",homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
+  const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
   const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], searches = [], timers = new Map();
   let timerId = 0;
   const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
@@ -40,7 +41,8 @@ function creatorSetup(savedValues = {}) {
     fetch:async (path, options = {}) => {
       calls.push({path,body:options.body ? JSON.parse(options.body) : null});
       let data;
-      if (path === "/api/creators") data = {creators:registry};
+      if (path === "/api/creators") data = {developers:registry.map(c => ({...c,selector:{kind:"developer",name:c.name}})),
+        publishers:registry.map(c => ({...c,selector:{kind:"publisher",name:c.name}}))};
       else if (path === "/api/creators/search") {
         data = searches.shift() || {creators: [], exact_matches: []};
         if (data.error) return {ok:false, json:async () => data};
@@ -52,19 +54,20 @@ function creatorSetup(savedValues = {}) {
     }
   });
   testContext.run(fs.readFileSync("web/creators.js", "utf8"));
-  const group = () => testContext.get("creator-groups").children[0];
+  const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
+  const group = () => get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,calls,storage,snapshots,searches,radios,regions,timers,group,body};
+  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body};
 }
 
-test("creator search adds a dynamic homepage while retaining featured rows and restores its catalog", async () => {
+test("developer search adds a dynamic catalog while retaining featured rows and restores its catalog", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
   const retained = ctx.body().children[0];
-  const creator = {id:"steam-32938395",name:"ConcernedApe",selector:{kind:"homepage",clan_id:"32938395"}};
-  ctx.searches.push({creators:[creator],exact_matches:[]});
+  const creator = {id:"developer-"+"d".repeat(24),name:"ConcernedApe",selector:{kind:"developer",name:"ConcernedApe"}};
+  ctx.searches.push({creators:[],exact_matches:[creator]});
   ctx.get("creator-query").value = "ConcernedApe";
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
-  const button = ctx.get("creator-search-results").children[0].children[1];
+  const button = ctx.get("creator-search-results").children[0].children[1].children[0];
   ctx.snapshots.push({state:"complete",message:"Done",catalogs:{[creator.id]:{
     products:[{app_id:"4",name:"Stardew Valley"}],next_start:12,has_more:true,total:15}},
     items:[game("4","Stardew Valley")],rates:[],warnings:[]});
@@ -76,7 +79,7 @@ test("creator search adds a dynamic homepage while retaining featured rows and r
   const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
   assert.deepEqual(submitted.selector,creator.selector);
   assert.equal(submitted.creator_id,creator.id);
-  const restored = creatorSetup({"polisher-creator-job":ctx.storage.get("polisher-creator-job")});
+  const restored = creatorSetup({"polisher-developer-job":ctx.storage.get("polisher-developer-job")});
   restored.get("creators-tab").listeners.click(); await settle();
   assert.equal(restored.get("creator-groups").children.length,2);
   const dynamic = restored.get("creator-groups").children[1];
@@ -88,25 +91,45 @@ test("creator search adds a dynamic homepage while retaining featured rows and r
 test("creator search distinguishes empty matches, failures, and exact-name roles", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
   ctx.get("creator-query").value = "A & B";
-  ctx.searches.push({creators:[],exact_matches:[{id:"publisher-"+"a".repeat(24),name:"A & B",selector:{kind:"publisher",name:"A & B"}}]});
+  ctx.searches.push({creators:[],exact_matches:[{id:"developer-"+"a".repeat(24),name:"A & B",selector:{kind:"developer",name:"A & B"}}]});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
-  assert.match(ctx.get("creator-search-status").textContent,/No matching creator homepages/);
+  assert.match(ctx.get("creator-search-status").textContent,/Choose a developer/);
   assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"A & B");
   ctx.run("running = true; window.creatorPane.refreshControls();");
-  assert.equal(ctx.get("creator-search-results").children[0].children[1].disabled,true);
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].disabled,true);
   ctx.run("running = false;");
   ctx.searches.push({error:"Steam is unavailable"});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   assert.equal(ctx.get("creator-search-status").textContent,"Steam is unavailable");
   assert.equal(ctx.get("creator-search-results").children.length,0);
   assert.equal(ctx.get("creator-search-submit").disabled,false);
+  ctx.searches.push({creators:[],exact_matches:[]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.match(ctx.get("creator-search-status").textContent,/No matching developers/);
+});
+
+test("developer search ignores homepage and publisher options and deduplicates names", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const developer = {id:"developer-"+"a".repeat(24),name:"Valve",selector:{kind:"developer",name:"Valve"}};
+  const publisher = {id:"publisher-"+"b".repeat(24),name:"Valve",selector:{kind:"publisher",name:"Valve"}};
+  ctx.searches.push({creators:[{id:"steam-123",name:"Valve",selector:{kind:"homepage",clan_id:"123"}}],exact_matches:[developer,developer,publisher]});
+  ctx.get("creator-query").value = "Valve";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  const rows = ctx.get("creator-search-results").children;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].children[0].children[0].textContent,"Valve");
+  const buttons = rows[0].children[1].children;
+  assert.deepEqual(buttons.map(button => button.textContent),["Add & compare"]);
+  buttons[0].listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,developer.selector);
+  assert.equal(buttons[0].disabled,true);
 });
 
 test("saved dynamic creators cannot inject links and preserve exact-name selectors", async () => {
   const good = {id:"developer-"+"a".repeat(24),name:"A & B",homepage:"javascript:alert(1)",icon:"https://evil.test",selector:{kind:"developer",name:"A & B"}};
   const saved = {home:"pl",regions:["us"],request:{mode:"featured"},creators:[good,
     {id:"evil",name:"Bad",selector:{kind:"homepage",clan_id:"1/../secret"}}],catalogs:[],results:[]};
-  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.equal(ctx.get("creator-groups").children.length,2);
   const identity = ctx.get("creator-groups").children[1].children[0].children[0];
@@ -117,11 +140,11 @@ test("saved dynamic creators cannot inject links and preserve exact-name selecto
 test("an empty added catalog preserves the exchange rates for existing comparisons", async () => {
   const saved = {home:"pl",regions:["us"],request:{mode:"featured"},
     rates:[{currency:"USD",rate_to_pln:4,cache_status:"cache"}],catalogs:[],results:[]};
-  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
   ctx.get("creators-tab").listeners.click(); await settle();
   ctx.snapshots.push({state:"complete",message:"No products",catalogs:{studio:{products:[],next_start:12,has_more:false,total:0}},items:[],rates:[],warnings:[]});
   ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
-  assert.equal(JSON.parse(ctx.storage.get("polisher-creator-job")).rates[0].rate_to_pln,4);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).rates[0].rate_to_pln,4);
 });
 
 test("creator tab automatically compares examples and preserves wishlist results and baseline", async () => {
@@ -132,13 +155,13 @@ test("creator tab automatically compares examples and preserves wishlist results
   assert.equal(ctx.get("compare-form").hidden, true);
   assert.equal(ctx.body().children.length, 3);
   assert.equal(ctx.body().children[0].children[1].textContent, "10.00 zł");
-  assert.equal(ctx.calls.find(call => call.path === "/api/creator-jobs").body.mode, "featured");
+  assert.equal(ctx.calls.find(call => call.path === "/api/creator-jobs").body.mode, "products");
   assert.equal(ctx.run("items[0].app_id"), "99");
   assert.equal(ctx.run("resultHome"), "gb");
   ctx.get("wishlist-tab").listeners.click();
   assert.equal(ctx.get("compare-form").hidden, false);
   assert.equal(ctx.get("creators-panel").hidden, true);
-  assert.ok(ctx.storage.has("polisher-creator-job"));
+  assert.ok(ctx.storage.has("polisher-developer-job"));
 });
 
 test("expanded catalogs retain soundtracks, avoid duplicate examples, and refresh displayed IDs", async () => {
@@ -158,12 +181,12 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
   assert.equal(refreshed.mode, "products"); assert.deepEqual(refreshed.app_ids, ["1","2","3","4"]);
   assert.equal(refreshed.home, "gb");
-  assert.equal(JSON.parse(ctx.storage.get("polisher-creator-job")).catalogs[0].nextStart, 0);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 0);
   assert.equal(ctx.body().children.length, 4);
   assert.equal(count(), "4 products shown");
-  const saved = JSON.parse(ctx.storage.get("polisher-creator-job"));
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
   delete saved.catalogs[0].expanded; // Older saved sessions have no explicit expansion flag.
-  const restored = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
   restored.get("creators-tab").listeners.click(); await settle();
   assert.equal(restored.group().children[1].children[1].children[0].textContent, "4 products shown");
 });
@@ -180,7 +203,7 @@ test("creator catalogs hide free products but retain paid soundtracks and unavai
   assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","6","7"]);
   ctx.get("creators-refresh").listeners.click(); await settle();
   assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.app_ids,["1","2","3","6","7"]);
-  const restored = creatorSetup({"polisher-creator-job":ctx.storage.get("polisher-creator-job")});
+  const restored = creatorSetup({"polisher-developer-job":ctx.storage.get("polisher-developer-job")});
   restored.get("creators-tab").listeners.click(); await settle();
   assert.deepEqual(restored.body().children.map(row => row.dataset.appId),["1","2","3","6","7"]);
 });
@@ -216,7 +239,7 @@ test("creator averages weight products equally and update after loading more", a
   const saved = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
     catalogs:[{id:"studio",products:[{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Unavailable"}],nextStart:0,hasMore:true,total:null}],
     results:[comparison("1",120,100,150),comparison("2",20,10,0),skipped("3","no_regional_price")]};
-  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
   ctx.get("creators-tab").listeners.click(); await settle();
   const statistics = () => ctx.group().children[0].children[1];
   assert.equal(statistics().children[0].children[0].textContent,"Average PLN vs USD");
@@ -267,7 +290,7 @@ test("restored creator results keep expanded products and running jobs reconnect
   const saved = {home:"gb",regions:["us"],request:{mode:"catalog"},job:{id:"a".repeat(32),token:"b".repeat(43)},
     catalogs:[{id:"studio",products:[{app_id:"4",name:"Soundtrack"}],nextStart:12,hasMore:true,total:30}],
     results:[game("4","Soundtrack")],rates:[]};
-  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.equal(ctx.body().children.length, 1);
   assert.equal(ctx.body().children[0].children[1].textContent, "10.00 GBP");
@@ -280,7 +303,7 @@ test("creator comparisons wait behind a wishlist and lock shared controls while 
   const ctx = creatorSetup(); ctx.run("running = true;");
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
-  assert.match(ctx.get("creators-progress").textContent, /Waiting for your wishlist/);
+  assert.match(ctx.get("creators-progress").textContent, /Waiting for the current comparison/);
   ctx.run("running = false;");
   ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
   [...ctx.timers.values()][0](); await settle();
@@ -293,6 +316,101 @@ test("creator comparisons wait behind a wishlist and lock shared controls while 
   assert.equal(ctx.run('items[0].app_id'), "existing-wishlist");
   ctx.get("creators-cancel").listeners.click(); await settle();
   assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+});
+
+test("developer and publisher tabs retain independent searches, groups, prices, and saved cursors", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const retained = ctx.body().children[0];
+  const developer = {id:"developer-"+"d".repeat(24),name:"Valve",selector:{kind:"developer",name:"Valve"}};
+  ctx.searches.push({creators:[],exact_matches:[developer]});
+  ctx.get("creator-query").value = "Valve";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"developer");
+  ctx.get("creator-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  const developerState = ctx.storage.get("polisher-developer-job");
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("developers-panel").hidden,true);
+  assert.equal(ctx.get("publishers-panel").hidden,false);
+  assert.equal(ctx.get("publisher-groups").children.length,1);
+  assert.equal(ctx.get("publisher-search-results").children.length,0);
+  const publisher = {id:"publisher-"+"e".repeat(24),name:"Valve",selector:{kind:"publisher",name:"Valve"}};
+  ctx.searches.push({creators:[],exact_matches:[publisher,developer]});
+  ctx.get("publisher-query").value = "Valve";
+  await ctx.get("publisher-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"publisher");
+  assert.equal(ctx.get("publisher-search-results").children.length,1);
+  ctx.get("publisher-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,publisher.selector);
+  assert.equal(ctx.storage.get("polisher-developer-job"),developerState);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.body().children[0],retained);
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  assert.equal(ctx.get("creator-query").value,"Valve");
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].textContent,"Added");
+  const restored = creatorSetup(Object.fromEntries(ctx.storage));
+  restored.get("creators-tab").listeners.click(); await settle();
+  restored.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length,2);
+  assert.equal(restored.get("publisher-groups").children.length,2);
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+});
+
+test("a running developer job blocks publisher additions and can be cancelled after switching back", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,1);
+  assert.equal(ctx.get("publishers-refresh").disabled,true);
+  assert.equal(ctx.get("analyze").disabled,true);
+  assert.equal(ctx.run("window.creatorPane.busy"),true);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  await ctx.get("creators-cancel").listeners.click();
+  assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+});
+
+test("legacy selections migrate by credit role and homepage catalogs are discarded", async () => {
+  const developer = {id:"developer-"+"a".repeat(24),name:"Dev",selector:{kind:"developer",name:"Dev"}};
+  const publisher = {id:"publisher-"+"b".repeat(24),name:"Pub",selector:{kind:"publisher",name:"Pub"}};
+  const homepage = {id:"steam-123",name:"Home",selector:{kind:"homepage",clan_id:"123"}};
+  const saved = {home:"pl",regions:["us"],request:{mode:"catalog"},creators:[developer,publisher,homepage],
+    catalogs:[{id:developer.id,products:[{app_id:"4",name:"Dev game"}],nextStart:25,total:40,hasMore:true},
+      {id:publisher.id,products:[{app_id:"5",name:"Pub game"}],nextStart:25,total:40,hasMore:true},
+      {id:homepage.id,products:[{app_id:"6",name:"Homepage game"}],nextStart:12,total:20,hasMore:true}],results:[]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  const dev = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  const pub = JSON.parse(ctx.storage.get("polisher-publisher-job"));
+  assert.equal(dev.creators.some(c => c.id === developer.id),true);
+  assert.equal(pub.creators.some(c => c.id === publisher.id),true);
+  assert.equal(dev.creators.some(c => c.selector.kind !== "developer"),false);
+  assert.equal(pub.creators.some(c => c.selector.kind !== "publisher"),false);
+  assert.equal(dev.catalogs.find(c => c.id === developer.id).nextStart,25);
+  assert.equal(pub.catalogs.find(c => c.id === publisher.id).nextStart,25);
+  assert.equal(dev.catalogs.some(c => c.id === homepage.id),false);
+});
+
+test("all twenty catalog selections survive restoration", async () => {
+  const catalogs = Array.from({length:19}, (_,i) => ({id:"developer-"+(i+1).toString(16).padStart(24,"0"),
+    name:"Developer "+i,selector:{kind:"developer",name:"Developer "+i}}));
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},
+    creators:[{id:"studio",name:"Studio",selector:{kind:"developer",name:"Studio"}},...catalogs],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,20);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).creators.at(-1).id,catalogs.at(-1).id);
+});
+
+test("three-tab keyboard navigation wraps and supports Home and End", async () => {
+  const ctx = creatorSetup();
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowLeft",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.get("publishers-tab").focused,true);
+  ctx.get("publishers-tab").listeners.keydown({key:"Home",preventDefault(){}});
+  assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("creators-tab").attributes["aria-selected"],"true");
 });
 
 test("default hides unavailable products while retaining technical failures", () => {

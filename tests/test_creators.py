@@ -38,6 +38,14 @@ class CatalogTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(HttpClientError):
                 parse_catalog({**payload, **change}, 12, search=True)
 
+    def test_credit_catalog_advances_through_steam_default_page_size(self):
+        html = ''.join(f'<a class="search_result_row" data-ds-appid="{i}"><span class="title">Game</span></a>' for i in range(1, 25))
+        html += '<a class="search_result_row" href="https://store.steampowered.com/bundle/123/Bundle/"></a>'
+        page = parse_catalog({"success": 1, "start": 0, "total_count": 56, "results_html": html}, 0, search=True)
+        self.assertEqual(len(page["products"]), 24)
+        self.assertEqual(page["next_start"], 25)
+        self.assertTrue(page["has_more"])
+
     def test_credit_catalog_encodes_name_and_separates_role_cache(self):
         from urllib.parse import parse_qs, urlsplit
         service, client = CreatorCatalogService(lambda: 0), Mock()
@@ -89,6 +97,8 @@ class CreatorSearchTests(unittest.TestCase):
     def setUp(self):
         self.clock, self.client = Mock(return_value=0), Mock()
         self.service = CreatorSearchService(self.clock)
+        self.service.role_catalogs = Mock()
+        self.service.role_catalogs.get_page.return_value = {"total": 1, "source": "live"}
         self.item = {"item_type": 5, "id": 32938395, "success": 1, "name": "ConcernedApe",
                      "store_url_path": "developer/ConcernedApe"}
         self.client.get_json.return_value = {"response": {"metadata": {"count": 1}, "store_items": [self.item]}}
@@ -109,7 +119,9 @@ class CreatorSearchTests(unittest.TestCase):
 
     def test_empty_search_is_distinct_from_malformed_and_denied_responses(self):
         self.client.get_json.return_value = {"response": {"metadata": {"count": 0}}}
-        self.assertEqual(self.service.search(self.client, "no such studio", "pl")["creators"], [])
+        self.service.role_catalogs.get_page.return_value = {"total": 0, "source": "live"}
+        self.assertEqual(self.service.search(self.client, "no such studio", "pl"),
+                         {"creators": [], "exact_matches": []})
         for payload in ({}, {"response": {}}, {"response": {"metadata": {}, "store_items": "bad"}}):
             self.client.get_json.return_value = payload
             with self.assertRaises(HttpClientError):
@@ -118,6 +130,48 @@ class CreatorSearchTests(unittest.TestCase):
         self.client.get_json.side_effect = HttpClientError("denied", network_access_denied=True)
         with self.assertRaises(HttpClientError):
             self.service.search(self.client, "no such studio", "pl")
+
+    def test_roles_are_verified_for_suggested_names_and_the_exact_query(self):
+        self.service.role_catalogs = CreatorCatalogService(self.clock)
+        self.client.get_json.side_effect = [
+            {"response": {"metadata": {"count": 1}, "store_items": [self.item]}},
+            {"success": 1, "start": 0, "total_count": 1, "results_html":
+             '<a class="search_result_row" data-ds-appid="10"><span class="title">Game</span></a>'},
+            {"success": 1, "start": -1, "total_count": 0, "results_html": ""},
+            {"success": 1, "start": -1, "total_count": 0, "results_html": ""},
+            {"success": 1, "start": -1, "total_count": 0, "results_html": ""},
+        ]
+        data = self.service.search(self.client, "Concerned", "pl")
+        self.assertEqual([c["selector"] for c in data["exact_matches"]],
+                         [{"kind": "developer", "name": "ConcernedApe"}])
+        self.assertEqual(self.client.get_json.call_count, 5)
+        self.service.search(self.client, "Concerned", "pl")
+        self.assertEqual(self.client.get_json.call_count, 5)
+
+    def test_role_search_only_checks_requested_role_and_separates_cache(self):
+        developer = self.service.search(self.client, "ConcernedApe", "pl", "developer")
+        self.assertEqual(developer["creators"], [])
+        self.assertEqual([c["selector"]["kind"] for c in developer["exact_matches"]], ["developer"])
+        self.assertEqual(self.service.role_catalogs.get_page.call_count, 1)
+        publisher = self.service.search(self.client, "ConcernedApe", "pl", "publisher")
+        self.assertEqual([c["selector"]["kind"] for c in publisher["exact_matches"]], ["publisher"])
+        self.assertEqual(self.service.role_catalogs.get_page.call_count, 2)
+        self.service.search(self.client, "ConcernedApe", "pl", "developer")
+        self.assertEqual(self.client.get_json.call_count, 2)
+
+    def test_role_verification_failure_does_not_cache_unverified_results(self):
+        for failure in (HttpClientError("outage", transient=True),
+                        HttpClientError("denied", network_access_denied=True)):
+            with self.subTest(failure=failure):
+                self.service.role_catalogs.get_page.side_effect = failure
+                with self.assertRaises(HttpClientError):
+                    self.service.search(self.client, "ConcernedApe", "pl")
+                self.assertFalse(self.service.cache)
+        self.service.role_catalogs.get_page.side_effect = None
+        self.service.role_catalogs.get_page.return_value = {"total": 1, "source": "stale cache"}
+        with self.assertRaises(HttpClientError):
+            self.service.search(self.client, "ConcernedApe", "pl")
+        self.assertFalse(self.service.cache)
 
     def test_resolve_checks_id_and_rejects_arbitrary_curators(self):
         selected = {"kind": "homepage", "clan_id": "32938395"}
@@ -264,6 +318,28 @@ class CreatorApiTests(unittest.TestCase):
         self.assertEqual(response["status"], 503)
         self.assertNotIn("secret", json.dumps(response))
         self.assertFalse(self.manager.creator_search.lock.locked())
+
+    def test_featured_registry_separates_roles_and_uses_credit_selectors(self):
+        data = self.request("/api/creators")["data"]
+        self.assertEqual([c["name"] for c in data["developers"]], ["Supergiant Games", "CD PROJEKT RED"])
+        self.assertEqual(len(data["publishers"]), 3)
+        for key, kind in (("developers", "developer"), ("publishers", "publisher")):
+            for catalog in data[key]:
+                self.assertEqual(catalog["selector"], {"kind": kind, "name": catalog["name"]})
+                self.assertEqual(catalog["id"], selector_id(catalog["selector"]))
+                self.assertEqual(len(catalog["examples"]), 3)
+                from steam_price_polisher.web_app import validate_creator_request
+                _, source = validate_creator_request({"mode": "catalog", "regions": ["us"],
+                                                      "creator_id": catalog["id"], "selector": catalog["selector"]})
+                self.assertEqual(source["selector"], catalog["selector"])
+
+    def test_search_role_validation_and_dispatch(self):
+        body = {"query": "Valve", "home": "pl", "role": "publisher"}
+        with patch.object(self.manager.creator_search, "search", return_value={"creators": [], "exact_matches": []}) as search:
+            self.assertEqual(self.request("/api/creators/search", "POST", body)["status"], 200)
+            self.assertEqual(search.call_args.args[1:], ("Valve", "pl", "publisher"))
+            for role in (None, "homepage", [], "unknown"):
+                self.assertEqual(self.request("/api/creators/search", "POST", {**body, "role": role})["status"], 400)
 
     def test_dynamic_homepage_uses_existing_pipeline_and_revalidates_identity(self):
         selector = {"kind": "homepage", "clan_id": "32938395"}
