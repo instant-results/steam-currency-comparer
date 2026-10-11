@@ -257,38 +257,47 @@ function csvCell(value) {
   if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
   return '"' + text.replaceAll('"', '""') + '"';
 }
-function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
+function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
+  const baseline = () => storefronts[home];
+  const {example = false, includeOwner = false, profile = null, extraColumns = []} = options;
   const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_baseline", "baseline_difference", "baseline_difference_percent", "different_regional_discounts", "price_provenance", "baseline_storefront", "baseline_currency", "rate_to_baseline", "baseline_rate_to_pln", "baseline_rate_publication_date", "baseline_rate_retrieved_at_utc", "baseline_rate_checked_at_utc", "baseline_rate_cache_status"];
   if (includeOwner) headers.push("wishlist_profile");
+  headers.push(...extraColumns.map(column => column.name));
   const rows = [headers];
-  for (const item of items) {
+  for (const item of exportItems) {
     const c = item.comparison;
-    const prices = c ? [{...c.home_price, region:resultHome, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    const prices = c ? [{...c.home_price, region:home, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
     for (const price of prices) {
-      const rate = currentRates.find(value => value.currency === price.currency) || {};
+      const rate = rates.find(value => value.currency === price.currency) || {};
       const identity = price.currency === "PLN";
       const reference = c ? Math.min(...c.alternatives.map(value => value.amount_in_home)) : null;
-      const row = [exportedAt, demoMode, item.app_id, item.name, c ? "compared" : item.skipped?.category,
+      const row = [exportedAt, example, item.app_id, item.name, c ? "compared" : item.skipped?.category,
         price.region, price.currency, price.original_amount, price.base_amount, price.discount_percent,
         identity ? 1 : rate.rate_to_pln, rate.effective_date, rate.retrieved_at_utc, rate.checked_at_utc,
         identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
         price.amount_in_home, c ? c.home_price.amount - reference : null, c ? percentageDifference(c) : null,
         c ? hasDifferentDiscounts(c) : null, item.source_summary];
-      const homeRate = currentRates.find(value => value.currency === baseline().currency) || {};
-      row.push(resultHome, baseline().currency, c ? (price.region === resultHome ? 1 : price.rate_to_home) : null,
+      const homeRate = rates.find(value => value.currency === baseline().currency) || {};
+      row.push(home, baseline().currency, c ? (price.region === home ? 1 : price.rate_to_home) : null,
         baseline().currency === "PLN" ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
         homeRate.retrieved_at_utc, homeRate.checked_at_utc, baseline().currency === "PLN" ? "identity" : homeRate.cache_status);
-      if (includeOwner) row.push(currentProfile);
+      if (includeOwner) row.push(profile);
+      row.push(...extraColumns.map(column => column.value(item)));
       rows.push(row);
     }
   }
   return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
-$("export-csv").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([buildCsv($("export-owner").checked)], {type:"text/csv;charset=utf-8"}));
-  const link = node("a"); link.href = url; link.download = "steam-price-comparison.csv";
+function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
+  return buildPriceCsv(items, resultHome, currentRates,
+    {example: demoMode, includeOwner, profile: currentProfile}, exportedAt);
+}
+function downloadCsv(contents, filename) {
+  const url = URL.createObjectURL(new Blob([contents], {type:"text/csv;charset=utf-8"}));
+  const link = node("a"); link.href = url; link.download = filename;
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
+}
+$("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();
