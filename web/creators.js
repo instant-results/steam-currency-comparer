@@ -22,7 +22,7 @@
     function save() {
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
-          featuredIds: [...defaultIds], home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
+          featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded})),
           results: [...results.values()], rates: creatorRates}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
@@ -170,10 +170,16 @@
         for (let index = 0; index < group.products.length; index++) {
           const product = group.products[index];
           const item = results.get(product.app_id) || {...product, pending: true};
-          const signature = creatorHome + JSON.stringify(item);
+          const showCredits = $("creator-show-credits").checked;
+          const signature = creatorHome + showCredits + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
             const row = comparisonRow(item, creatorHome);
+            if (showCredits) {
+              const role = kind === "developer" ? "Publisher" : "Developer";
+              const names = item[kind === "developer" ? "publishers" : "developers"];
+              row.children[0].append(node("small", `${role}: ${Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable"}`, "catalog-credit"));
+            }
             if (cached) cached.row.remove();
             cached = {row, signature}; group.rowCache.set(product.app_id, cached);
           }
@@ -351,6 +357,7 @@
         document.querySelectorAll('[name="region"]').forEach(el => el.checked = creatorRegions.includes(el.value));
         updateSelections();
       }
+      $("creator-show-credits").checked = saved.showCredits === true;
       for (const item of saved.results || []) if (/^[0-9]{1,12}$/.test(item.app_id)) results.set(item.app_id, item);
       for (const catalog of saved.catalogs || []) {
         const group = groups.get(catalog.id);
@@ -388,7 +395,10 @@
             }
           }
           restored = restore(saved);
-          if (restored) save();
+          if (restored) {
+            if ([...results.values()].some(item => item.comparison && (!Array.isArray(item.developers) || !Array.isArray(item.publishers)))) defaultsChanged = true;
+            save();
+          }
         } catch (_) { /* Ignore invalid saved state. */ }
         if (!restored || (defaultsChanged && !creatorJob)) {
           if (running || otherBusy()) {
@@ -418,6 +428,7 @@
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
+    $("creator-show-credits").addEventListener("change", () => { renderGroups(); save(); });
     $("creators-cancel").addEventListener("click", async () => {
       if (!creatorJob) return;
       cancelRequested = true; refreshControls();

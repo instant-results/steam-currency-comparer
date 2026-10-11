@@ -32,6 +32,8 @@ class AnalysisProgress:
     stale_cache_hits: int
     live_requests: int
     is_free: bool = False
+    developers: tuple[str, ...] | None = None
+    publishers: tuple[str, ...] | None = None
 
     @property
     def status(self) -> str:
@@ -260,6 +262,8 @@ class AnalysisRunner:
             cache_hits,
             stale_hits,
             live_requests,
+            developers=next((lookup.result.developers for lookup in lookups if lookup.result.developers is not None), None),
+            publishers=next((lookup.result.publishers for lookup in lookups if lookup.result.publishers is not None), None),
         )
 
     def _skipped(
@@ -286,6 +290,8 @@ class AnalysisRunner:
             stale_hits,
             live_requests,
             any(lookup.result.is_free is True for lookup in lookups),
+            next((lookup.result.developers for lookup in lookups if lookup.result.developers is not None), None),
+            next((lookup.result.publishers for lookup in lookups if lookup.result.publishers is not None), None),
         )
 
     def _skipped_from_error(
