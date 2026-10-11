@@ -1,7 +1,7 @@
 """Featured Steam creators and defensive parsing of their public catalog pages."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 import re
@@ -124,12 +124,17 @@ def parse_catalog(payload, start, count=CATALOG_PAGE_SIZE, *, search=False):
         parser = CatalogParser(search=search)
         parser.feed(html)
         products = tuple(parser.products.values())
-        if parser.invalid_rows or parser.rows > count or len(products) > count or (start < total and not parser.rows) or (not search and start < total and not products):
+        limit = 50 if search else count
+        if parser.invalid_rows or parser.rows > limit or len(products) > limit or (start < total and not parser.rows) or (not search and start < total and not products):
             raise ValueError("Catalog products missing")
+        # Steam search may ignore count and return its default 25 rows. Advance
+        # through every returned slot, including skipped bundles/packages.
+        if search:
+            size = max(count, parser.rows)
         return {"products": [asdict(item) for item in products], "total": total,
                 "next_start": start + size, "has_more": start + size < total}
     except (ValueError, TypeError) as exc:
-        raise HttpClientError("Steam returned an unreadable creator catalog.", invalid_response=True) from exc
+        raise HttpClientError("Steam returned an unreadable catalog.", invalid_response=True) from exc
 
 
 class CreatorCatalogService:
@@ -192,9 +197,16 @@ def selector_id(selector):
 
 
 def credit_creator(selector):
-    return Creator(selector_id(selector), selector["name"], selector["kind"].title() + " credit",
+    return Creator(selector_id(selector), selector["name"], selector["kind"].title(),
                    "", "https://store.steampowered.com/search/?" + urlencode({selector["kind"]: selector["name"]}),
                    "", (), selector)
+
+
+def featured_by_role(kind):
+    """Curated starting games; expansion follows the selected attribution role."""
+    return [replace(credit_creator({"kind": kind, "name": creator.name}),
+                    icon=creator.icon, examples=creator.examples)
+            for creator in FEATURED_CREATORS if kind in creator.role.lower()]
 
 
 def _api_url(method, payload):
@@ -204,10 +216,10 @@ def _api_url(method, payload):
 def _store_items(payload):
     response = payload.get("response") if isinstance(payload, dict) else None
     if not isinstance(response, dict):
-        raise HttpClientError("Steam returned an unreadable creator search.", invalid_response=True)
+        raise HttpClientError("Steam returned an unreadable catalog search.", invalid_response=True)
     items = response.get("store_items", [])
     if not isinstance(items, list) or len(items) > 50:
-        raise HttpClientError("Steam returned an unreadable creator search.", invalid_response=True)
+        raise HttpClientError("Steam returned an unreadable catalog search.", invalid_response=True)
     return items
 
 
@@ -231,9 +243,12 @@ class CreatorSearchService:
         self.clock = clock
         self.cache = {}
         self.lock = threading.Lock()
+        self.role_catalogs = CreatorCatalogService(clock)
 
-    def search(self, client, term, region):
-        key = (term.casefold(), region)
+    def search(self, client, term, region, role=None):
+        if role is not None and role not in ("developer", "publisher"):
+            raise ValueError("Choose developers or publishers.")
+        key = (term.casefold(), region, role)
         cached = self.cache.get(key)
         if cached and self.clock() - cached[0] < 600:
             return cached[1]
@@ -243,15 +258,29 @@ class CreatorSearchService:
             "data_request": {"include_basic_info": True}}))
         response = payload.get("response") if isinstance(payload, dict) else None
         if not isinstance(response, dict) or not isinstance(response.get("metadata"), dict):
-            raise HttpClientError("Steam returned an unreadable creator search.", invalid_response=True)
+            raise HttpClientError("Steam returned an unreadable catalog search.", invalid_response=True)
         creators = {}
         for item in _store_items(payload):
             creator = _homepage(item)
             if creator:
                 featured = next((c for c in FEATURED_CREATORS if c.clan_id == creator.clan_id), None)
                 creators[creator.id] = (featured or creator).public()
-        data = {"creators": list(creators.values()), "exact_matches": [credit_creator({"kind": kind, "name": term}).public()
-                 for kind in ("developer", "publisher")]}
+        names = {creator["name"].casefold(): creator["name"] for creator in creators.values()}
+        names.setdefault(term.casefold(), term)
+        matches = []
+        for name in names.values():
+            try:
+                name = validate_search_term(name)
+            except ValueError:
+                continue
+            for kind in ((role,) if role else ("developer", "publisher")):
+                creator = credit_creator({"kind": kind, "name": name})
+                page = self.role_catalogs.get_page(client, creator, region, 0)
+                if page["source"] == "stale cache":
+                    raise HttpClientError("Steam could not verify matching catalogs.", transient=True)
+                if page["total"] > 0:
+                    matches.append(creator.public())
+        data = {"creators": [] if role else list(creators.values()), "exact_matches": matches}
         if len(self.cache) >= 128:
             self.cache.pop(next(iter(self.cache)))
         self.cache[key] = (self.clock(), data)
@@ -268,4 +297,4 @@ class CreatorSearchService:
             creator = _homepage(item)
             if creator and creator.clan_id == selector["clan_id"]:
                 return creator
-        raise HttpClientError("Steam could not resolve this creator.", invalid_response=True)
+        raise HttpClientError("Steam could not resolve this catalog.", invalid_response=True)

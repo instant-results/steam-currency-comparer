@@ -232,7 +232,7 @@ function renderRates(rates, target) {
 }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
-  if (window.creatorPane?.busy) { notice("A creator comparison is running. Wait for it or cancel it on the Developers & publishers tab.", true); return; }
+  if (window.creatorPane?.busy) { notice("A catalog comparison is running. Wait for it or cancel it on the Developers or Publishers tab.", true); return; }
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
