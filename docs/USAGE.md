@@ -425,3 +425,12 @@ Follow the preview lifecycle guidance above. Inspect the repository state before
 the detailed change history. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
 changing wishlist retrieval or adding Steam-compatible loading orders.
+
+### Other product credits
+
+Use **Show publisher** above the Developers search or **Show developer** above
+the Publishers search to show the opposite role below each product title. All
+reported names appear, including co-publishers. Each tab remembers its choice;
+missing credits are labeled Unavailable. Credits come from the same Steam
+appdetails response as prices and are cached with them. Older saved catalog
+comparisons refresh once to obtain credits.

@@ -11,7 +11,7 @@ independent tabs alongside Your wishlist. No Creator category appears in the UI.
 
 ## Publication and version
 
-Current version: `0.4.1-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.2-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -34,6 +34,10 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   and Techland. Publishers features Devolver Digital (US), THQ Nordic (Austria),
   and 11 bit studios (Poland), with examples made by different studios.
   Role defaults are curated independently; see docs/FEATURED_CATALOGS.md.
+- Each role has a Show publisher / Show developer checkbox above search. It
+  displays opposite-role credits beneath each title and persists independently.
+  Steam appdetails credits share the price cache; old catalog entries/results
+  refresh once to obtain missing credits.
 - Each role has its own Find a developer/publisher form, results, selected names,
   pagination, rates, job token, and saved session state. Search verifies nonempty
   regional product catalogs for that role. Add & compare appends a catalog.
@@ -88,7 +92,7 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 - Steam search can ignore count=12 and return 25 entries; start=12 may repeat page
   zero. Parser bounds search pages to 50 rows and advances through returned slots,
   including skipped bundles/packages. No upstream HTML/scripts are forwarded.
-- Price cache schema 5 includes free-product metadata; regular prices refresh after
+- Price cache schema 6 includes free-product and developer/publisher credit metadata; regular prices refresh after
   one hour, known sale prices after 15 minutes, rates after 24 hours. Stale fallback
   is labeled. Catalog cache six hours, bounded and keyed by identity/region/cursor.
 - NBP quotes PLN per currency unit. Convert A to B using rate[A]/rate[B], PLN=1;
@@ -103,12 +107,12 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 
 ## Verification and open work
 
-Latest checks: 126 Python tests and 40 frontend tests, plus JS syntax/diff checks.
+Latest checks: 128 Python tests and 43 frontend tests, plus JS syntax/diff checks.
 New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
 independent saved groups, restored legacy prices, and desktop/390px layouts with
-no console errors. The v0.4.1 preview uses port 8765; verify listener/health state
+no console errors. The v0.4.2 preview uses port 8765; verify listener/health state
 before reuse. Minimal DOM tests require complementary browser QA.
 
 The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
@@ -124,3 +128,5 @@ separate implementation, test, and documentation commits. Ask after meaningful
 changes whether the user wants coherent commits. The v0.4.1 default-catalog
 refresh is committed in separate feature, test, and documentation commits. Keep runtime data, caches,
 screenshots, local wishlist files, secrets, and populated environment files out of Git.
+
+The v0.4.2 optional opposite-role credit display is committed in separate implementation, test, and documentation commits.
