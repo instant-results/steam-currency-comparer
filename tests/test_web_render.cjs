@@ -391,6 +391,25 @@ test("legacy selections migrate by credit role and homepage catalogs are discard
   assert.equal(dev.catalogs.some(c => c.id === homepage.id),false);
 });
 
+test("changed publisher defaults replace retired examples while preserving user catalogs", async () => {
+  const retired = {id:"publisher-"+"a".repeat(24),name:"Self publisher",selector:{kind:"publisher",name:"Self publisher"},examples:[{app_id:"9",name:"Old game"}]};
+  const selected = {id:"publisher-"+"b".repeat(24),name:"Selected publisher",selector:{kind:"publisher",name:"Selected publisher"},examples:[]};
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},creators:[retired,selected],
+    catalogs:[{id:selected.id,products:[{app_id:"4",name:"Selected game"}],nextStart:25,total:40,hasMore:true}],results:[]};
+  const ctx = creatorSetup({"polisher-publisher-job":JSON.stringify(saved)},"publisher");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  const updated = JSON.parse(ctx.storage.get("polisher-publisher-job"));
+  assert.equal(updated.creators.some(c => c.id === retired.id),false);
+  assert.equal(updated.creators.some(c => c.id === selected.id),true);
+  assert.equal(updated.catalogs.find(c => c.id === selected.id).nextStart,25);
+  assert.deepEqual(updated.featuredIds,["studio"]);
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.app_ids,["1","2","3","4"]);
+  const restored = creatorSetup({"polisher-publisher-job":JSON.stringify(updated)},"publisher");
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+});
+
 test("all twenty catalog selections survive restoration", async () => {
   const catalogs = Array.from({length:19}, (_,i) => ({id:"developer-"+(i+1).toString(16).padStart(24,"0"),
     name:"Developer "+i,selector:{kind:"developer",name:"Developer "+i}}));
