@@ -11,7 +11,7 @@ independent tabs alongside Your wishlist. No Creator category appears in the UI.
 
 ## Publication and version
 
-Current version: `0.4.2-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.3-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -66,7 +66,9 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   and filter. Differences use the cheapest converted alternative. Zero reference
   makes percentages unavailable. Per-price provenance appears in hover tooltips.
 - Results/rates persist in the browser tab; completed saved comparisons can outlive
-  server jobs. Refresh explicitly requests new checks. CSV remains on wishlist.
+  server jobs. Refresh explicitly requests new checks. Catalog tabs also export checked products, with catalog role/name and both
+  developer/publisher credits independent of their display checkbox. CSV uses
+  one row per observed storefront and repeats products for each catalog membership.
 
 ## Architecture and constraints
 
@@ -107,7 +109,7 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 
 ## Verification and open work
 
-Latest checks: 128 Python tests and 43 frontend tests, plus JS syntax/diff checks.
+Latest checks: 128 Python tests and 46 frontend tests, plus JS syntax/diff checks.
 New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
@@ -130,3 +132,5 @@ refresh is committed in separate feature, test, and documentation commits. Keep 
 screenshots, local wishlist files, secrets, and populated environment files out of Git.
 
 The v0.4.2 optional opposite-role credit display is committed in separate implementation, test, and documentation commits.
+
+The v0.4.3 catalog CSV downloads are committed in separate implementation, test, and documentation commits.

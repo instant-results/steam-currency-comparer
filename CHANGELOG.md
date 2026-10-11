@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3-beta — 2026-10-11
+
+- Add Download CSV below each developer/publisher catalog list, exporting checked
+  products with price, discount, conversion, and provenance fields. Both credit
+  columns are always included, independently of the display checkbox.
+- Identify each exported catalog by role and name; retain separate membership
+  rows for products present in more than one selected catalog.
+
 ## 0.4.2-beta — 2026-10-11
 
 - Add independent Show publisher / Show developer checkboxes above catalog searches.
