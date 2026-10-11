@@ -321,8 +321,11 @@ class CreatorApiTests(unittest.TestCase):
 
     def test_featured_registry_separates_roles_and_uses_credit_selectors(self):
         data = self.request("/api/creators")["data"]
-        self.assertEqual([c["name"] for c in data["developers"]], ["Supergiant Games", "CD PROJEKT RED"])
-        self.assertEqual(len(data["publishers"]), 3)
+        self.assertEqual([c["name"] for c in data["developers"]], ["Supergiant Games", "CD PROJEKT RED", "Techland"])
+        self.assertEqual([c["name"] for c in data["publishers"]],
+                         ["Devolver Digital", "THQ Nordic", "11 bit studios"])
+        self.assertTrue(set(c["name"] for c in data["developers"]).isdisjoint(
+            c["name"] for c in data["publishers"]))
         for key, kind in (("developers", "developer"), ("publishers", "publisher")):
             for catalog in data[key]:
                 self.assertEqual(catalog["selector"], {"kind": kind, "name": catalog["name"]})
