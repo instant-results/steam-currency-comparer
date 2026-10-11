@@ -23,7 +23,7 @@ function setup(selectors = {}, extras = {}) {
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, run: source => vm.runInContext(source, context)};
 }
-const game = (id, name) => ({app_id:id, name, comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
+const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
 
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
@@ -233,7 +233,7 @@ test("creator icons fall back to Steam and terminal catalogs hide Load more", as
 });
 
 test("creator averages weight products equally and update after loading more", async () => {
-  const comparison = (id, home, usd, eur, fair = false) => ({app_id:id,name:id,comparison:{
+  const comparison = (id, home, usd, eur, fair = false) => ({app_id:id,name:id,developers:[],publishers:[],comparison:{
     home_price:{amount:home},alternatives:[{region:"us",currency:"USD",original_amount:usd,rate_to_home:1,amount_in_home:usd},
       {region:"de",currency:"EUR",original_amount:eur,rate_to_home:1,amount_in_home:eur}],is_fair:fair}});
   const saved = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
@@ -706,4 +706,35 @@ test("price tooltips show standalone provenance for baseline and combined calcul
   assert.equal(homeCell.title, "cached");
   const altSpan = row.children[2].children[0].children[0];
   assert.equal(altSpan.title, "5.00 USD × 4 · live");
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} credit toggle shows the opposite role and persists without requests`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  const title = () => ctx.body().children[0].children[0];
+  const count = title().children.length, calls = ctx.calls.length;
+  ctx.get("creator-show-credits").checked = true;
+  ctx.get("creator-show-credits").listeners.change();
+  assert.equal(title().children.at(-1).textContent, kind === "developer" ? "Publisher: Test publisher, Co-publisher" : "Developer: Test developer");
+  assert.equal(ctx.calls.length, calls);
+  const restored = creatorSetup(Object.fromEntries(ctx.storage), kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-show-credits").checked, true);
+  assert.equal(restored.body().children[0].children[0].children.at(-1).textContent, title().children.at(-1).textContent);
+  ctx.get("creator-show-credits").checked = false; ctx.get("creator-show-credits").listeners.change();
+  assert.equal(title().children.length, count);
+});
+
+test("saved catalog prices without credits refresh once and retain loaded products", async () => {
+  const old = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"First"}],nextStart:25,hasMore:true,total:40}],
+    results:[game("1","First")]};
+  delete old.results[0].developers; delete old.results[0].publishers;
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(old)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.find(c => c.path === "/api/creator-jobs").body.app_ids,["1"]);
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.equal(saved.catalogs[0].nextStart,25);
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.calls.filter(c => c.path === "/api/creator-jobs").length,0);
 });

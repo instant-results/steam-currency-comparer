@@ -27,6 +27,16 @@ class QueueHttpClient:
 
 
 class SteamAccessTests(unittest.TestCase):
+    def test_product_credits_are_normalized_for_paid_and_unpriced_products(self):
+        for overview in ({"currency": "PLN", "final": 1000, "initial": 1000, "discount_percent": 0}, None):
+            data = {"name": "Game", "developers": [" Studio ", "Studio", 3], "publishers": ["Publisher", "Co-publisher"]}
+            if overview: data["price_overview"] = overview
+            client = SteamClient(QueueHttpClient([{"10": {"success": True, "data": data}}]), request_delay=0)
+            result = client.get_regional_price("10", "pl", "PLN")
+            self.assertEqual(result.developers, ("Studio",))
+            self.assertEqual(result.publishers, ("Publisher", "Co-publisher"))
+
+
     def test_denied_wishlist_does_not_retry_another_endpoint(self):
         for identifier, key in (("76561198000000000", ""), ("example", "secret"), ("example", "")):
             http = QueueHttpClient([HttpClientError("private", network_access_denied=True)])
