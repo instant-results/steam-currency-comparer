@@ -738,3 +738,41 @@ test("saved catalog prices without credits refresh once and retain loaded produc
   restored.get("creators-tab").listeners.click(); await settle();
   assert.equal(restored.calls.filter(c => c.path === "/api/creator-jobs").length,0);
 });
+
+for (const kind of ["developer", "publisher"]) test(`${kind} CSV always includes both credits and only its own checked catalog data`, async () => {
+  const ctx = creatorSetup({}, kind);
+  assert.match(fs.readFileSync("web/index.html", "utf8"), new RegExp(`id="${kind}s-export"[^>]*disabled`));
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-export").disabled, false);
+  ctx.run('downloadCsv = (contents, filename) => {window.exportContents = contents; window.exportFilename = filename;}');
+  ctx.get("creators-export").listeners.click();
+  const csv = ctx.run('window.exportContents');
+  assert.ok(csv.startsWith("\uFEFF"));
+  assert.match(csv, /"catalog_role","catalog_name","developers","publishers"/);
+  assert.match(csv, new RegExp(`"${kind}","Studio","Test developer","Test publisher; Co-publisher"`));
+  assert.match(csv, /"PLN"/); assert.match(csv, /"USD"/);
+  assert.equal(csv.trim().split("\r\n").length, 7); // Three games, two observed prices each.
+  assert.equal(ctx.run('window.exportFilename'), `steam-${kind}s-comparison.csv`);
+  assert.doesNotMatch(csv, /wishlist_profile|token/);
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  ctx.get("creators-export").listeners.click();
+  const withoutTime = text => text.replace(/\d{4}-\d{2}-\d{2}T[^"]+/g, "TIME");
+  assert.equal(withoutTime(ctx.run('window.exportContents')), withoutTime(csv));
+});
+
+test("catalog CSV keeps saved baseline, escaped credits, and uncompared rows", async () => {
+  const item = game("1", "A game"); item.publishers = ['=unsafe, "publisher"'];
+  const saved = {home:"gb",regions:["us"],request:{mode:"products"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"A game"},{app_id:"2",name:"Missing"}],nextStart:0,hasMore:true,total:null}],
+    results:[item,skipped("2","no_regional_price")]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.radios.forEach(el => el.checked = el.value === "pl");
+  ctx.run('downloadCsv = contents => {window.exportContents = contents;}');
+  ctx.get("creators-export").listeners.click();
+  const csv = ctx.run('window.exportContents');
+  assert.match(csv, /"gb","GBP"/);
+  assert.match(csv, /"'=unsafe, ""publisher"""/);
+  assert.match(csv, /"no_regional_price"/);
+  assert.equal(csv.trim().split("\r\n").length, 4);
+});
