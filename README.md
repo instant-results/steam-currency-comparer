@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.1-beta** · Beta for local use.
+**Version: 0.4.2-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -194,7 +194,7 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.1-beta` refreshes the featured developer and publisher examples.
+The current `0.4.2-beta` adds optional publisher/developer credits to catalog rows.
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2-beta — 2026-10-11
+
+- Add independent Show publisher / Show developer checkboxes above catalog searches.
+  Credits appear below each game title and the display choice persists per tab.
+- Cache Steam product credits alongside prices; refresh older catalog results and
+  cache entries once to supply missing metadata.
+
 ## 0.4.1-beta — 2026-10-11
 
 - Feature Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios (Poland) as publishers, with games developed by different studios.
