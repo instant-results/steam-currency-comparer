@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0-beta — 2026-10-11
+
+- Split Developers and Publishers into separate tabs with role-specific searches and catalogs.
+- Remove the Creator category and homepage catalog option from the interface.
+- Keep independent catalog selections, results, pagination, and search controls for each role.
+- Expand featured entries through exact-name developer/publisher product credits.
+- Migrate explicit role selections from the combined tab and preserve shared comparison locking.
+
+## 0.3.1-beta — 2026-10-03
+
+- Group creator search results into one row per name with descriptive catalog buttons.
+- Verify developer and publisher catalogs before offering those roles, including for suggested names.
+- Wrap catalog buttons on narrow screens and retain independent selection states.
+- Handle Steam search returning its default 25-entry pages despite a smaller requested page size.
+
 ## 0.3.0-beta — 2026-10-03
 
 - Search Steam creator homepages by name and add catalogs beside the featured three.

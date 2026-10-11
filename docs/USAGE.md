@@ -40,41 +40,43 @@ deployed as a public service.
 
 ## Developer and publisher catalogs
 
-Open **Developers & publishers** beside **Your wishlist**. The tab automatically
-compares three selected games each from Supergiant Games, CD PROJEKT RED, and
-Devolver Digital, using the sidebar's baseline and comparison currencies.
+Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
+with three selected games each from Supergiant Games and CD PROJEKT RED;
+Publishers also includes Devolver Digital. Each tab compares its starting games
+using the sidebar's baseline and comparison currencies.
 Names and artwork appear immediately; prices and differences fill in as requests
-complete. Featured examples are games; expanded catalogs also include DLC,
-soundtracks, and other products linked to the creator's Steam homepage.
-Free products, including demos, are removed after Steam identifies them as free
-or returns a zero baseline price. Paid products without a regional price remain
-visible with an explanation. Refresh older saved results to identify free products.
+complete. **Load more** expands products whose Steam store pages credit that
+exact name as developer or publisher, depending on the tab. Catalogs include
+paid DLC, soundtracks, and other products. Free products, including demos, are
+removed after checking; missing regional prices alone do not imply free.
 
-The centered blue arrow labeled **Load more** checks up to 12 catalog products at
-a time and shows the non-free ones.
-Pages containing only free products still advance; use Load more again to continue.
-Already displayed examples are not duplicated. The button disappears at the end
-of the catalog. Steam's listings can vary by region, and creator-homepage
-membership is not an exhaustive guarantee of every credited developer or publisher.
-Use **Find a developer or publisher** to search by name, then choose **Add & compare**.
-Matching Steam creator homepages appear first. The Developer and Publisher
-exact-name options search products attributed to the entered name on their store
-pages; they are fallback searches, not confirmed company matches. Use the complete
-credited name. A homepage can group several credited names, so these catalogs can differ.
+Steam can return its default 25-entry search page despite the requested 12 entries.
+Pagination advances through every returned slot, including skipped packages and
+bundles. Already displayed examples are not duplicated, and Load more disappears
+at the end. Free-only pages still advance; use Load more again to continue.
 
-The initial three creators stay visible. New selections append below them and
-use the currencies of the displayed comparisons; use **Refresh comparisons** to
-apply changed sidebar choices. Search remains available during a comparison,
-but adding a creator waits until the current comparison finishes or is cancelled.
-Up to 20 creators can be displayed in one tab. Selected creators and catalog
-positions survive reload in that tab. Homepage suggestions may omit studios;
-exact-name results depend on spelling and Steam filters. Package/bundle entries
-are skipped while their pagination positions still advance. New creator icons use
-the Steam-logo fallback. The search field takes names, not pasted URLs.
+Use **Find a developer** or **Find a publisher** in the corresponding tab.
+Only names with matching products for that role in the baseline region are
+returned. **Add & compare** appends that catalog beside the featured entries.
+There is no Creator role or homepage-catalog button. Steam homepage suggestions
+are used internally to discover possible names, then their product credits are checked.
+Use the full credited name: spelling, regional availability, and Steam filters
+can affect coverage. Searches take names, not pasted URLs, and need no Steam login
+or API key. Discovery uses a ten-minute bounded cache with six-hour role-page caching;
+searching alone does not fetch regional prices.
 
-Search needs no Steam login or API key. Discovery uses a ten-minute bounded cache;
-searching alone does not fetch regional prices. See the
-[creator-search research and implementation notes](STEAM_CREATOR_SEARCH.md).
+The two catalog tabs keep independent results, selections, catalog positions,
+and searches when switching tabs. Completed comparisons and selected catalogs
+survive reload in the same browser tab. Up to 20 catalogs can appear per role.
+Older combined-tab selections migrate only when they carry an explicit developer
+or publisher selector; old homepage catalogs are not assigned a role.
+New entries use the Steam-logo fallback. Existing results retain their comparison
+currencies until **Refresh comparisons** applies the sidebar choices.
+
+Search remains available during comparisons, while adding, refreshing, and
+expanding catalogs wait for the active comparison to finish or be cancelled.
+Return to the tab running the comparison to cancel it. All three tabs share the
+paced worker and price cache. See the [search implementation notes](STEAM_CREATOR_SEARCH.md).
 
 The footer labels the initial curated selection as **featured games**. That label
 disappears once the catalog expands, including after changing the baseline or
@@ -82,7 +84,7 @@ restoring saved results. Expanded footers show the loaded product count and,
 when available, Steam's catalog total. The total may include free products that
 are excluded from the displayed list.
 
-Each creator's icon and name sit above its games, beside an average percentage
+Each developer's or publisher's icon and name sit above its games, beside an average percentage
 difference for each selected foreign storefront. Each compared, loaded product
 has equal weight: `(baseline price - converted foreign price) / converted foreign
 price * 100`. The mean uses unrounded differences; negative means cheaper in the
