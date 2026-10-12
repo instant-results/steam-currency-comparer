@@ -389,7 +389,7 @@ class JobManager:
         }
         job.update(state="running", rates=rate_rows, warnings=warnings,
                    message="Comparing catalog products…" if job.creator_request else order_messages[job.order])
-        runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True, require_credits=bool(job.creator_request)), home=job.config.home, alternatives=job.config.alternatives)
+        runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True, require_credits=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(
             wishlist,
