@@ -115,7 +115,7 @@ function setBusy(value) { running = value; $("analyze").disabled = value; $("ana
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
-function comparisonRow(item, resultHome) {
+function comparisonRow(item, resultHome, showWishlistCredits = false) {
   const baseline = () => storefronts[resultHome];
   const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
   const diff = item => item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home));
@@ -123,6 +123,15 @@ function comparisonRow(item, resultHome) {
   tr.dataset.appId = item.app_id;
   const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", (item.name || `Steam product ${item.app_id}`) + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
   artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
+  if (showWishlistCredits) {
+    const credits = node("small", undefined, "catalog-credit wishlist-credits");
+    for (const [field, label] of [["developers", "Developer"], ["publishers", "Publisher"]]) {
+      const names = item[field];
+      const credit = Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable";
+      credits.append(node("span", `${label}: `, "credit-label"), node("span", credit, "credit-names"));
+    }
+    title.append(credits);
+  }
   if(item.comparison) {
     const c = item.comparison;
     if (hasDifferentDiscounts(c)) {
@@ -178,7 +187,7 @@ function render() {
     const signature = resultHome + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
-    const tr = comparisonRow(item, resultHome);
+    const tr = comparisonRow(item, resultHome, true);
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
     rowCache.set(item.app_id, cached);
