@@ -595,6 +595,51 @@ test("artwork loads lazily in a fixed slot and falls back without replacing the 
   assert.equal(run('gameArtwork("../bad").children.length'), 1);
 });
 
+test("wishlist rows show both compact credit lists beneath artwork without changing price columns", () => {
+  const {get, run} = setup();
+  const item = game("413150", "Stardew Valley");
+  item.developers = ["First developer", "Second developer"];
+  item.publishers = ['<script>unsafe text</script>', "Co-publisher"];
+  run(`items = ${JSON.stringify([item])}; demoMode = true; render();`);
+  const row = get("rows").children[0], title = row.children[0];
+  assert.equal(row.children.length, 4);
+  assert.equal(title.children[0].className, "game-name");
+  const credits = title.children[1];
+  assert.equal(credits.tagName, "small");
+  assert.equal(credits.className, "catalog-credit wishlist-credits");
+  assert.deepEqual(credits.children.map(child => [child.className, child.textContent]), [
+    ["credit-label", "Developer: "], ["credit-names", "First developer, Second developer"],
+    ["credit-label", "Publisher: "], ["credit-names", "<script>unsafe text</script>, Co-publisher"]
+  ]);
+  assert.equal(credits.children[3].children.length, 0); // Untrusted credits stay text.
+  assert.equal(row.children[1].className, "price");
+  assert.equal(row.children[3].className, "difference fair");
+  const csvBefore = run('buildCsv(false, "2026-10-13T11:00:00Z")');
+  run('render(); sort = "name"; render(); sort = "arrival"; render();');
+  assert.equal(get("rows").children[0], row);
+  assert.equal(run('buildCsv(false, "2026-10-13T11:00:00Z")'), csvBefore);
+  assert.equal(run(`comparisonRow(${JSON.stringify(item)}, "pl").children[0].children.length`), 1);
+});
+
+test("wishlist credits handle older, missing, skipped, and pending metadata and update when learned", () => {
+  const {get, run} = setup();
+  const old = game("1", "Old saved game"); delete old.developers; delete old.publishers;
+  const missing = {...skipped("2", "temporary_failure"), developers:[], publishers:["Known publisher"]};
+  const pending = {app_id:"3",name:"Pending game",pending:true};
+  run(`items = ${JSON.stringify([old,missing,pending])}; render();`);
+  const credits = row => { const spans = row.children[0].children[1].children; return [spans[0].textContent + spans[1].textContent, spans[2].textContent + spans[3].textContent]; };
+  assert.deepEqual(get("rows").children.map(credits), [
+    ["Developer: Unavailable", "Publisher: Unavailable"],
+    ["Developer: Unavailable", "Publisher: Known publisher"],
+    ["Developer: Loading…", "Publisher: Loading…"]
+  ]);
+  assert.equal(get("rows").children[1].children[1].colSpan, 3);
+  run('items[0].developers = ["Learned developer"]; items[0].publishers = ["Learned publisher"]; render();');
+  assert.deepEqual(credits(get("rows").children[0]), ["Developer: Learned developer", "Publisher: Learned publisher"]);
+  get("search").value = "old"; run("render();");
+  assert.deepEqual(get("rows").children.map(row => row.dataset.appId), ["1"]);
+});
+
 
 test("percentage sorting differs from absolute sorting and keeps undefined percentages last", () => {
   const {get,run} = setup();
