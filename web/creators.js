@@ -122,13 +122,8 @@
     function catalogCsv(exportedAt = new Date().toISOString()) {
       const exportItems = creators.flatMap(creator => (groups.get(creator.id)?.products || [])
         .filter(product => results.has(product.app_id))
-        .map(product => ({...results.get(product.app_id), catalog_name: creator.name})));
-      return buildPriceCsv(exportItems, creatorHome, creatorRates, {extraColumns: [
-        {name: "catalog_role", value: () => kind},
-        {name: "catalog_name", value: item => item.catalog_name},
-        {name: "developers", value: item => (item.developers || []).join("; ")},
-        {name: "publishers", value: item => (item.publishers || []).join("; ")}
-      ]}, exportedAt);
+        .map(product => ({...results.get(product.app_id), catalog_id: creator.id, catalog_role: kind, catalog_name: creator.name})));
+      return buildPriceCsv(exportItems, creatorHome, creatorRates, {sourceTab: kind, regions: creatorRegions}, exportedAt);
     }
 
     function syncColumns(source) {
