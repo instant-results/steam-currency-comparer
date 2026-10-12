@@ -14,16 +14,423 @@ class Element {
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector() { return new Element("p"); }
+  focus() { this.focused = true; }
 }
-function setup(selectors = {}) {
+function setup(selectors = {}, extras = {}) {
   const elements = new Map();
   const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}});
+  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, run: source => vm.runInContext(source, context)};
 }
-const game = (id, name) => ({app_id:id, name, comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
+const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
+
+const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
+function creatorSetup(savedValues = {}, kind = "developer") {
+  const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
+  const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], searches = [], timers = new Map();
+  let timerId = 0;
+  const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
+  const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
+  const selectors = {'[name="home"]':radios,'[name="region"]':regions,'[name="region"]:checked':regions.filter(el => el.checked)};
+  const testContext = setup(selectors, {
+    sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
+    setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
+    fetch:async (path, options = {}) => {
+      calls.push({path,body:options.body ? JSON.parse(options.body) : null});
+      let data;
+      if (path === "/api/creators") data = {developers:registry.map(c => ({...c,selector:{kind:"developer",name:c.name}})),
+        publishers:registry.map(c => ({...c,selector:{kind:"publisher",name:c.name}}))};
+      else if (path === "/api/creators/search") {
+        data = searches.shift() || {creators: [], exact_matches: []};
+        if (data.error) return {ok:false, json:async () => data};
+      }
+      else if (path === "/api/creator-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path.endsWith("/cancel")) data = {state:"cancelling"};
+      else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
+      return {ok:true,json:async () => data};
+    }
+  });
+  testContext.run(fs.readFileSync("web/creators.js", "utf8"));
+  const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
+  const group = () => get("creator-groups").children[0];
+  const body = () => group().children[1].children[0].children[0].children[2];
+  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body};
+}
+
+test("developer search adds a dynamic catalog while retaining featured rows and restores its catalog", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const retained = ctx.body().children[0];
+  const creator = {id:"developer-"+"d".repeat(24),name:"ConcernedApe",selector:{kind:"developer",name:"ConcernedApe"}};
+  ctx.searches.push({creators:[],exact_matches:[creator]});
+  ctx.get("creator-query").value = "ConcernedApe";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  const button = ctx.get("creator-search-results").children[0].children[1].children[0];
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{[creator.id]:{
+    products:[{app_id:"4",name:"Stardew Valley"}],next_start:12,has_more:true,total:15}},
+    items:[game("4","Stardew Valley")],rates:[],warnings:[]});
+  button.listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  assert.equal(ctx.body().children[0],retained);
+  assert.equal(button.textContent,"Added");
+  assert.equal(button.disabled,true);
+  const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(submitted.selector,creator.selector);
+  assert.equal(submitted.creator_id,creator.id);
+  const restored = creatorSetup({"polisher-developer-job":ctx.storage.get("polisher-developer-job")});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length,2);
+  const dynamic = restored.get("creator-groups").children[1];
+  assert.equal(dynamic.children[1].children[0].children[0].children[2].children.length,1);
+  dynamic.children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(restored.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.start,12);
+});
+
+test("creator search distinguishes empty matches, failures, and exact-name roles", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-query").value = "A & B";
+  ctx.searches.push({creators:[],exact_matches:[{id:"developer-"+"a".repeat(24),name:"A & B",selector:{kind:"developer",name:"A & B"}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.match(ctx.get("creator-search-status").textContent,/Choose a developer/);
+  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"A & B");
+  ctx.run("running = true; window.creatorPane.refreshControls();");
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].disabled,true);
+  ctx.run("running = false;");
+  ctx.searches.push({error:"Steam is unavailable"});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("creator-search-status").textContent,"Steam is unavailable");
+  assert.equal(ctx.get("creator-search-results").children.length,0);
+  assert.equal(ctx.get("creator-search-submit").disabled,false);
+  ctx.searches.push({creators:[],exact_matches:[]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.match(ctx.get("creator-search-status").textContent,/No matching developers/);
+});
+
+test("developer search ignores homepage and publisher options and deduplicates names", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const developer = {id:"developer-"+"a".repeat(24),name:"Valve",selector:{kind:"developer",name:"Valve"}};
+  const publisher = {id:"publisher-"+"b".repeat(24),name:"Valve",selector:{kind:"publisher",name:"Valve"}};
+  ctx.searches.push({creators:[{id:"steam-123",name:"Valve",selector:{kind:"homepage",clan_id:"123"}}],exact_matches:[developer,developer,publisher]});
+  ctx.get("creator-query").value = "Valve";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  const rows = ctx.get("creator-search-results").children;
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].children[0].children[0].textContent,"Valve");
+  const buttons = rows[0].children[1].children;
+  assert.deepEqual(buttons.map(button => button.textContent),["Add & compare"]);
+  buttons[0].listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,developer.selector);
+  assert.equal(buttons[0].disabled,true);
+});
+
+test("saved dynamic creators cannot inject links and preserve exact-name selectors", async () => {
+  const good = {id:"developer-"+"a".repeat(24),name:"A & B",homepage:"javascript:alert(1)",icon:"https://evil.test",selector:{kind:"developer",name:"A & B"}};
+  const saved = {home:"pl",regions:["us"],request:{mode:"featured"},creators:[good,
+    {id:"evil",name:"Bad",selector:{kind:"homepage",clan_id:"1/../secret"}}],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  const identity = ctx.get("creator-groups").children[1].children[0].children[0];
+  assert.equal(identity.children[0].src,"/steam-logo.svg");
+  assert.equal(identity.children[1].children[0].href,"https://store.steampowered.com/search/?developer=A%20%26%20B");
+});
+
+test("an empty added catalog preserves the exchange rates for existing comparisons", async () => {
+  const saved = {home:"pl",regions:["us"],request:{mode:"featured"},
+    rates:[{currency:"USD",rate_to_pln:4,cache_status:"cache"}],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"No products",catalogs:{studio:{products:[],next_start:12,has_more:false,total:0}},items:[],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).rates[0].rate_to_pln,4);
+});
+
+test("creator tab automatically compares examples and preserves wishlist results and baseline", async () => {
+  const ctx = creatorSetup();
+  ctx.run(`items = ${JSON.stringify([game("99","My wishlist")])}; resultHome = "gb";`);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("wishlist-panel").hidden, true);
+  assert.equal(ctx.get("compare-form").hidden, true);
+  assert.equal(ctx.body().children.length, 3);
+  assert.equal(ctx.body().children[0].children[1].textContent, "10.00 zł");
+  assert.equal(ctx.calls.find(call => call.path === "/api/creator-jobs").body.mode, "products");
+  assert.equal(ctx.run("items[0].app_id"), "99");
+  assert.equal(ctx.run("resultHome"), "gb");
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal(ctx.get("compare-form").hidden, false);
+  assert.equal(ctx.get("creators-panel").hidden, true);
+  assert.ok(ctx.storage.has("polisher-developer-job"));
+});
+
+test("expanded catalogs retain soundtracks, avoid duplicate examples, and refresh displayed IDs", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const count = () => ctx.group().children[1].children[1].children[0].textContent;
+  assert.match(count(), /featured games/);
+  const retainedRow = ctx.body().children[0];
+  ctx.snapshots.push({state:"complete",message:"Checked catalog.",catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Original Soundtrack"}],next_start:12,has_more:true,total:30}},items:[game("4","Original Soundtrack")],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","4"]);
+  assert.equal(ctx.body().children[0], retainedRow);
+  const expanded = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(expanded.mode, "catalog"); assert.equal(expanded.start, 0);
+  assert.doesNotMatch(count(), /featured games/);
+  ctx.radios.forEach(el => el.checked = el.value === "gb");
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(refreshed.mode, "products"); assert.deepEqual(refreshed.app_ids, ["1","2","3","4"]);
+  assert.equal(refreshed.home, "gb");
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 0);
+  assert.equal(ctx.body().children.length, 4);
+  assert.equal(count(), "4 products shown");
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  delete saved.catalogs[0].expanded; // Older saved sessions have no explicit expansion flag.
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.group().children[1].children[1].children[0].textContent, "4 products shown");
+});
+
+test("creator catalogs hide free products but retain paid soundtracks and unavailable products", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const zero = game("5", "Free game"); zero.comparison.home_price.amount = 0;
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[
+    {app_id:"4",name:"Demo"},{app_id:"5",name:"Free game"},{app_id:"6",name:"Paid soundtrack"},{app_id:"7",name:"Coming soon"}
+  ],next_start:12,has_more:true,total:30}},items:[
+    {...skipped("4","no_regional_price"),is_free:true},zero,game("6","Paid soundtrack"),skipped("7","no_regional_price")
+  ],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","6","7"]);
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.app_ids,["1","2","3","6","7"]);
+  const restored = creatorSetup({"polisher-developer-job":ctx.storage.get("polisher-developer-job")});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.deepEqual(restored.body().children.map(row => row.dataset.appId),["1","2","3","6","7"]);
+});
+
+test("free-only catalog pages still advance to later paid products", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"4",name:"Demo"}],next_start:12,has_more:true,total:24}},items:[{...skipped("4","no_regional_price"),is_free:true}],rates:[],warnings:[]});
+  const more = ctx.group().children[1].children[1].children[1];
+  more.listeners.click(); await settle();
+  assert.equal(ctx.body().children.length,3);
+  assert.equal(more.hidden,false);
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"5",name:"Paid game"}],next_start:24,has_more:false,total:24}},items:[game("5","Paid game")],rates:[],warnings:[]});
+  more.listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.start,12);
+  assert.equal(ctx.body().children.length,4);
+  assert.equal(more.hidden,true);
+});
+
+test("creator icons fall back to Steam and terminal catalogs hide Load more", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const img = ctx.group().children[0].children[0].children[0]; img.listeners.error();
+  assert.equal(img.src, "/steam-logo.svg");
+  assert.equal(img.referrerPolicy, "no-referrer");
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[],next_start:12,has_more:false,total:3}},items:[],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(ctx.group().children[1].children[1].children[1].hidden, true);
+});
+
+test("creator averages weight products equally and update after loading more", async () => {
+  const comparison = (id, home, usd, eur, fair = false) => ({app_id:id,name:id,developers:[],publishers:[],comparison:{
+    home_price:{amount:home},alternatives:[{region:"us",currency:"USD",original_amount:usd,rate_to_home:1,amount_in_home:usd},
+      {region:"de",currency:"EUR",original_amount:eur,rate_to_home:1,amount_in_home:eur}],is_fair:fair}});
+  const saved = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Unavailable"}],nextStart:0,hasMore:true,total:null}],
+    results:[comparison("1",120,100,150),comparison("2",20,10,0),skipped("3","no_regional_price")]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const statistics = () => ctx.group().children[0].children[1];
+  assert.equal(statistics().children[0].children[0].textContent,"Average PLN vs USD");
+  assert.equal(statistics().children[0].children[1].textContent,"+60.0%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"+60.0%");
+  assert.equal(statistics().children[0].children[2].textContent,"2 products compared");
+  assert.equal(statistics().children[1].children[1].textContent,"−20.0%");
+  assert.equal(statistics().children[1].children[3].children[1].textContent,"−20.0%");
+  assert.equal(statistics().children[1].children[2].textContent,"1 product compared");
+  assert.match(statistics().children[2].textContent,/2 of 3 compared · 0 cheaper\/equal · 2 pricier · 1 uncompared/);
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Soundtrack"},{app_id:"5",name:"Demo"}],next_start:12,has_more:false,total:5}},
+    items:[comparison("4",30,60,40,true),{...skipped("5","no_regional_price"),is_free:true}],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(statistics().children[0].children[1].textContent,"+23.3%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"+20.0%");
+  assert.equal(statistics().children[1].children[1].textContent,"−22.5%");
+  assert.equal(statistics().children[1].children[3].children[1].textContent,"−22.5%");
+  assert.match(statistics().children[2].textContent,/3 of 4 compared · 1 cheaper\/equal · 2 pricier · 1 uncompared/);
+  ctx.radios.forEach(el => el.checked = el.value === "gb");
+  assert.equal(statistics().children[0].children[0].textContent,"Average PLN vs USD");
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{},items:[comparison("1",40,100,50,true)],rates:[],warnings:[]});
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(statistics().children[0].children[0].textContent,"Average GBP vs USD");
+  assert.equal(statistics().children[0].children[1].textContent,"−60.0%");
+  assert.equal(statistics().children[0].children[3].children[1].textContent,"−60.0%");
+  assert.match(statistics().children[2].textContent,/1 of 4 compared.*3 pending/);
+});
+
+test("creator statistics show no average while results are pending or reference prices are zero", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  let stats = ctx.group().children[0].children[1];
+  assert.equal(stats.children[0].children[1].textContent,"—");
+  assert.equal(stats.children[0].children[3].children[1].textContent,"—");
+  assert.match(stats.children[2].textContent,/0 of 3 compared.*3 pending/);
+  const zero = game("1","First"); zero.comparison.alternatives[0].amount_in_home = 0;
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{},items:[zero,skipped("2","app_unavailable")],rates:[],warnings:[]});
+  [...ctx.timers.values()][0](); await settle();
+  stats = ctx.group().children[0].children[1];
+  assert.equal(stats.children[0].children[1].textContent,"—");
+  assert.equal(stats.children[0].children[2].textContent,"0 products compared");
+  assert.equal(stats.children[0].children[3].children[1].textContent,"—");
+  assert.match(stats.children[2].textContent,/1 of 3 compared.*1 uncompared · 1 pending/);
+});
+
+test("restored creator results keep expanded products and running jobs reconnect", async () => {
+  const saved = {home:"gb",regions:["us"],request:{mode:"catalog"},job:{id:"a".repeat(32),token:"b".repeat(43)},
+    catalogs:[{id:"studio",products:[{app_id:"4",name:"Soundtrack"}],nextStart:12,hasMore:true,total:30}],
+    results:[game("4","Soundtrack")],rates:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.body().children.length, 1);
+  assert.equal(ctx.body().children[0].children[1].textContent, "10.00 GBP");
+  assert.ok(ctx.radios.find(el => el.value === "gb").checked);
+  assert.ok(ctx.calls.some(call => call.path.startsWith("/api/jobs/")));
+  assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
+});
+
+test("creator comparisons wait behind a wishlist and lock shared controls while running", async () => {
+  const ctx = creatorSetup(); ctx.run("running = true;");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
+  assert.match(ctx.get("creators-progress").textContent, /Waiting for the current comparison/);
+  ctx.run("running = false;");
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  [...ctx.timers.values()][0](); await settle();
+  assert.equal(ctx.run("window.creatorPane.busy"), true);
+  assert.ok(ctx.radios.every(el => el.disabled));
+  assert.equal(ctx.get("analyze").disabled, true);
+  assert.equal(ctx.get("retry").disabled, true);
+  ctx.run('items = [{app_id:"existing-wishlist"}];');
+  await ctx.run('start({identifier:"example",regions:["us"],home:"pl"})');
+  assert.equal(ctx.run('items[0].app_id'), "existing-wishlist");
+  ctx.get("creators-cancel").listeners.click(); await settle();
+  assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+});
+
+test("developer and publisher tabs retain independent searches, groups, prices, and saved cursors", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const retained = ctx.body().children[0];
+  const developer = {id:"developer-"+"d".repeat(24),name:"Valve",selector:{kind:"developer",name:"Valve"}};
+  ctx.searches.push({creators:[],exact_matches:[developer]});
+  ctx.get("creator-query").value = "Valve";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"developer");
+  ctx.get("creator-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  const developerState = ctx.storage.get("polisher-developer-job");
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("developers-panel").hidden,true);
+  assert.equal(ctx.get("publishers-panel").hidden,false);
+  assert.equal(ctx.get("publisher-groups").children.length,1);
+  assert.equal(ctx.get("publisher-search-results").children.length,0);
+  const publisher = {id:"publisher-"+"e".repeat(24),name:"Valve",selector:{kind:"publisher",name:"Valve"}};
+  ctx.searches.push({creators:[],exact_matches:[publisher,developer]});
+  ctx.get("publisher-query").value = "Valve";
+  await ctx.get("publisher-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"publisher");
+  assert.equal(ctx.get("publisher-search-results").children.length,1);
+  ctx.get("publisher-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,publisher.selector);
+  assert.equal(ctx.storage.get("polisher-developer-job"),developerState);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.body().children[0],retained);
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  assert.equal(ctx.get("creator-query").value,"Valve");
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].textContent,"Added");
+  const restored = creatorSetup(Object.fromEntries(ctx.storage));
+  restored.get("creators-tab").listeners.click(); await settle();
+  restored.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length,2);
+  assert.equal(restored.get("publisher-groups").children.length,2);
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+});
+
+test("a running developer job blocks publisher additions and can be cancelled after switching back", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,1);
+  assert.equal(ctx.get("publishers-refresh").disabled,true);
+  assert.equal(ctx.get("analyze").disabled,true);
+  assert.equal(ctx.run("window.creatorPane.busy"),true);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  await ctx.get("creators-cancel").listeners.click();
+  assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+});
+
+test("legacy selections migrate by credit role and homepage catalogs are discarded", async () => {
+  const developer = {id:"developer-"+"a".repeat(24),name:"Dev",selector:{kind:"developer",name:"Dev"}};
+  const publisher = {id:"publisher-"+"b".repeat(24),name:"Pub",selector:{kind:"publisher",name:"Pub"}};
+  const homepage = {id:"steam-123",name:"Home",selector:{kind:"homepage",clan_id:"123"}};
+  const saved = {home:"pl",regions:["us"],request:{mode:"catalog"},creators:[developer,publisher,homepage],
+    catalogs:[{id:developer.id,products:[{app_id:"4",name:"Dev game"}],nextStart:25,total:40,hasMore:true},
+      {id:publisher.id,products:[{app_id:"5",name:"Pub game"}],nextStart:25,total:40,hasMore:true},
+      {id:homepage.id,products:[{app_id:"6",name:"Homepage game"}],nextStart:12,total:20,hasMore:true}],results:[]};
+  const ctx = creatorSetup({"polisher-creator-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  const dev = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  const pub = JSON.parse(ctx.storage.get("polisher-publisher-job"));
+  assert.equal(dev.creators.some(c => c.id === developer.id),true);
+  assert.equal(pub.creators.some(c => c.id === publisher.id),true);
+  assert.equal(dev.creators.some(c => c.selector.kind !== "developer"),false);
+  assert.equal(pub.creators.some(c => c.selector.kind !== "publisher"),false);
+  assert.equal(dev.catalogs.find(c => c.id === developer.id).nextStart,25);
+  assert.equal(pub.catalogs.find(c => c.id === publisher.id).nextStart,25);
+  assert.equal(dev.catalogs.some(c => c.id === homepage.id),false);
+});
+
+test("changed publisher defaults replace retired examples while preserving user catalogs", async () => {
+  const retired = {id:"publisher-"+"a".repeat(24),name:"Self publisher",selector:{kind:"publisher",name:"Self publisher"},examples:[{app_id:"9",name:"Old game"}]};
+  const selected = {id:"publisher-"+"b".repeat(24),name:"Selected publisher",selector:{kind:"publisher",name:"Selected publisher"},examples:[]};
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},creators:[retired,selected],
+    catalogs:[{id:selected.id,products:[{app_id:"4",name:"Selected game"}],nextStart:25,total:40,hasMore:true}],results:[]};
+  const ctx = creatorSetup({"polisher-publisher-job":JSON.stringify(saved)},"publisher");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,2);
+  const updated = JSON.parse(ctx.storage.get("polisher-publisher-job"));
+  assert.equal(updated.creators.some(c => c.id === retired.id),false);
+  assert.equal(updated.creators.some(c => c.id === selected.id),true);
+  assert.equal(updated.catalogs.find(c => c.id === selected.id).nextStart,25);
+  assert.deepEqual(updated.featuredIds,["studio"]);
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.app_ids,["1","2","3","4"]);
+  const restored = creatorSetup({"polisher-publisher-job":JSON.stringify(updated)},"publisher");
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+});
+
+test("all twenty catalog selections survive restoration", async () => {
+  const catalogs = Array.from({length:19}, (_,i) => ({id:"developer-"+(i+1).toString(16).padStart(24,"0"),
+    name:"Developer "+i,selector:{kind:"developer",name:"Developer "+i}}));
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},
+    creators:[{id:"studio",name:"Studio",selector:{kind:"developer",name:"Studio"}},...catalogs],catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-groups").children.length,20);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).creators.at(-1).id,catalogs.at(-1).id);
+});
+
+test("three-tab keyboard navigation wraps and supports Home and End", async () => {
+  const ctx = creatorSetup();
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowLeft",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.get("publishers-tab").focused,true);
+  ctx.get("publishers-tab").listeners.keydown({key:"Home",preventDefault(){}});
+  assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("creators-tab").attributes["aria-selected"],"true");
+});
 
 test("default hides unavailable products while retaining technical failures", () => {
   const {get,run} = setup();
@@ -299,4 +706,101 @@ test("price tooltips show standalone provenance for baseline and combined calcul
   assert.equal(homeCell.title, "cached");
   const altSpan = row.children[2].children[0].children[0];
   assert.equal(altSpan.title, "5.00 USD × 4 · live");
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} credits switch between compact text and an aligned column without requests`, async () => {
+  const ctx = creatorSetup(); ctx.get(kind + "s-tab").listeners.click(); await settle();
+  const get = id => ctx.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
+  const group = () => get("creator-groups").children[0];
+  const table = () => group().children[1].children[0].children[0];
+  const row = () => table().children[2].children[0];
+  const credit = kind === "developer" ? "Test publisher, Co-publisher" : "Test developer";
+  const label = kind === "developer" ? "Publisher" : "Developer";
+  assert.equal(row().children[0].children.at(-1).textContent, `${label}: ${credit}`);
+  assert.equal(row().children.length,4);
+  const calls = ctx.calls.length;
+  get("creator-show-credits").checked = true; get("creator-show-credits").listeners.change();
+  assert.equal(row().children.length,5); assert.equal(row().children[1].textContent,credit);
+  assert.equal(row().children[0].children.length,1);
+  assert.equal(table().children[0].children.length,5);
+  assert.equal(table().children[1].children[0].children[1].children[0].children[0].textContent,label.toUpperCase());
+  assert.equal(get("creator-columns-colgroup").children.length,5);
+  assert.equal(get("creator-columns-head").children[0].children.length,5);
+  assert.equal(row().children[3].className,"catalog-foreign-price");
+  assert.equal(ctx.calls.length,calls);
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-show-credits").checked,true);
+  assert.equal(restored.body().children[0].children[1].textContent,credit);
+  get("creator-show-credits").checked = false; get("creator-show-credits").listeners.change();
+  assert.equal(row().children.length,4);
+  assert.equal(row().children[0].children.at(-1).textContent,`${label}: ${credit}`);
+  assert.equal(table().children[0].children.length,4);
+  assert.equal(get("creator-columns-head").children[0].children.length,4);
+});
+
+test("credit columns preserve pending and uncompared price spans", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking…",catalogs:{},items:[skipped("1","app_unavailable")],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  const rows = ctx.body().children;
+  assert.equal(rows[0].children[1].textContent,"Unavailable");
+  assert.equal(rows[1].children[1].textContent,"Loading…");
+  assert.equal(rows[0].children[2].colSpan,3);
+  assert.equal(rows[1].children[2].colSpan,3);
+  assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
+});
+
+test("saved catalog prices without credits refresh once and retain loaded products", async () => {
+  const old = {home:"pl",regions:["us","de"],request:{mode:"featured"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"First"}],nextStart:25,hasMore:true,total:40}],
+    results:[game("1","First")]};
+  delete old.results[0].developers; delete old.results[0].publishers;
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(old)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.find(c => c.path === "/api/creator-jobs").body.app_ids,["1"]);
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.equal(saved.catalogs[0].nextStart,25);
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.calls.filter(c => c.path === "/api/creator-jobs").length,0);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} CSV always includes both credits and only its own checked catalog data`, async () => {
+  const ctx = creatorSetup({}, kind);
+  assert.match(fs.readFileSync("web/index.html", "utf8"), new RegExp(`id="${kind}s-export"[^>]*disabled`));
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-export").disabled, false);
+  ctx.run('downloadCsv = (contents, filename) => {window.exportContents = contents; window.exportFilename = filename;}');
+  ctx.get("creators-export").listeners.click();
+  const csv = ctx.run('window.exportContents');
+  assert.ok(csv.startsWith("\uFEFF"));
+  assert.match(csv, /"catalog_role","catalog_name","developers","publishers"/);
+  assert.match(csv, new RegExp(`"${kind}","Studio","Test developer","Test publisher; Co-publisher"`));
+  assert.match(csv, /"PLN"/); assert.match(csv, /"USD"/);
+  assert.equal(csv.trim().split("\r\n").length, 7); // Three games, two observed prices each.
+  assert.equal(ctx.run('window.exportFilename'), `steam-${kind}s-comparison.csv`);
+  assert.doesNotMatch(csv, /wishlist_profile|token/);
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  ctx.get("creators-export").listeners.click();
+  const withoutTime = text => text.replace(/\d{4}-\d{2}-\d{2}T[^"]+/g, "TIME");
+  assert.equal(withoutTime(ctx.run('window.exportContents')), withoutTime(csv));
+});
+
+test("catalog CSV keeps saved baseline, escaped credits, and uncompared rows", async () => {
+  const item = game("1", "A game"); item.publishers = ['=unsafe, "publisher"'];
+  const saved = {home:"gb",regions:["us"],request:{mode:"products"},rates:[],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"A game"},{app_id:"2",name:"Missing"}],nextStart:0,hasMore:true,total:null}],
+    results:[item,skipped("2","no_regional_price")]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.radios.forEach(el => el.checked = el.value === "pl");
+  ctx.run('downloadCsv = contents => {window.exportContents = contents;}');
+  ctx.get("creators-export").listeners.click();
+  const csv = ctx.run('window.exportContents');
+  assert.match(csv, /"gb","GBP"/);
+  assert.match(csv, /"'=unsafe, ""publisher"""/);
+  assert.match(csv, /"no_regional_price"/);
+  assert.equal(csv.trim().split("\r\n").length, 4);
 });

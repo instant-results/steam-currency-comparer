@@ -54,6 +54,9 @@ class RegionalPriceResult:
     price: StorePrice | None = None
     game_name: str | None = None
     detail: str | None = None
+    is_free: bool | None = None
+    developers: tuple[str, ...] | None = None
+    publishers: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.status is PriceStatus.AVAILABLE and self.price is None:
@@ -74,8 +77,9 @@ class RegionalPriceResult:
         cls,
         game_name: str | None,
         detail: str | None = None,
+        *, is_free: bool | None = None,
     ) -> RegionalPriceResult:
-        return cls(PriceStatus.NO_REGIONAL_PRICE, None, game_name, detail)
+        return cls(PriceStatus.NO_REGIONAL_PRICE, None, game_name, detail, is_free)
 
     @classmethod
     def app_unavailable(

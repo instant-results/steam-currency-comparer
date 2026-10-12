@@ -1,9 +1,11 @@
 # Steam Currency Comparer
 
-**Version: 0.1.0-beta.1** · First beta release in preparation.
+**Version: 0.4.5-beta** · Beta for local use.
 
-Compare the prices of games on your public Steam wishlist across regional Steam
-storefronts. Choose a baseline currency and one or two other storefronts; the app
+[GitHub repository](https://github.com/instant-results/steam-currency-comparer)
+
+Compare the prices of games on your public Steam wishlist, or browse featured
+developer and publisher catalogs, across regional Steam storefronts. Choose a baseline currency and one or two other storefronts; the app
 converts their prices using National Bank of Poland (NBP) exchange rates and shows
 which games cost more or less in your baseline storefront, including current sales.
 
@@ -32,7 +34,22 @@ change over time. No personal Steam profile is used.
   result sorting once results arrive.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
-- Exports loaded results to CSV, with wishlist attribution optional.
+- Exports wishlist, developer, and publisher results to CSV. Catalog exports
+  always include both developer and publisher credits; wishlist attribution is optional.
+- Separate **Developers** and **Publishers** tabs compare featured games without
+  a wishlist. Developers starts with Supergiant Games, CD PROJEKT RED, and
+  Techland. Publishers starts with Devolver Digital (US), THQ Nordic (Austria),
+  and 11 bit studios (Poland). **Load more** expands the products
+  credited to each name in that role, including paid DLC and soundtracks.
+  Free products are hidden after checking.
+- Each catalog's summary shows average and median percentage differences for
+  each comparison currency, sample sizes, and coverage of loaded products.
+  Statistics cover the displayed selection rather than the entire catalog.
+- Each tab searches its own role and offers **Add & compare** for matching names.
+  Developer and publisher selections, results, and catalog positions are saved
+  independently in the same browser tab. Developer/publisher credits appear
+  beneath each game, or in a separate column using **Show publisher column** /
+  **Show developer column**. There is no separate creator category.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -53,8 +70,15 @@ Node.js is only needed for frontend tests, not to run the app.
 ### 1. Get the project
 
 Download the repository using **Code → Download ZIP** on GitHub and extract it,
-or clone it with Git. Open a terminal in the extracted or cloned project folder
-(the folder containing `serve_web.py` and `requirements.txt`).
+or clone it with Git:
+
+```sh
+git clone https://github.com/instant-results/steam-currency-comparer.git
+cd steam-currency-comparer
+```
+
+Open a terminal in the extracted or cloned project folder (the folder containing
+`serve_web.py` and `requirements.txt`).
 
 ### 2. Install and start
 
@@ -114,7 +138,8 @@ installation if the project's dependencies change.
 - **Unavailable products are hidden by default.** Enable **Show unavailable
   products** to reveal them. Technical failures remain visible.
 - **Results are temporary.** Refresh reconnects in the same tab; closing the tab
-  or restarting the server loses job access. Completed results expire after an hour.
+  or restarting the server loses job access. Server results expire after an hour;
+  completed catalog results saved in the tab remain visible until refreshed or closed.
 - **Prices are snapshots.** Regular prices normally refresh after an hour, sale
   prices after 15 minutes, and exchange rates after 24 hours. Stale fallback is
   labeled when available.
@@ -145,8 +170,9 @@ settings that must be supplied as environment variables.
 The web app keeps its price cache and diagnostic logs in `.steam-price-polisher/`
 by default. The cache stores regional prices and exchange rates, not
 profile-to-wishlist links. Logs exclude profiles, API keys, cookies, and job tokens.
-The browser tab stores the current profile and job-access token in session storage;
-private results and profile attribution are held temporarily in server memory.
+The browser tab stores the current profile and job-access token in session storage,
+plus separate developer and publisher results and catalog positions. Private wishlist results and
+profile attribution are held temporarily in server memory.
 
 Steam and NBP receive the requests needed for the comparison, and the browser
 loads game artwork directly from Steam's image CDN. Running locally does not mean
@@ -155,12 +181,41 @@ Keep local data, populated environment files, and credentials out of Git.
 
 ## Versioning
 
-The release version is defined in `steam_price_polisher/version.py` and shown
-in the app header, server startup message, and `/api/health` response.
-`0.1.0-beta.1` identifies the first beta of the 0.1.0 release. Increment the beta
-suffix for later prereleases; use `0.1.0` for the corresponding stable release.
-Update this README and the [changelog](CHANGELOG.md) when changing the version. Git tags and
-GitHub releases are created separately when a release is ready to publish.
+The version is defined in `steam_price_polisher/version.py` and shown in the app
+header, server startup message, and `/api/health` response. The intended first
+stable release is **1.0.0**.
+
+During development toward that release, use **0.MINOR.PATCH-beta**:
+
+- Increment **MINOR** for a substantial new feature and reset PATCH to zero:
+  `0.1.0-beta` → `0.2.0-beta`.
+- Increment **PATCH** for fixes and refinements within the current feature
+  milestone: `0.2.0-beta` → `0.2.1-beta`.
+- Keep the **-beta** suffix while the app is in beta. Do not append an iteration
+  number such as `.1`; version bumps use MINOR or PATCH instead.
+- Use **1.0.0**, without the beta suffix, when the app reaches the intended stable
+  release. After that, use patch versions for fixes, minor versions for compatible
+  features, and major versions for incompatible changes.
+
+The current `0.4.5-beta` closes the developer/publisher feature branch and records
+its next development targets. Upcoming changes are described in the
+[development roadmap](docs/ROADMAP.md).
+It does not imply a planned stable `0.4.0` release. The historical
+`0.1.0-beta.1` version predates this convention and remains unchanged in earlier
+release notes and screenshot captions.
+
+Update this README, the [changelog](CHANGELOG.md), and
+[project context](PROJECT_CONTEXT.md) when changing the version. Git tags,
+GitHub releases, and deployment are separate actions; a version bump or commit
+does not publish the app.
+
+## Planned development
+
+The developer/publisher feature branch is complete for now. Next: unify CSV
+formats between tabs and add compact developer/publisher descriptions beneath
+wishlist game icons/titles. The following stage adds a tab for the user's owned
+Steam library. These are planned features; see the [roadmap](docs/ROADMAP.md)
+for scope and completion criteria.
 
 ## For developers
 
@@ -190,12 +245,14 @@ Frontend checks require Node.js with its built-in test runner:
 ```sh
 node --test tests/test_web_render.cjs
 node --check web/app.js
+node --check web/creators.js
 ```
 
 - [Usage and technical reference](docs/USAGE.md): CLI commands, sale-price handling,
   CSV fields, sorting, caching, diagnostics, and methodology.
 - [Deployment guidance](DEPLOYMENT.md): requirements and limitations for future
   public hosting. The local launcher is not the public deployment entry point.
+- [Development roadmap](docs/ROADMAP.md): next targets and the subsequent owned-library stage.
 - [Current project context](PROJECT_CONTEXT.md) and [collaboration guidance](AGENTS.md).
 - [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
   integration, not an implemented feature.

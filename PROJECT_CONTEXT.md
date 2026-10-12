@@ -1,196 +1,147 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-09-23. This is a current-state summary, not a change log.
+Updated: 2026-10-13. This is a current-state summary, not a change log.
 
 ## Start here
 
-Read AGENTS.md for collaboration preferences and README.md for usage and
-methodology. Inspect Git status and the implementation before changing anything.
-Use Git history for historical details; do not repeat the development history.
-Continue with the user's next request rather than inventing a new feature or
-deploying the app. Local-server lifecycle and network-permission error handling
-have been addressed; see the operational notes below.
+Read AGENTS.md and README.md, then inspect Git status and the implementation.
+Follow the user's next request; do not invent new features or deploy the app.
+Developer and publisher searches/catalogs are implemented as independent tabs
+alongside Your wishlist. No Creator category appears in the UI. This feature
+branch is complete for now; the next targets are in docs/ROADMAP.md.
 
-## Publication preparation
+## Publication and version
 
-README.md is the public-facing introduction and installation guide, with direct
-virtual-environment commands for Windows and macOS/Linux. Detailed existing usage
-and implementation notes are retained in docs/USAGE.md. Documentation explicitly
-labels sample profile identifiers as placeholders. The public display name is Steam Currency Comparer. Existing Python package,
-script names, environment variables, and cache paths retain their original names
-for compatibility.
+Current version: `0.4.5-beta`, defined in `steam_price_polisher/version.py` and
+shown in the header, startup log, and `/api/health`. Follow README.md versioning:
+0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
+The intended first stable release is 1.0.0. Version bumps do not publish the app.
+The source repository is https://github.com/instant-results/steam-currency-comparer.
+No new tag, push, release, or public deployment is authorized.
+Public display name is Steam Currency Comparer; existing package, script,
+environment-variable, API, and cache names retain compatibility.
+README screenshots in docs/images show the 2026-09-23 seven-game example.
 
-Current version: `0.1.0-beta.1`, defined in `steam_price_polisher/version.py`.
-The server renders it into the header and returns it from `/api/health`.
-The first beta is being prepared; no release tag has been created.
-README screenshots live in docs/images/ and show the built-in seven-game live
-example, captured on 2026-09-23 without a personal profile. The title and version
-badge have been checked at desktop and 320/390 CSS-pixel mobile widths. Mobile
-headers put the version badge on its own row. The GitHub repository is
-https://github.com/instant-results/steam-currency-comparer. Source publication
-is separate from hosting the app or creating a tagged GitHub release.
+## Product behavior
 
-## Product and current behavior
-
-A local web app compares public Steam wishlist prices across international storefronts; eventual public hosting
-is intended but has not happened. The interface uses plain, direct, functional language describing
-regional price comparisons and exchange rates. All AI-generated marketing taglines, faux-edgy slogans,
-and dramatic fragment copy have been eliminated in favor of clear technical prose.
-
-- Select a baseline from PLN/Poland, USD/United States, EUR/Germany, NOK/Norway,
-  or GBP/United Kingdom, plus one or two other currencies. The baseline is
-  selected manually, not derived from the Steam profile. Default: PLN vs USD/EUR.
-- The interface presents three numbered steps: wishlist input, currency choices,
-  and comparison results. The Steam profile field and primary/example actions
-  occupy the full-width first row; the currency sidebar is reserved for baseline
-  and comparison choices.
-- The wishlist row selects the initial loading order: personal priority
-  (default, lowest number first), date added (newest first), or name (A-Z).
-  Missing metadata remains stable at the end. Alphabetical order may prefetch
-  baseline details to obtain names, then reuses those lookups without duplicate
-  baseline requests. The selected order persists with refresh and retry.
-- Baseline conflicts temporarily hide comparison selections. Switching to a
-  non-conflicting baseline restores them. Explicit checkbox edits replace the
-  remembered choices. Saved-job restoration restores that run's selections.
-- The welcome caption follows sidebar choices. Existing results retain their
-  own baseline when the user edits the form for a future run.
-- Results append in the selected loading order using stable row elements. Game name,
-  baseline price, absolute difference, and percentage difference can be sorted.
-  Reset sorting restores loading order without restarting or changing filters.
-- Table column headers align horizontally and vertically with row data:
-  "GAME NAME" offsets for the artwork thumbnail slot to align with game titles,
-  the baseline price header aligns with numerical prices, "OTHER STOREFRONTS"
-  and "DIFFERENCE" share the centered primary header baseline, while their
-  secondary conversion and sort labels sit directly beneath without affecting
-  that centering. All headers share uniform typography and prominence.
-- Unavailable products are hidden by default. Uncompared includes missing prices
-  and technical failures, subject to the separate unavailable-products toggle.
-- Each regional price retains its own base price, final price, and discount.
-  Unequal known discounts receive a badge and filter; unknown is not zero.
-- Differences use the cheapest selected alternative in baseline currency.
-  A zero reference makes the percentage unavailable.
-- Price provenance (cached, live, stale) is displayed individually on hover:
-  standalone for the baseline price and alongside the converted price calculation
-  for foreign storefronts.
-- Lazy-loaded Steam header thumbnails have fixed slots and a missing-image
-  fallback. Hovering over either a game's artwork or title shows its Steam App ID.
-- CSV exports all loaded results, regardless of filters, with optional profile
-  attribution off by default. It includes both exchange-rate legs and their
-  publication, retrieval, and check times; tokens are never exported.
-- Start, Cancel, and example actions sit in the full-width wishlist row. Profile,
-  baseline, comparison currencies, and loading order are retained with the saved
-  job in the same tab. Example mode compares a curated
-  7-game wishlist (including The Witcher 3) using live Steam prices and official NBP exchange rates.
+- Your wishlist, Developers, and Publishers are separate keyboard-accessible tabs.
+- Shared sidebar: PLN/Poland, USD/United States, EUR/Germany, NOK/Norway, GBP/UK;
+  any baseline, one or two alternatives. Default PLN versus USD/EUR.
+- Wishlist input has Your Rank, Date Added, and Name loading orders. Alphabetical
+  prefetch learns missing names and reuses baseline prices. Rows append stably;
+  table sorting resets to loading order. Search, filters, unavailable toggle,
+  CSV export with optional profile attribution, retry, and cancellation remain.
+- Developers starts with three games each from Supergiant Games, CD PROJEKT RED,
+  and Techland. Publishers features Devolver Digital (US), THQ Nordic (Austria),
+  and 11 bit studios (Poland), with examples made by different studios.
+  Role defaults are curated independently; see docs/FEATURED_CATALOGS.md.
+- Each role has a Show publisher column / Show developer column checkbox above
+  search. Checked displays opposite-role credits in a separate labeled column;
+  unchecked keeps compact credits beneath each title. The mode persists per tab.
+  Steam appdetails credits share the price cache; old catalog entries/results
+  refresh once to obtain missing credits.
+- Each role has its own Find a developer/publisher form, results, selected names,
+  pagination, rates, job token, and saved session state. Search verifies nonempty
+  regional product catalogs for that role. Add & compare appends a catalog.
+  No homepage catalog or third company role is offered.
+- Load more uses exact-name developer/publisher product credits for both featured
+  and searched names. Paid DLC/soundtracks count; free products are hidden after
+  checking the free flag or zero baseline price. Missing prices alone do not mean free.
+- Up to 20 catalogs per role persist in session storage under polisher-developer-job
+  and polisher-publisher-job. Legacy polisher-creator-job migrates explicit role
+  selections and their matching cursors; homepage catalogs are discarded rather
+  than assigned a role. Legacy active tab creators maps to developer. Session state records featured IDs;
+  changed defaults replace former featured entries and trigger a comparison of
+  the new defaults, preserving user-added catalogs and their cursors.
+- Shared currencies and comparison actions are locked while any comparison runs.
+  Search is still allowed. An unopened role tab waits for the active job to finish;
+  switch back to the owning tab to cancel it. Wishlist state remains independent.
+- Existing comparisons retain their own currencies until Refresh comparisons.
+  A baseline change resets pagination while preserving displayed products.
+- Catalog statistics use equal product weight, unrounded percentage differences,
+  mean, median, sample size, coverage, and cheaper/equal/pricier/uncompared counts.
+  Missing, pending, free, and zero-reference products are excluded as appropriate.
+- One visible heading aligns with all role tables; hidden headings support screen
+  readers. Preserve table/header typography, column alignment, synchronized narrow
+  scrolling, statistics slots, baseline divider, and the Load more arrow styling.
+- Prices retain each region's final/base price and discount; mismatches get a badge
+  and filter. Differences use the cheapest converted alternative. Zero reference
+  makes percentages unavailable. Per-price provenance appears in hover tooltips.
+- Results/rates persist in the browser tab; completed saved comparisons can outlive
+  server jobs. Refresh explicitly requests new checks. Catalog tabs also export checked products, with catalog role/name and both
+  developer/publisher credits independent of their display checkbox. CSV uses
+  one row per observed storefront and repeats products for each catalog membership.
 
 ## Architecture and constraints
 
-Python WSGI backend, vanilla HTML/CSS/JavaScript frontend; no frontend build step.
+Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
+- serve_web.py: exclusive loopback preview, default port 8765, duplicate rejection,
+  interrupt/termination and parent-exit cleanup. Verify listener and health before
+  reusing/restarting. Keep the launching session alive.
+- web_app.py: same-origin validation, private bounded jobs, one paced worker.
+  Three starts per owner/minute, one active job per owner, jobs expire after one hour.
+- creators.py: legacy featured registry and role-specific public registry entries,
+  exact-credit catalog parser/cache, anonymous name discovery. Internal Creator
+  classes and old routes remain compatible; the frontend does not expose that role.
+- GET /api/creators returns developers/publishers plus legacy creators.
+  POST /api/creators/search takes query/home/role (developer or publisher), uses
+  Steam SearchSuggestions internally to discover canonical names, and verifies
+  only the requested role's product search. Legacy role-less requests remain supported.
+- Search cache: 128 queries, ten minutes, keyed by term/region/role. Separate role
+  verification page cache: six hours, 128 pages. Search rejects failed/stale checks.
+- POST /api/creator-jobs retains featured/catalog/products modes and validated
+  selectors. New tab initialization compares only that role's curated app IDs
+  using products mode. Expansion uses the role selector. Existing result/cancel
+  routes use private tokens. Legacy homepage jobs still supported internally.
+- Steam search can ignore count=12 and return 25 entries; start=12 may repeat page
+  zero. Parser bounds search pages to 50 rows and advances through returned slots,
+  including skipped bundles/packages. No upstream HTML/scripts are forwarded.
+- Price cache schema 6 includes free-product and developer/publisher credit metadata; regular prices refresh after
+  one hour, known sale prices after 15 minutes, rates after 24 hours. Stale fallback
+  is labeled. Catalog cache six hours, bounded and keyed by identity/region/cursor.
+- NBP quotes PLN per currency unit. Convert A to B using rate[A]/rate[B], PLN=1;
+  retain both dates and cache provenance. Germany is the EUR storefront proxy.
+- HTTP/request policy modules handle verified TLS, retries, and pacing at 1.5 seconds.
+  Local network denial is non-retryable, stops jobs, and never hides behind stale
+  fallback. Run live previews with outbound access to Steam and NBP.
+- Local diagnostics: data-dir/logs/events-PID.jsonl, 2 MiB rotation and three backups.
+  Safe structured events exclude profiles, keys, cookies, and job tokens.
+- See docs/USAGE.md for usage/methodology/lifecycle, DEPLOYMENT.md before hosting,
+  docs/STEAM_CREATOR_SEARCH.md for catalog API evidence and compatibility limits.
 
-- serve_web.py: loopback preview on port 8765.
-- steam_price_polisher/web_app.py: validated API, private bounded jobs, worker,
-  result metadata, and cross rates.
-- web/app.js, web/index.html, web/app.css: UI state, rendering, CSV, and styling.
-- configuration.py: five storefront/currency pairs and selection validation.
-- analysis.py, comparison.py: per-game workflow and pure comparison arithmetic.
-- steam_access.py, price_service.py: Steam retrieval and price-cache handling.
-- exchange_rates.py, cache.py: NBP rates and SQLite persistence.
-- request_policy.py, http_client.py: pacing, retries, and secure HTTP.
-- event_log.py: structured local diagnostics, rotation, job correlation, and safe metadata.
-- steam_wishlist_compare.py: CLI, still using Poland as baseline.
-- DEPLOYMENT.md: hosting guidance; consult before any deployment work.
-- docs/STEAM_SORTED_WISHLIST_API.md: implementation-ready research handoff for
-  Steam's richer sorted/filtered wishlist service and additional loading orders.
+## Verification and open work
 
-NBP quotes PLN per unit. Convert A to baseline B using rate[A] / rate[B],
-with PLN = 1. Preserve both source dates and cache provenance. Regional sale
-metadata comes with the price response; inspecting discounts costs no extra
-price request. Do not infer other regions' discounts from the baseline.
+Latest checks: 128 Python tests and 47 frontend tests, plus JS syntax/diff checks.
+New checks cover role-only search/cache keys, featured role registry selectors,
+separate tab state/restoration, cross-tab worker locking, legacy migration, and
+three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
+independent saved groups, restored legacy prices, and desktop/390px layouts with
+no console errors. Preview port: 8765; verify the listener and /api/health version
+before reuse. An already running process may serve an older release.
+Live v0.4.4 QA verified compact/column modes, exact header/cell
+alignment, saved tab preferences, and synchronized scrolling at 390px with no
+console errors. Minimal DOM tests require complementary browser QA.
 
-One background worker paces sequential Steam requests, using cached results.
-Web prices normally expire after one hour, known sales after 15 minutes, and
-exchange rates after 24 hours; labeled stale fallback is possible. Missing
-baseline prices can skip alternative requests. Web wishlists are public-only,
-up to 1,000 games. Jobs expire and are lost on server restart; cached prices remain.
+Next targets (planned, not implemented; see [docs/ROADMAP.md](docs/ROADMAP.md)):
 
-Keep cache files, local wishlists, cookies, and keys out of Git. The web app does
-not use CLI cookies or local wishlist files. HTTPS verification must remain enabled.
+1. Unify CSV schema/format across Wishlist, Developers, and Publishers. The price
+   serializer is already shared, but wishlist exports lack catalog credit fields.
+2. Add compact developer/publisher descriptions beneath wishlist game icons/titles,
+   reusing appdetails credits and price caching while preserving table alignment.
+3. In the following stage, add a separate tab for the user's owned Steam library;
+   verify retrieval, credentials, and privacy constraints before implementation.
 
-## Local server lifecycle and network access
+The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
+Potential TODO: a local searchable developer/publisher directory with aliases,
+ranking, and source/refresh planning. Deferred at the user's request; no crawler
+or persistent company index is included.
 
-The preview binds exclusively on Windows and rejects duplicate listeners,
-including legacy servers using address reuse. It handles interrupt/termination
-signals, checks the original parent process for exit, and closes the listener
-through context-manager cleanup. Slow HTTP clients run on daemon request threads.
-Keep the launching terminal alive; use the WSGI factory for managed deployments.
-`--port` selects a loopback port (0 requests an available temporary port).
+## Git state
 
-Follow README.md checks before and after starts/restarts. Repeatable subprocess tests cover shutdown,
-parent exit, duplicate launches, and immediate reuse of the released port.
-
-Launch live previews with outbound network access. OS socket permission denial
-(including Windows 10013) becomes a non-retryable `network_access_denied` error,
-with sanitized guidance to restart with outbound access. This propagates through
-wishlist/vanity lookup, regional prices, and exchange rates. Permission denial
-stops the job, including alphabetical prefetch; stale rates do not conceal it.
-HTTP 403, TLS errors, and local file permission errors remain distinct.
-
-## Wishlist API research handoff
-
-Steam's current `IWishlistService/GetWishlistSortedFiltered/v1` can return the
-complete wishlist in a requested Steam sort order while enriching a selected
-range with Store Browse name, release, and review data. This could add Release
-Date, Top Selling, and Review Score loading orders and remove alphabetical name
-prefetching. The historical `/wishlistdata/?p=...` fallback redirected to the
-store homepage during anonymous verification and must not be treated as a
-working rich-data contract. No integration has been implemented. See
-`docs/STEAM_SORTED_WISHLIST_API.md` for the observed schema, risks, decisions,
-file map, tests, and acceptance criteria.
-
-## Diagnostic logging
-
-The preview and WSGI factory configure a dedicated event logger. Per-process
-JSON Lines files live under the data directory's `logs/events-<PID>.jsonl`, with
-2 MiB rotation and three backups per process. Old process logs remain until
-removed. Git ignores event files, including rotations. INFO covers lifecycle
-and failures; `STEAM_PRICE_POLISHER_LOG_LEVEL=DEBUG` adds request successes and
-cache provenance to files while console output stays at INFO.
-
-Context-local job IDs connect lifecycle, request, and cache events across worker
-execution. Only allowlisted metadata is recorded: no credentials, profiles,
-game lists/prices, request URLs/headers/bodies, raw exception text, or local
-absolute paths. Unexpected failures include type and project code location.
-File logging failures fall back to console diagnostics without stopping jobs.
-See README.md for usage. The CLI does not automatically configure file logging.
-
-## Run and verify
-
-From the repository root:
-
-```powershell
-python -m unittest discover -q
-node --test tests/test_web_render.cjs
-node --check web/app.js
-git diff --check
-```
-
-After verifying that port 8765 is clear, start the preview separately with
-`python serve_web.py`, then confirm http://127.0.0.1:8765/api/health. Static
-changes need a browser refresh; backend changes need a verified clean restart,
-which clears in-memory jobs. Avoid triggering full live wishlists for routine
-tests.
-
-Last verified: 99 Python tests and 20 frontend tests, all passing. Tests cover
-configuration combinations, cross rates, API validation, caching/failures,
-render stability, wishlist loading order, filtering/sorting, CSV, thumbnails,
-and selection restoration.
-Frontend tests use a minimal DOM harness; they do not establish browser visual
-correctness. Use targeted UI verification when needed.
-
-## Git handoff
-
-The integration branch is `main`. Structured logging implementation, regression
-tests, and documentation are versioned in separate commits. Use Git history
-for commit details.
-
-Inspect actual Git status rather than relying on this snapshot. Follow AGENTS.md
-for reminders and separate feature/test commits when committing authorized work.
+Working branch: codex/developer-publisher-catalogs. Developer/publisher feature
+work through v0.4.4 is committed in separate implementation, test, and
+documentation commits. The v0.4.5 version/roadmap handoff is committed separately.
+The feature branch is complete for now; follow the user's
+next request before starting more implementation. No merge, push, tag, release,
+or deployment is authorized. Keep runtime data, caches, screenshots, local
+wishlist files, secrets, and populated environment files out of Git.

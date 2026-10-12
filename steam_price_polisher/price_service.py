@@ -42,6 +42,7 @@ class CachedPriceService:
         use_stale_on_error: bool = True,
         require_sale_metadata: bool = False,
         sale_ttl: float = 15 * 60,
+        require_credits: bool = False,
     ) -> None:
         self._live_provider = live_provider
         self._cache = cache
@@ -52,6 +53,7 @@ class CachedPriceService:
         self._use_stale_on_error = use_stale_on_error
         self._require_sale_metadata = require_sale_metadata
         self._sale_ttl = sale_ttl
+        self._require_credits = require_credits
 
     def get_regional_price(
         self,
@@ -69,6 +71,13 @@ class CachedPriceService:
             price = cached.result.price
             metadata_missing = self._require_sale_metadata and price is not None and (
                 price.base_amount is None or price.discount_percent is None
+            )
+            # Old missing-price cache entries cannot distinguish free products.
+            metadata_missing |= self._require_sale_metadata and (
+                cached.result.status is PriceStatus.NO_REGIONAL_PRICE and cached.result.is_free is None
+            )
+            metadata_missing |= self._require_credits and cached.result.status is not PriceStatus.APP_UNAVAILABLE and (
+                cached.result.developers is None or cached.result.publishers is None
             )
             if price is not None and price.discount_percent and price.discount_percent > 0:
                 ttl = min(ttl, self._sale_ttl)

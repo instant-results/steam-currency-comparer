@@ -35,7 +35,111 @@ retry within the browser tab.
 For eventual public hosting, see [DEPLOYMENT.md](../DEPLOYMENT.md). The WSGI service
 includes bounded background jobs, input checks, same-origin POST protection,
 private result tokens, and a persistent price cache. Deploy it as one Python
-process behind HTTPS; this local version has not been published.
+process behind HTTPS. The source is published on GitHub; the app has not been
+deployed as a public service.
+
+## Developer and publisher catalogs
+
+Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
+with three selected games each from Supergiant Games, CD PROJEKT RED, and Techland.
+Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios
+(Poland), with examples developed by other studios. See [featured catalogs](FEATURED_CATALOGS.md)
+for the selected games and verification sources. Each tab compares its starting games
+using the sidebar's baseline and comparison currencies.
+Names and artwork appear immediately; prices and differences fill in as requests
+complete. **Load more** expands products whose Steam store pages credit that
+exact name as developer or publisher, depending on the tab. Catalogs include
+paid DLC, soundtracks, and other products. Free products, including demos, are
+removed after checking; missing regional prices alone do not imply free.
+
+Steam can return its default 25-entry search page despite the requested 12 entries.
+Pagination advances through every returned slot, including skipped packages and
+bundles. Already displayed examples are not duplicated, and Load more disappears
+at the end. Free-only pages still advance; use Load more again to continue.
+
+Use **Find a developer** or **Find a publisher** in the corresponding tab.
+Only names with matching products for that role in the baseline region are
+returned. **Add & compare** appends that catalog beside the featured entries.
+There is no Creator role or homepage-catalog button. Steam homepage suggestions
+are used internally to discover possible names, then their product credits are checked.
+Use the full credited name: spelling, regional availability, and Steam filters
+can affect coverage. Searches take names, not pasted URLs, and need no Steam login
+or API key. Discovery uses a ten-minute bounded cache with six-hour role-page caching;
+searching alone does not fetch regional prices.
+
+The two catalog tabs keep independent results, selections, catalog positions,
+and searches when switching tabs. Completed comparisons and selected catalogs
+survive reload in the same browser tab. Up to 20 catalogs can appear per role.
+When defaults change, former featured entries are replaced while user-added
+catalogs and their pagination remain. New defaults are compared automatically.
+Older combined-tab selections migrate only when they carry an explicit developer
+or publisher selector; old homepage catalogs are not assigned a role.
+New entries use the Steam-logo fallback. Existing results retain their comparison
+currencies until **Refresh comparisons** applies the sidebar choices.
+
+Search remains available during comparisons, while adding, refreshing, and
+expanding catalogs wait for the active comparison to finish or be cancelled.
+Return to the tab running the comparison to cancel it. All three tabs share the
+paced worker and price cache. See the [search implementation notes](STEAM_CREATOR_SEARCH.md).
+
+The footer labels the initial curated selection as **featured games**. That label
+disappears once the catalog expands, including after changing the baseline or
+restoring saved results. Expanded footers show the loaded product count and,
+when available, Steam's catalog total. The total may include free products that
+are excluded from the displayed list.
+
+Each developer's or publisher's icon and name sit above its games, beside an average percentage
+difference for each selected foreign storefront. Each compared, loaded product
+has equal weight: `(baseline price - converted foreign price) / converted foreign
+price * 100`. The mean uses unrounded differences; negative means cheaper in the
+baseline, positive means pricier. Missing, pending, free, and zero-reference
+products do not contribute. Each average shows its own sample count. Below each
+average, the median shows the middle product difference after sorting; with an
+even sample size it averages the two middle differences. Both use the same sample
+and unrounded calculations.
+The header also reports comparison coverage and cheaper/equal, pricier, uncompared,
+and pending counts. Cheaper/equal means the baseline price is no higher than every
+selected converted foreign price. These statistics describe loaded products only,
+including paid DLC and soundtracks; they do not summarize the entire Steam catalog.
+Statistics use existing comparison results without additional requests, update
+when more products load, and retain the results' currencies until refreshed.
+
+One shared column-heading row sits above all creators. Desktop statistics align
+with the corresponding foreign-price columns. A 1px divider separates baseline
+and foreign prices at the middle of each game row, above the expansion arrow's
+midpoint. It extends through newly appended rows, including rows awaiting prices,
+and ends at 80% of the final row's height; that row has no bottom horizontal rule.
+Narrow screens stack statistics above tables with synchronized horizontal scrolling.
+The arrow is shallow, has a flat top and no visible border, and fades most strongly
+at its top center; its white label remains accessible to keyboard and screen-reader
+users. The introduction keeps the free-product note, progress status, and statistics
+explanation with consistent text sizing. The exclusion note sits on its own line.
+Currency choices appear in the shared sidebar, numbered **01 / CURRENCIES** in
+this tab and **02 / CURRENCIES** in the wishlist tab.
+
+Currency selections are shared between tabs. Existing results keep the currencies
+used for that comparison; **Refresh comparisons** applies the current sidebar
+choices to all displayed creator products, including expanded pages. Changing the
+baseline restarts catalog pagination to avoid skipping region-specific entries. Use it to
+retry incomplete prices after cancellation or a request failure. It reuses fresh
+cached prices, so refreshing does not force a new Steam request for every price.
+Only one comparison can run per connection; creator examples wait for an active
+wishlist comparison, and both use the same paced background worker.
+
+Wishlist and creator results remain separate. The active tab, creator results,
+catalog position, and job access token are saved in the same tab's session storage
+to survive refresh. Server jobs still expire after an hour or disappear on restart;
+completed creator results saved in the tab can remain visible until refreshed.
+Prices and NBP rates use the existing shared SQLite cache. Creator catalog pages
+are cached in server memory for six hours (up to 128 pages); a failed refresh can
+use a labeled stale catalog, except when network access is denied.
+
+Icons come from Steam's avatar CDN, with the bundled official Steam logo as a
+fallback. Game artwork continues to use Steam's image CDN. Catalog integration
+uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
+it is not a documented Steamworks API contract. Malformed pages fail visibly
+instead of executing or forwarding Steam HTML. Each catalog tab has a CSV
+download below its catalog list. The CLI does not provide creator browsing.
 
 ## Run the command-line prototype
 
@@ -80,7 +184,9 @@ python .\steam_wishlist_compare.py https://steamcommunity.com/id/example
 
 The key is not written to the cache or repository. When it is absent, the tool
 explains that vanity resolution was skipped and still tries the legacy wishlist
-endpoint. You can always use a numeric SteamID64 instead.
+endpoint. That fallback is not a reliable workaround: the 2026-09-12 research
+probe received a store-homepage redirect instead of wishlist JSON. Prefer a
+numeric SteamID64 when vanity resolution is not configured.
 
 Do not commit a populated `.env` file. The project does not automatically load
 `.env`; `.env.example` only documents the supported variables.
@@ -242,13 +348,24 @@ filters. A running comparison exports only its completed results so far. There
 is one row per game/storefront and one row for each uncompared game. Wishlist
 profile attribution is optional and off by default; access tokens are never exported.
 
+Developer and publisher tabs export all checked, non-free products in their
+selected catalogs, including uncompared products. Both `developers` and
+`publishers` columns are always included, regardless of the display checkbox;
+multiple names are separated by semicolons, and unavailable credits are blank.
+`catalog_role` and `catalog_name` identify membership. A product belonging to
+several selected catalogs has separate rows for each catalog. Unchecked pending
+products are omitted during a comparison. Catalog exports retain the currency
+choices of their own results and contain no wishlist profile or job credentials.
+
 The UTF-8 CSV includes original/base/final prices, discounts, prices converted to the baseline currency,
 absolute and percentage differences, and exchange-rate provenance. NBP publication
 date, original successful retrieval time, and the comparison's rate-check time
 are separate fields. Timestamps use UTC. A cache check does not imply a new NBP
 request. Older in-memory results without timestamps export blank fields; run a
 new comparison after restarting the server to obtain them. PLN identity conversion
-has no NBP timestamps. Example exports are marked as illustrative data.
+has no NBP timestamps. Example exports carry an `example_data` flag identifying the
+curated game selection; their prices and exchange rates come from the same live
+and cached sources as normal comparisons.
 
 CSV is intended for spreadsheets and analysis; numeric values use decimal points.
 Untrusted text starting with spreadsheet formula characters is prefixed with an
@@ -311,9 +428,27 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Continuing development
 
+The developer/publisher feature branch is complete for now. Follow the ordered
+[development roadmap](ROADMAP.md): first unify CSV formats and add compact
+wishlist developer/publisher descriptions, then add an owned-library tab.
+These targets are not yet implemented. The current CSV formats still differ in
+credit/membership columns, and compact credit descriptions currently appear
+only on the Developers and Publishers tabs.
+
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
 handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
 Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is
 the detailed change history. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
 changing wishlist retrieval or adding Steam-compatible loading orders.
+
+### Other product credits
+
+The Developers tab shows publishers, and the Publishers tab shows developers.
+By default, credits appear as small text below each product title. Check
+**Show publisher column** / **Show developer column** above search to move the
+credits into a separate labeled column. All reported names appear, including
+co-publishers. Each tab remembers its display mode;
+missing credits are labeled Unavailable. Credits come from the same Steam
+appdetails response as prices and are cached with them. Older saved catalog
+comparisons refresh once to obtain credits.
