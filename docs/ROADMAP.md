@@ -4,10 +4,10 @@ Updated: 2026-10-13. Completed work is marked below; remaining targets are plann
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
-The developer/publisher feature branch is complete. The export and wishlist-credit
-stage is underway, with remaining work ordered below.
+The developer/publisher feature branch and the export/wishlist-credit stage are
+complete. The next stage is the user's owned library.
 
-## Next stage: consistent exports and wishlist credits
+## Completed stage: consistent exports and wishlist credits
 
 ### Unify CSV formats between tabs
 
@@ -32,6 +32,10 @@ headers, credits, missing values, attribution, and comparison currencies.
 
 ### Add compact developer/publisher descriptions to wishlist rows
 
+Completed in `0.4.7-beta` on `codex/unified-csv-exports`. Wishlist rows show
+both credit lists using the catalog text styling. Regression checks and desktop/
+390px browser QA cover multiple/missing names, stable rows, and table alignment.
+
 - Show developer and publisher credit labels beneath each game's icon/title in
   Your wishlist, using the small, unobtrusive presentation from the catalog tabs.
 - Reuse Steam appdetails credits and the existing price cache; show all reported
@@ -43,7 +47,7 @@ Done when wishlist rows show both credits with the existing compact styling,
 including the built-in example and restored comparisons, without disturbing
 price columns or issuing requests merely to change the display.
 
-## Following stage: the user's owned library
+## Next stage: the user's owned library
 
 - Add an Owned library tab alongside Your wishlist, Developers, and Publishers
   to compare the games the user owns on Steam.

@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.6-beta** · Beta for local use.
+**Version: 0.4.7-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -37,6 +37,8 @@ change over time. No personal Steam profile is used.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.
+- Wishlist rows show compact Developer and Publisher credits beneath each game's
+  artwork/title, including all reported names and labels for unavailable metadata.
 - Separate **Developers** and **Publishers** tabs compare featured games without
   a wishlist. Developers starts with Supergiant Games, CD PROJEKT RED, and
   Techland. Publishers starts with Devolver Digital (US), THQ Nordic (Austria),
@@ -198,7 +200,8 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.6-beta` unifies and expands CSV exports across all three tabs.
+The current `0.4.7-beta` adds compact developer/publisher credits to wishlist rows,
+using the same metadata already included in the unified CSV exports.
 Upcoming changes are described in the
 [development roadmap](docs/ROADMAP.md).
 It does not imply a planned stable `0.4.0` release. The historical
@@ -212,9 +215,9 @@ does not publish the app.
 
 ## Planned development
 
-CSV formats are unified across tabs. Next: add compact developer/publisher descriptions
-beneath wishlist game icons/titles. The following stage adds a tab for the user's owned
-Steam library. These are planned features; see the [roadmap](docs/ROADMAP.md)
+CSV formats are unified across tabs, and wishlist rows show both product credits.
+The next stage adds a tab for the user's owned Steam library. This is a planned
+feature; see the [roadmap](docs/ROADMAP.md)
 for scope and completion criteria.
 
 ## For developers
@@ -253,6 +256,8 @@ node --check web/creators.js
 - [Deployment guidance](DEPLOYMENT.md): requirements and limitations for future
   public hosting. The local launcher is not the public deployment entry point.
 - [Development roadmap](docs/ROADMAP.md): next targets and the subsequent owned-library stage.
+- [Text and localization decisions](docs/TEXT_AND_LOCALIZATION.md): wording,
+  credit alignment, and boundaries for future translations.
 - [Current project context](PROJECT_CONTEXT.md) and [collaboration guidance](AGENTS.md).
 - [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
   integration, not an implemented feature.

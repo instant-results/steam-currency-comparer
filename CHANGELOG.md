@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.7-beta — 2026-10-13
+
+- Show compact Developer and Publisher lines beneath the artwork/title in
+  wishlist rows, including all reported names and missing-metadata labels.
+- Align both credit-name lists in a shared fluid grid. Record wording, typography,
+  and future translation boundaries in docs/TEXT_AND_LOCALIZATION.md.
+- Reuse catalog credit typography and cached appdetails metadata without extra
+  requests to display credits. Preserve table columns, sorting, filters, artwork,
+  and the unified CSV; catalog credit-column modes retain their own behavior.
+
 ## 0.4.6-beta — 2026-10-13
 
 - Use one fixed, versioned CSV schema for Wishlist, Developers, and Publishers,
