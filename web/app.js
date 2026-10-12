@@ -257,32 +257,65 @@ function csvCell(value) {
   if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
   return '"' + text.replaceAll('"', '""') + '"';
 }
+// Schema 1 is fixed across all tabs, including exports with no results or owner opt-in.
+// Keep the original price columns first so existing column names remain usable.
+const priceCsvHeaders = Object.freeze([
+  "exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency",
+  "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date",
+  "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status",
+  "final_price_baseline", "baseline_difference", "baseline_difference_percent",
+  "different_regional_discounts", "price_provenance", "baseline_storefront", "baseline_currency",
+  "rate_to_baseline", "baseline_rate_to_pln", "baseline_rate_publication_date",
+  "baseline_rate_retrieved_at_utc", "baseline_rate_checked_at_utc", "baseline_rate_cache_status",
+  "wishlist_profile", "catalog_role", "catalog_name", "developers", "publishers",
+  "csv_schema_version", "source_tab", "catalog_id", "steam_url", "comparison_storefronts",
+  "comparison_currencies", "wishlist_loading_order", "checked_index", "baseline_final_price",
+  "cheapest_alternative_storefront", "cheapest_alternative_currency",
+  "cheapest_alternative_final_price_baseline", "baseline_is_cheaper_or_equal",
+  "storefront_difference_baseline", "storefront_difference_percent", "base_price_baseline",
+  "storefront_price_source", "baseline_rate_source", "skipped_reason", "skipped_storefront",
+  "skipped_retryable", "cache_hits", "stale_cache_hits", "live_price_requests",
+  "developers_known", "publishers_known"
+]);
 function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
   const baseline = () => storefronts[home];
-  const {example = false, includeOwner = false, profile = null, extraColumns = []} = options;
-  const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_baseline", "baseline_difference", "baseline_difference_percent", "different_regional_discounts", "price_provenance", "baseline_storefront", "baseline_currency", "rate_to_baseline", "baseline_rate_to_pln", "baseline_rate_publication_date", "baseline_rate_retrieved_at_utc", "baseline_rate_checked_at_utc", "baseline_rate_cache_status"];
-  if (includeOwner) headers.push("wishlist_profile");
-  headers.push(...extraColumns.map(column => column.name));
-  const rows = [headers];
+  const {example = false, includeOwner = false, profile = null, sourceTab = "wishlist", regions = [], order = null} = options;
+  const homeIdentity = baseline().currency === "PLN";
+  const homeRate = homeIdentity ? {} : rates.find(value => value.currency === baseline().currency) || {};
+  const rows = [priceCsvHeaders];
   for (const item of exportItems) {
     const c = item.comparison;
     const prices = c ? [{...c.home_price, region:home, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    const cheapest = c ? c.alternatives.reduce((best, price) => price.amount_in_home < best.amount_in_home ? price : best) : null;
+    const reference = cheapest?.amount_in_home;
+    const comparisonRegions = c ? c.alternatives.map(price => price.region) : regions;
     for (const price of prices) {
-      const rate = rates.find(value => value.currency === price.currency) || {};
       const identity = price.currency === "PLN";
-      const reference = c ? Math.min(...c.alternatives.map(value => value.amount_in_home)) : null;
+      const rate = identity ? {} : rates.find(value => value.currency === price.currency) || {};
+      const factor = c ? (price.region === home ? 1 : price.rate_to_home) : null;
+      const foreign = c && price.region !== home;
       const row = [exportedAt, example, item.app_id, item.name, c ? "compared" : item.skipped?.category,
         price.region, price.currency, price.original_amount, price.base_amount, price.discount_percent,
         identity ? 1 : rate.rate_to_pln, rate.effective_date, rate.retrieved_at_utc, rate.checked_at_utc,
         identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
         price.amount_in_home, c ? c.home_price.amount - reference : null, c ? percentageDifference(c) : null,
         c ? hasDifferentDiscounts(c) : null, item.source_summary];
-      const homeRate = rates.find(value => value.currency === baseline().currency) || {};
-      row.push(home, baseline().currency, c ? (price.region === home ? 1 : price.rate_to_home) : null,
-        baseline().currency === "PLN" ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
-        homeRate.retrieved_at_utc, homeRate.checked_at_utc, baseline().currency === "PLN" ? "identity" : homeRate.cache_status);
-      if (includeOwner) row.push(profile);
-      row.push(...extraColumns.map(column => column.value(item)));
+      row.push(home, baseline().currency, factor,
+        homeIdentity ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
+        homeRate.retrieved_at_utc, homeRate.checked_at_utc, homeIdentity ? "identity" : homeRate.cache_status,
+        sourceTab === "wishlist" && includeOwner ? profile : null,
+        item.catalog_role, item.catalog_name, (item.developers || []).join("; "), (item.publishers || []).join("; "),
+        1, sourceTab, item.catalog_id, `https://store.steampowered.com/app/${item.app_id}/`,
+        comparisonRegions.join("; "), comparisonRegions.map(region => storefronts[region].currency).join("; "),
+        sourceTab === "wishlist" ? order : null, item.index, c?.home_price.amount,
+        cheapest?.region, cheapest?.currency, reference, c?.is_fair,
+        foreign ? c.home_price.amount - price.amount_in_home : null,
+        foreign && price.amount_in_home > 0 ? (c.home_price.amount - price.amount_in_home) / price.amount_in_home * 100 : null,
+        price.base_amount != null && factor != null ? price.base_amount * factor : null,
+        price.source, homeIdentity ? "Identity conversion" : homeRate.source,
+        item.skipped?.reason, item.skipped?.region, item.skipped?.retryable,
+        item.cache_hits, item.stale_cache_hits, item.live_requests,
+        Array.isArray(item.developers), Array.isArray(item.publishers));
       rows.push(row);
     }
   }
@@ -290,7 +323,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
 }
 function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
   return buildPriceCsv(items, resultHome, currentRates,
-    {example: demoMode, includeOwner, profile: currentProfile}, exportedAt);
+    {example: demoMode, includeOwner, profile: currentProfile, regions: lastRequest?.regions || [], order: lastRequest?.order || null}, exportedAt);
 }
 function downloadCsv(contents, filename) {
   const url = URL.createObjectURL(new Blob([contents], {type:"text/csv;charset=utf-8"}));
