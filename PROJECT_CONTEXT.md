@@ -8,12 +8,12 @@ Read AGENTS.md and README.md, then inspect Git status and the implementation.
 Follow the user's next request; do not invent new features or deploy the app.
 Developer and publisher searches/catalogs are implemented as independent tabs
 alongside Your wishlist. No Creator category appears in the UI. This feature
-branch is complete. CSV unification is implemented on codex/unified-csv-exports;
-the remaining targets are in docs/ROADMAP.md.
+branch is complete. CSV unification and compact wishlist credits are implemented
+on codex/unified-csv-exports; the next target is in docs/ROADMAP.md.
 
 ## Publication and version
 
-Current version: `0.4.6-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.7-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -34,6 +34,15 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   CSV export with optional profile attribution, retry, and cancellation remain.
   Wishlist comparisons now also require cached developer/publisher credits;
   older cache entries refresh once during comparison, without export-time requests.
+  Rows show both compact Developer and Publisher lines beneath the artwork/title,
+  using catalog credit styling. All reported names appear; missing or empty lists
+  show Unavailable, pending rows show Loading…. Older completed jobs may retain
+  missing credits until another comparison. Rendering adds no requests.
+  Labels/names use a shared fluid grid so both role names align and wrap in their
+  own column. Consult docs/TEXT_AND_LOCALIZATION.md for wording, alignment, and
+  future translation decisions; update it when changing those decisions.
+  Live browser QA of restored example results verified equal name-column starts,
+  long-name wrapping, and bounded page width at 390 CSS pixels, with no errors.
 - Developers starts with three games each from Supergiant Games, CD PROJEKT RED,
   and Techland. Publishers features Devolver Digital (US), THQ Nordic (Austria),
   and 11 bit studios (Poland), with examples made by different studios.
@@ -117,11 +126,17 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 
 ## Verification and open work
 
-Latest checks: 129 Python tests and 51 frontend tests, plus JS syntax/diff checks.
+Latest full backend suite: 129 Python tests. Latest frontend suite: 53 tests,
+plus JS syntax/diff and release-version checks. Wishlist credit checks cover both
+roles, multiple/missing names, pending/skipped/older results, safe text, stable
+rows, filtering/sorting, and unchanged CSV. Browser QA used a local sample-price
+fixture at desktop/390px: credits wrap below artwork/title, header/cell columns
+align, page width stays bounded, and there are no console errors. Fixture assets
+and screenshots remain ignored under .steam-price-polisher/qa/wishlist-credits.
 CSV checks cover identical headers across tabs and attribution settings, enriched
 wishlist cache reuse, mixed provenance, both conversion legs, escaping/missing values,
-zero references, overlapping catalog membership, and partial exports. This export
-change was verified offline; no new live browser QA or network comparison was run.
+zero references, overlapping catalog membership, and partial exports. CSV and
+wishlist-credit changes were verified without new live price comparisons.
 New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
@@ -134,9 +149,7 @@ console errors. Minimal DOM tests require complementary browser QA.
 
 Next targets (planned, not implemented; see [docs/ROADMAP.md](docs/ROADMAP.md)):
 
-1. Add compact developer/publisher descriptions beneath wishlist game icons/titles,
-   reusing appdetails credits and price caching while preserving table alignment.
-2. In the following stage, add a separate tab for the user's owned Steam library;
+1. Add a separate tab for the user's owned Steam library;
    verify retrieval, credentials, and privacy constraints before implementation.
 
 The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
@@ -148,7 +161,10 @@ or persistent company index is included.
 
 Working branch: codex/unified-csv-exports, created from main for CSV unification.
 The implementation, tests, and documentation for v0.4.6 are versioned in separate
-coherent commits, as authorized by the user. No push is authorized.
+coherent commits. The v0.4.7 wishlist-credit changes are committed with separate
+implementation, test, and documentation commits. docs/TEXT_AND_LOCALIZATION.md
+has its own commit, as requested by the user.
+No push is authorized.
 main is the repository's primary branch; there is no master branch.
 The completed codex/developer-publisher-catalogs branch is merged locally into
 main with a merge commit. Implementation, test, and documentation commits remain

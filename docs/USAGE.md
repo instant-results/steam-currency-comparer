@@ -473,10 +473,9 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Continuing development
 
-CSV formats are unified across all three tabs. Follow the ordered
-[development roadmap](ROADMAP.md): next add compact wishlist developer/publisher
-descriptions, then add an owned-library tab. Those targets are not yet implemented;
-compact credit descriptions currently appear only on the Developers and Publishers tabs.
+CSV formats are unified across all three tabs, and wishlist rows show both compact
+product credits. The next stage in the [development roadmap](ROADMAP.md) is an
+owned-library tab, which is not yet implemented.
 
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
 handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
@@ -485,7 +484,19 @@ the detailed change history. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
 changing wishlist retrieval or adding Steam-compatible loading orders.
 
-### Other product credits
+### Product credits
+
+Your wishlist shows both **Developer:** and **Publisher:** beneath each game's
+artwork/title, using the same small, muted text as the catalog tabs. Role labels
+and names share a fluid grid, so both name lists align and wrapped names stay in
+their own column. See [text and localization decisions](TEXT_AND_LOCALIZATION.md)
+for wording and future translation guidance. All reported
+names appear, including multiple developers and co-publishers. Missing or empty
+credits show Unavailable; pending rows show Loading…. Credit text also appears
+on example comparisons and skipped results when metadata is available.
+Existing results from an older server show Unavailable until a new comparison
+supplies their missing credits. Sorting, filtering, and displaying credits do not
+fetch additional prices or metadata. Both lists are already included in CSV.
 
 The Developers tab shows publishers, and the Publishers tab shows developers.
 By default, credits appear as small text below each product title. Check
