@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.5-beta — 2026-10-13
+
+- Close out the developer/publisher feature branch with its implemented searches,
+  catalogs, compact/column credits, and CSV downloads.
+- Record the next targets in docs/ROADMAP.md: CSV format unification across tabs
+  and compact developer/publisher descriptions on wishlist rows, followed by an
+  owned-library tab. These changes are planned, not implemented in this version.
+
 ## 0.4.4-beta — 2026-10-11
 
 - Rename catalog checkboxes to Show publisher column / Show developer column.

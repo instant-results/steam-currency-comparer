@@ -6,12 +6,13 @@ Updated: 2026-10-13. This is a current-state summary, not a change log.
 
 Read AGENTS.md and README.md, then inspect Git status and the implementation.
 Follow the user's next request; do not invent new features or deploy the app.
-Current work separates developer and publisher searches and catalogs into two
-independent tabs alongside Your wishlist. No Creator category appears in the UI.
+Developer and publisher searches/catalogs are implemented as independent tabs
+alongside Your wishlist. No Creator category appears in the UI. This feature
+branch is complete for now; the next targets are in docs/ROADMAP.md.
 
 ## Publication and version
 
-Current version: `0.4.4-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.5-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -115,10 +116,20 @@ New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
 independent saved groups, restored legacy prices, and desktop/390px layouts with
-no console errors. The v0.4.2 preview uses port 8765; verify listener/health state
-before reuse. Live v0.4.4 QA verified compact/column modes, exact header/cell
+no console errors. Preview port: 8765; verify the listener and /api/health version
+before reuse. An already running process may serve an older release.
+Live v0.4.4 QA verified compact/column modes, exact header/cell
 alignment, saved tab preferences, and synchronized scrolling at 390px with no
 console errors. Minimal DOM tests require complementary browser QA.
+
+Next targets (planned, not implemented; see [docs/ROADMAP.md](docs/ROADMAP.md)):
+
+1. Unify CSV schema/format across Wishlist, Developers, and Publishers. The price
+   serializer is already shared, but wishlist exports lack catalog credit fields.
+2. Add compact developer/publisher descriptions beneath wishlist game icons/titles,
+   reusing appdetails credits and price caching while preserving table alignment.
+3. In the following stage, add a separate tab for the user's owned Steam library;
+   verify retrieval, credentials, and privacy constraints before implementation.
 
 The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
 Potential TODO: a local searchable developer/publisher directory with aliases,
@@ -129,7 +140,8 @@ or persistent company index is included.
 
 Working branch: codex/developer-publisher-catalogs. Developer/publisher feature
 work through v0.4.4 is committed in separate implementation, test, and
-documentation commits. The feature branch is complete for now; follow the user's
+documentation commits. The v0.4.5 version/roadmap handoff is committed separately.
+The feature branch is complete for now; follow the user's
 next request before starting more implementation. No merge, push, tag, release,
 or deployment is authorized. Keep runtime data, caches, screenshots, local
 wishlist files, secrets, and populated environment files out of Git.

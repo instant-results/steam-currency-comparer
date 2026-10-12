@@ -428,6 +428,13 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Continuing development
 
+The developer/publisher feature branch is complete for now. Follow the ordered
+[development roadmap](ROADMAP.md): first unify CSV formats and add compact
+wishlist developer/publisher descriptions, then add an owned-library tab.
+These targets are not yet implemented. The current CSV formats still differ in
+credit/membership columns, and compact credit descriptions currently appear
+only on the Developers and Publishers tabs.
+
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
 handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
 Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is

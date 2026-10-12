@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.4-beta** · Beta for local use.
+**Version: 0.4.5-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -197,7 +197,9 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.4-beta` adds an optional credit column while keeping compact credits visible.
+The current `0.4.5-beta` closes the developer/publisher feature branch and records
+its next development targets. Upcoming changes are described in the
+[development roadmap](docs/ROADMAP.md).
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
@@ -206,6 +208,14 @@ Update this README, the [changelog](CHANGELOG.md), and
 [project context](PROJECT_CONTEXT.md) when changing the version. Git tags,
 GitHub releases, and deployment are separate actions; a version bump or commit
 does not publish the app.
+
+## Planned development
+
+The developer/publisher feature branch is complete for now. Next: unify CSV
+formats between tabs and add compact developer/publisher descriptions beneath
+wishlist game icons/titles. The following stage adds a tab for the user's owned
+Steam library. These are planned features; see the [roadmap](docs/ROADMAP.md)
+for scope and completion criteria.
 
 ## For developers
 
@@ -242,6 +252,7 @@ node --check web/creators.js
   CSV fields, sorting, caching, diagnostics, and methodology.
 - [Deployment guidance](DEPLOYMENT.md): requirements and limitations for future
   public hosting. The local launcher is not the public deployment entry point.
+- [Development roadmap](docs/ROADMAP.md): next targets and the subsequent owned-library stage.
 - [Current project context](PROJECT_CONTEXT.md) and [collaboration guidance](AGENTS.md).
 - [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
   integration, not an implemented feature.
