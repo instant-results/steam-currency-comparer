@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.4-beta — 2026-10-11
+
+- Rename catalog checkboxes to Show publisher column / Show developer column.
+  Checked shows a separate labeled column; unchecked retains compact credits
+  beneath game titles. Each tab saves its display mode independently.
+- Keep shared headers, price dividers, statistics, and narrow-screen scrolling
+  aligned in both layouts. CSV exports always retain both credit fields.
+
 ## 0.4.3-beta — 2026-10-11
 
 - Add Download CSV below each developer/publisher catalog list, exporting checked

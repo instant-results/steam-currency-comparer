@@ -1,6 +1,6 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-11. This is a current-state summary, not a change log.
+Updated: 2026-10-13. This is a current-state summary, not a change log.
 
 ## Start here
 
@@ -11,7 +11,7 @@ independent tabs alongside Your wishlist. No Creator category appears in the UI.
 
 ## Publication and version
 
-Current version: `0.4.3-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.4-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -34,8 +34,9 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   and Techland. Publishers features Devolver Digital (US), THQ Nordic (Austria),
   and 11 bit studios (Poland), with examples made by different studios.
   Role defaults are curated independently; see docs/FEATURED_CATALOGS.md.
-- Each role has a Show publisher / Show developer checkbox above search. It
-  displays opposite-role credits beneath each title and persists independently.
+- Each role has a Show publisher column / Show developer column checkbox above
+  search. Checked displays opposite-role credits in a separate labeled column;
+  unchecked keeps compact credits beneath each title. The mode persists per tab.
   Steam appdetails credits share the price cache; old catalog entries/results
   refresh once to obtain missing credits.
 - Each role has its own Find a developer/publisher form, results, selected names,
@@ -109,13 +110,15 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 
 ## Verification and open work
 
-Latest checks: 128 Python tests and 46 frontend tests, plus JS syntax/diff checks.
+Latest checks: 128 Python tests and 47 frontend tests, plus JS syntax/diff checks.
 New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
 independent saved groups, restored legacy prices, and desktop/390px layouts with
 no console errors. The v0.4.2 preview uses port 8765; verify listener/health state
-before reuse. Minimal DOM tests require complementary browser QA.
+before reuse. Live v0.4.4 QA verified compact/column modes, exact header/cell
+alignment, saved tab preferences, and synchronized scrolling at 390px with no
+console errors. Minimal DOM tests require complementary browser QA.
 
 The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
 Potential TODO: a local searchable developer/publisher directory with aliases,
@@ -124,13 +127,9 @@ or persistent company index is included.
 
 ## Git state
 
-Working branch: codex/developer-publisher-catalogs. Earlier v0.3.0 search work is
-committed. The v0.3.1 refinement and v0.4.0 separate-role tabs are committed in
-separate implementation, test, and documentation commits. Ask after meaningful
-changes whether the user wants coherent commits. The v0.4.1 default-catalog
-refresh is committed in separate feature, test, and documentation commits. Keep runtime data, caches,
-screenshots, local wishlist files, secrets, and populated environment files out of Git.
-
-The v0.4.2 optional opposite-role credit display is committed in separate implementation, test, and documentation commits.
-
-The v0.4.3 catalog CSV downloads are committed in separate implementation, test, and documentation commits.
+Working branch: codex/developer-publisher-catalogs. Developer/publisher feature
+work through v0.4.4 is committed in separate implementation, test, and
+documentation commits. The feature branch is complete for now; follow the user's
+next request before starting more implementation. No merge, push, tag, release,
+or deployment is authorized. Keep runtime data, caches, screenshots, local
+wishlist files, secrets, and populated environment files out of Git.

@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.3-beta** · Beta for local use.
+**Version: 0.4.4-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -47,7 +47,9 @@ change over time. No personal Steam profile is used.
   Statistics cover the displayed selection rather than the entire catalog.
 - Each tab searches its own role and offers **Add & compare** for matching names.
   Developer and publisher selections, results, and catalog positions are saved
-  independently in the same browser tab. There is no separate creator category.
+  independently in the same browser tab. Developer/publisher credits appear
+  beneath each game, or in a separate column using **Show publisher column** /
+  **Show developer column**. There is no separate creator category.
 
 The app compares prices for information. It does not change your Steam account's
 country, modify your wishlist, or purchase games. Displayed regional differences
@@ -195,7 +197,7 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.3-beta` adds CSV downloads for developer and publisher catalogs.
+The current `0.4.4-beta` adds an optional credit column while keeping compact credits visible.
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
