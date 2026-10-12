@@ -30,10 +30,14 @@ function updateSelections(event) {
   caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
   for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
   for (const el of options) {
-    el.disabled = running || el.value === home || (!el.checked && count >= 2);
+    el.disabled = running || window.creatorPane?.busy || el.value === home || (!el.checked && count >= 2);
     el.closest('label').hidden = el.value === home;
   }
-  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running);
+  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running || !!window.creatorPane?.busy);
+  window.creatorPane?.refreshControls();
+  $("analyze").disabled = running || !!window.creatorPane?.busy;
+  $("demo").disabled = running || !!window.creatorPane?.busy;
+  $("retry").disabled = running || !!window.creatorPane?.busy;
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
   $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
 }
@@ -111,6 +115,43 @@ function setBusy(value) { running = value; $("analyze").disabled = value; $("ana
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
+function comparisonRow(item, resultHome) {
+  const baseline = () => storefronts[resultHome];
+  const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
+  const diff = item => item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home));
+  const tr = node("tr"), title = node("td");
+  tr.dataset.appId = item.app_id;
+  const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", (item.name || `Steam product ${item.app_id}`) + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
+  artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
+  if(item.comparison) {
+    const c = item.comparison;
+    if (hasDifferentDiscounts(c)) {
+      const badge = node("span", "Different regional discounts", "regional-discount-badge");
+      const values = [{...c.home_price, region: c.home_price.region || resultHome}, ...c.alternatives].map(price =>
+        `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
+      badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
+      title.append(badge);
+    }
+    const home = node("td", `${money(c.home_price.amount)} ${unit()}`, "price");
+    const homeProvenance = formatProvenance(c.home_price.source);
+    if (homeProvenance) home.title = homeProvenance;
+    home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
+    const td = node("td"), alternatives = node("div", undefined, "foreign");
+    for (const p of c.alternatives) {
+      const price = node("span");
+      price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
+      const altProvenance = formatProvenance(p.source);
+      price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}${altProvenance ? ` · ${altProvenance}` : ""}`;
+      price.append(saleNote(p, p.currency));
+      alternatives.append(price);
+    }
+    td.append(alternatives); tr.append(td);
+    const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
+    percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
+    difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
+  } else { const td = node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
+  return tr;
+}
 function render() {
   $("export-csv").disabled = !items.length;
   $("filter-help").hidden = filter !== "skipped";
@@ -137,37 +178,7 @@ function render() {
     const signature = resultHome + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
-    const tr = node("tr"), title = node("td");
-    tr.dataset.appId = item.app_id;
-    const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", item.name + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
-    artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
-    if(item.comparison) {
-      const c = item.comparison;
-      if (hasDifferentDiscounts(c)) {
-        const badge = node("span", "Different regional discounts", "regional-discount-badge");
-        const values = [{...c.home_price, region: c.home_price.region || resultHome}, ...c.alternatives].map(price =>
-          `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
-        badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
-        title.append(badge);
-      }
-      const home = node("td", `${money(c.home_price.amount)} ${unit()}`, "price");
-      const homeProvenance = formatProvenance(c.home_price.source);
-      if (homeProvenance) home.title = homeProvenance;
-      home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
-      const td = node("td"), alternatives = node("div", undefined, "foreign");
-      for (const p of c.alternatives) {
-        const price = node("span");
-        price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
-        const altProvenance = formatProvenance(p.source);
-        price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}${altProvenance ? ` · ${altProvenance}` : ""}`;
-        price.append(saleNote(p, p.currency));
-        alternatives.append(price);
-      }
-      td.append(alternatives); tr.append(td);
-      const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
-      percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
-      difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
-    } else { const td = node("td", item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
+    const tr = comparisonRow(item, resultHome);
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
     rowCache.set(item.app_id, cached);
@@ -202,7 +213,9 @@ function formatRateTime(isoString) {
 }
 function showRates(rates) {
   currentRates = rates;
-  const target = $("rates");
+  if (!window.creatorPane?.active) renderRates(rates, $("rates"));
+}
+function renderRates(rates, target) {
   target.replaceChildren();
   for(const rate of rates) {
     const row = node("div", undefined, "rate-line"), label = node("span", `1 ${rate.currency}`);
@@ -219,6 +232,7 @@ function showRates(rates) {
 }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
+  if (window.creatorPane?.busy) { notice("A catalog comparison is running. Wait for it or cancel it on the Developers or Publishers tab.", true); return; }
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
@@ -243,38 +257,47 @@ function csvCell(value) {
   if (typeof value === "string" && /^[\s]*[=+@-]/.test(text)) text = "'" + text;
   return '"' + text.replaceAll('"', '""') + '"';
 }
-function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
+function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
+  const baseline = () => storefronts[home];
+  const {example = false, includeOwner = false, profile = null, extraColumns = []} = options;
   const headers = ["exported_at_utc", "example_data", "game_id", "game", "status", "storefront", "currency", "final_price", "base_price", "discount_percent", "rate_to_pln", "rate_publication_date", "rate_retrieved_at_utc", "rate_checked_at_utc", "rate_source", "rate_cache_status", "final_price_baseline", "baseline_difference", "baseline_difference_percent", "different_regional_discounts", "price_provenance", "baseline_storefront", "baseline_currency", "rate_to_baseline", "baseline_rate_to_pln", "baseline_rate_publication_date", "baseline_rate_retrieved_at_utc", "baseline_rate_checked_at_utc", "baseline_rate_cache_status"];
   if (includeOwner) headers.push("wishlist_profile");
+  headers.push(...extraColumns.map(column => column.name));
   const rows = [headers];
-  for (const item of items) {
+  for (const item of exportItems) {
     const c = item.comparison;
-    const prices = c ? [{...c.home_price, region:resultHome, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    const prices = c ? [{...c.home_price, region:home, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
     for (const price of prices) {
-      const rate = currentRates.find(value => value.currency === price.currency) || {};
+      const rate = rates.find(value => value.currency === price.currency) || {};
       const identity = price.currency === "PLN";
       const reference = c ? Math.min(...c.alternatives.map(value => value.amount_in_home)) : null;
-      const row = [exportedAt, demoMode, item.app_id, item.name, c ? "compared" : item.skipped?.category,
+      const row = [exportedAt, example, item.app_id, item.name, c ? "compared" : item.skipped?.category,
         price.region, price.currency, price.original_amount, price.base_amount, price.discount_percent,
         identity ? 1 : rate.rate_to_pln, rate.effective_date, rate.retrieved_at_utc, rate.checked_at_utc,
         identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
         price.amount_in_home, c ? c.home_price.amount - reference : null, c ? percentageDifference(c) : null,
         c ? hasDifferentDiscounts(c) : null, item.source_summary];
-      const homeRate = currentRates.find(value => value.currency === baseline().currency) || {};
-      row.push(resultHome, baseline().currency, c ? (price.region === resultHome ? 1 : price.rate_to_home) : null,
+      const homeRate = rates.find(value => value.currency === baseline().currency) || {};
+      row.push(home, baseline().currency, c ? (price.region === home ? 1 : price.rate_to_home) : null,
         baseline().currency === "PLN" ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
         homeRate.retrieved_at_utc, homeRate.checked_at_utc, baseline().currency === "PLN" ? "identity" : homeRate.cache_status);
-      if (includeOwner) row.push(currentProfile);
+      if (includeOwner) row.push(profile);
+      row.push(...extraColumns.map(column => column.value(item)));
       rows.push(row);
     }
   }
   return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
-$("export-csv").addEventListener("click", () => {
-  const url = URL.createObjectURL(new Blob([buildCsv($("export-owner").checked)], {type:"text/csv;charset=utf-8"}));
-  const link = node("a"); link.href = url; link.download = "steam-price-comparison.csv";
+function buildCsv(includeOwner, exportedAt = new Date().toISOString()) {
+  return buildPriceCsv(items, resultHome, currentRates,
+    {example: demoMode, includeOwner, profile: currentProfile}, exportedAt);
+}
+function downloadCsv(contents, filename) {
+  const url = URL.createObjectURL(new Blob([contents], {type:"text/csv;charset=utf-8"}));
+  const link = node("a"); link.href = url; link.download = filename;
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
+}
+$("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();

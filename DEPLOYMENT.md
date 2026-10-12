@@ -1,6 +1,7 @@
 # Public hosting path
 
-The app is local today. The Python service and browser assets can be deployed
+The source is published on [GitHub](https://github.com/instant-results/steam-currency-comparer).
+The app itself is still local; no public service has been deployed. The Python service and browser assets can be deployed
 together on a host that supports a persistent Python process. There is no
 separate frontend build and no browser-side API key.
 
@@ -79,4 +80,32 @@ Before opening to the public, configure HTTPS, persistent storage, trusted proxy
 handling, and edge abuse controls on the chosen host. Run a live public wishlist
 smoke test and measure request limits there. A local bounded live test retrieved 755 wishlist games and compared three of
 them successfully. Repeat this check on the deployment host; a full-wishlist
-run and production load test remain outstanding. This project is not published.
+run and production load test remain outstanding. A separate seven-game live
+example completed locally on 2026-09-23 for the README screenshots; that was
+not a public-host load test.
+
+
+## Work remaining before a public beta
+
+The intended hosting direction is a free public website with a few non-intrusive
+ads, potentially covering operating costs. Accounts, subscriptions, and billing
+are not part of the agreed direction. Hosting and advertising are not implemented.
+
+The current code still needs a focused service-readiness review:
+
+- Address long jobs blocking the single worker, with measured scan limits and
+  queue fairness. More replicas require shared job state and Steam pacing.
+- Separate completed-result retention from admission capacity: the 20-job limit
+  currently includes completed jobs, even when the worker is idle.
+- Review throttling and retry behavior. Web retries cap delays at 15 seconds,
+  including numeric upstream `Retry-After` values; date-form values are not parsed.
+- Add useful worker/queue/cache monitoring, deployment and rollback procedures,
+  storage maintenance, and abuse controls. `/api/health` reports application
+  status and version, but does not establish worker or upstream health.
+- Decide whether jobs should survive restarts. Today only cached prices and
+  exchange rates persist.
+- Recheck applicable data-use terms, privacy disclosures, and any selected ad
+  provider's requirements before hosting. External ads would require narrowly
+  scoped changes to the current Content Security Policy.
+
+These are planning notes, not completed safeguards or authorization to deploy.
