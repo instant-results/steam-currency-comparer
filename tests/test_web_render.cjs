@@ -26,6 +26,23 @@ function setup(selectors = {}, extras = {}) {
 const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
 
+// Parse quoted fields, including embedded commas, quotes, and line breaks.
+function parseCsv(csv) {
+  assert.ok(csv.startsWith("\uFEFF"));
+  const text = csv.slice(1), rows = []; let row = [], offset = 0;
+  for (const match of text.matchAll(/"((?:[^"]|"")*)"(,|\r\n)/g)) {
+    assert.equal(match.index, offset);
+    offset += match[0].length;
+    row.push(match[1].replaceAll('""', '"'));
+    if (match[2] === "\r\n") { rows.push(row); row = []; }
+  }
+  assert.equal(offset, text.length);
+  const headers = rows.shift();
+  assert.equal(new Set(headers).size, headers.length);
+  for (const values of rows) assert.equal(values.length, headers.length);
+  return {headers, rows: rows.map(values => Object.fromEntries(headers.map((name, i) => [name, values[i]])))};
+}
+
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
 function creatorSetup(savedValues = {}, kind = "developer") {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
@@ -542,7 +559,8 @@ test("CSV includes hidden results and rate provenance, with owner opt-in", () =>
   assert.match(csv, /app_unavailable/);
   assert.match(csv, /2026-09-10T09:00:00Z/);
   assert.match(csv, /2026-09-10T10:00:00Z/);
-  assert.ok(!csv.includes("wishlist_profile"));
+  assert.ok(csv.includes("wishlist_profile"));
+  assert.ok(parseCsv(csv).rows.every(row => row.wishlist_profile === ""));
   assert.ok(!csv.includes("private-profile"));
   assert.match(run('buildCsv(true)'), /private-profile/);
   assert.equal(csv.split("\r\n").length, 5);
@@ -781,7 +799,8 @@ for (const kind of ["developer", "publisher"]) test(`${kind} CSV always includes
   assert.match(csv, /"PLN"/); assert.match(csv, /"USD"/);
   assert.equal(csv.trim().split("\r\n").length, 7); // Three games, two observed prices each.
   assert.equal(ctx.run('window.exportFilename'), `steam-${kind}s-comparison.csv`);
-  assert.doesNotMatch(csv, /wishlist_profile|token/);
+  assert.ok(parseCsv(csv).rows.every(row => row.wishlist_profile === ""));
+  assert.doesNotMatch(csv, /token/);
   ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
   ctx.get("creators-export").listeners.click();
   const withoutTime = text => text.replace(/\d{4}-\d{2}-\d{2}T[^"]+/g, "TIME");
@@ -803,4 +822,111 @@ test("catalog CSV keeps saved baseline, escaped credits, and uncompared rows", a
   assert.match(csv, /"'=unsafe, ""publisher"""/);
   assert.match(csv, /"no_regional_price"/);
   assert.equal(csv.trim().split("\r\n").length, 4);
+});
+
+test("all tabs and owner settings have identical CSV headers, including empty exports", async () => {
+  const wishlist = setup();
+  wishlist.run(`items = ${JSON.stringify([game("1", "Wishlist game")])}; currentProfile = "PRIVATE_PROFILE"; job = {token:"PRIVATE_TOKEN"};`);
+  const plain = parseCsv(wishlist.run("buildCsv(false)"));
+  const attributed = parseCsv(wishlist.run("buildCsv(true)"));
+  assert.deepEqual(plain.headers, attributed.headers);
+  assert.equal(plain.rows[0].wishlist_profile, "");
+  assert.equal(attributed.rows[0].wishlist_profile, "PRIVATE_PROFILE");
+  assert.equal(plain.rows[0].developers, "Test developer");
+  assert.equal(plain.rows[0].publishers, "Test publisher; Co-publisher");
+  assert.equal(plain.rows[0].catalog_name, "");
+  assert.equal(plain.rows[0].catalog_role, "");
+  assert.equal(plain.rows[0].source_tab, "wishlist");
+  assert.equal(plain.rows[0].csv_schema_version, "1");
+  assert.equal(plain.rows[0].steam_url, "https://store.steampowered.com/app/1/");
+  for (const kind of ["developer", "publisher"]) {
+    const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+    ctx.run('currentProfile = "PRIVATE_PROFILE"; downloadCsv = contents => {window.exportContents = contents;}');
+    ctx.get("creators-export").listeners.click();
+    const contents = ctx.run("window.exportContents"), catalog = parseCsv(contents);
+    assert.deepEqual(catalog.headers, plain.headers);
+    assert.ok(catalog.rows.every(row => row.source_tab === kind && row.catalog_role === kind && row.catalog_id === "studio"));
+    assert.ok(catalog.rows.every(row => row.wishlist_profile === "" && row.wishlist_loading_order === ""));
+    assert.doesNotMatch(contents, /PRIVATE_PROFILE|PRIVATE_TOKEN|bbbbbbbb/);
+  }
+  const empty = parseCsv(wishlist.run('items = []; buildCsv(false)'));
+  assert.deepEqual(empty.headers, plain.headers);
+  assert.equal(empty.rows.length, 0);
+});
+
+test("CSV retains both conversion legs, per-storefront differences, and mixed price sources", () => {
+  const {run} = setup();
+  const item = {app_id:"10",name:"Rich metadata",index:3,developers:["Dev A","Dev B"],publishers:[],
+    cache_hits:1,stale_cache_hits:1,live_requests:1,source_summary:"cache 1, stale 1, live 1",
+    comparison:{home_price:{amount:50,base_amount:100,discount_percent:50,source:"cache"},is_fair:false,
+      alternatives:[{region:"no",currency:"NOK",original_amount:100,base_amount:100,discount_percent:0,rate_to_home:0.4,amount_in_home:40,source:"live"},
+        {region:"pl",currency:"PLN",original_amount:150,base_amount:150,discount_percent:0,rate_to_home:0.2,amount_in_home:30,source:"stale cache"}]}};
+  run(`items = ${JSON.stringify([item])}; resultHome = "gb"; lastRequest = {home:"pl",regions:["us"],order:"date_added"};
+    currentRates = [{currency:"GBP",rate_to_pln:5,effective_date:"2026-10-09",retrieved_at_utc:"2026-10-10T10:00:00Z",checked_at_utc:"2026-10-13T10:00:00Z",source:"NBP table A (mid)",cache_status:"stale cache"},
+      {currency:"NOK",rate_to_pln:2,effective_date:"2026-10-12",retrieved_at_utc:"2026-10-13T10:00:00Z",checked_at_utc:"2026-10-13T10:00:00Z",source:"NBP table A (mid)",cache_status:"live"}];`);
+  const {rows} = parseCsv(run('buildCsv(false, "2026-10-13T11:00:00Z")'));
+  const [home, nok, pln] = rows;
+  assert.equal(home.final_price, "50"); assert.equal(home.base_price, "100");
+  assert.equal(home.storefront_difference_baseline, ""); assert.equal(home.storefront_difference_percent, "");
+  assert.equal(nok.rate_to_pln, "2"); assert.equal(nok.rate_to_baseline, "0.4");
+  assert.equal(nok.base_price_baseline, "40"); assert.equal(nok.final_price_baseline, "40");
+  assert.equal(nok.storefront_difference_baseline, "10"); assert.equal(nok.storefront_difference_percent, "25");
+  assert.equal(nok.rate_publication_date, "2026-10-12"); assert.equal(nok.rate_cache_status, "live");
+  assert.equal(pln.rate_to_pln, "1"); assert.equal(pln.rate_source, "Identity conversion");
+  assert.equal(pln.rate_publication_date, ""); assert.equal(pln.rate_retrieved_at_utc, "");
+  assert.equal(pln.storefront_difference_baseline, "20");
+  assert.equal(Number(pln.storefront_difference_percent), 20 / 30 * 100);
+  assert.deepEqual(rows.map(row => row.storefront_price_source), ["cache","live","stale cache"]);
+  for (const row of rows) {
+    assert.equal(row.baseline_storefront, "gb"); assert.equal(row.baseline_currency, "GBP");
+    assert.equal(row.baseline_rate_to_pln, "5"); assert.equal(row.baseline_rate_publication_date, "2026-10-09");
+    assert.equal(row.baseline_rate_cache_status, "stale cache"); assert.equal(row.baseline_rate_source, "NBP table A (mid)");
+    assert.equal(row.comparison_storefronts, "no; pl"); assert.equal(row.comparison_currencies, "NOK; PLN");
+    assert.equal(row.baseline_difference, "20"); assert.equal(Number(row.baseline_difference_percent), 20 / 30 * 100);
+    assert.equal(row.cheapest_alternative_storefront, "pl"); assert.equal(row.cheapest_alternative_currency, "PLN");
+    assert.equal(row.cheapest_alternative_final_price_baseline, "30"); assert.equal(row.baseline_is_cheaper_or_equal, "false");
+    assert.equal(row.different_regional_discounts, "true"); assert.equal(row.developers, "Dev A; Dev B");
+    assert.equal(row.publishers, ""); assert.equal(row.publishers_known, "true");
+    assert.equal(row.cache_hits, "1"); assert.equal(row.stale_cache_hits, "1"); assert.equal(row.live_price_requests, "1");
+    assert.equal(row.checked_index, "3"); assert.equal(row.wishlist_loading_order, "date_added");
+  }
+});
+
+test("CSV round-trips unsafe text and exports failures and zero references without invented metadata", () => {
+  const {run} = setup();
+  const zero = game("1", 'Quoted "title", with\r\na new line');
+  zero.developers = ["  =unsafe", "Other developer"]; zero.publishers = null;
+  zero.comparison.alternatives[0].amount_in_home = 0;
+  const failure = {...skipped("2", "temporary_failure"), skipped:{category:"temporary_failure",reason:"Temporary request failures",region:"no",retryable:true}};
+  run(`items = ${JSON.stringify([zero,failure])}; demoMode = true; lastRequest = {regions:["no"],order:"priority"};`);
+  const contents = run("buildCsv(false)"), {rows} = parseCsv(contents);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].game, zero.name);
+  assert.equal(rows[0].developers, "'  =unsafe; Other developer");
+  assert.equal(rows[0].developers_known, "true"); assert.equal(rows[0].publishers_known, "false");
+  assert.equal(rows[0].baseline_difference_percent, ""); assert.equal(rows[1].storefront_difference_percent, "");
+  const missing = rows[2];
+  assert.equal(missing.status, "temporary_failure"); assert.equal(missing.skipped_storefront, "no");
+  assert.equal(missing.skipped_reason, "Temporary request failures"); assert.equal(missing.skipped_retryable, "true");
+  assert.equal(missing.comparison_storefronts, "no"); assert.equal(missing.comparison_currencies, "NOK");
+  for (const field of ["storefront","currency","final_price","base_price","discount_percent","rate_to_pln","baseline_difference","base_price_baseline","baseline_is_cheaper_or_equal","cache_hits"]) assert.equal(missing[field], "");
+  assert.equal(missing.developers_known, "false"); assert.ok(rows.every(row => row.example_data === "true"));
+  assert.doesNotMatch(contents, /NaN|Infinity|undefined/);
+});
+
+test("running catalog CSV preserves overlapping memberships and omits pending and free products", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  const creator = {id:"developer-"+"d".repeat(24),name:"Other Studio",selector:{kind:"developer",name:"Other Studio"}};
+  ctx.searches.push({creators:[],exact_matches:[creator]}); ctx.get("creator-query").value = "Other Studio";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  ctx.snapshots.push({state:"running",message:"Checking",catalogs:{[creator.id]:{
+    products:[{app_id:"1",name:"First"},{app_id:"4",name:"Pending"},{app_id:"5",name:"Free"},{app_id:"6",name:"Unavailable"}],next_start:25,has_more:true,total:30}},
+    items:[{...game("5","Free"),is_free:true},skipped("6","no_regional_price")],rates:[],warnings:[]});
+  ctx.get("creator-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  ctx.run('downloadCsv = contents => {window.exportContents = contents;}'); ctx.get("creators-export").listeners.click();
+  const {rows} = parseCsv(ctx.run("window.exportContents"));
+  assert.equal(rows.length, 9); // Three featured products, one repeated product, one skipped product.
+  assert.deepEqual(rows.filter(row => row.game_id === "1").map(row => row.catalog_name), ["Studio","Studio","Other Studio","Other Studio"]);
+  assert.ok(!rows.some(row => ["4","5"].includes(row.game_id)));
+  assert.equal(rows.find(row => row.game_id === "6").status, "no_regional_price");
 });
