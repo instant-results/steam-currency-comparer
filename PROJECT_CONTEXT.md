@@ -138,10 +138,11 @@ or persistent company index is included.
 
 ## Git state
 
-Working branch: codex/developer-publisher-catalogs. Developer/publisher feature
-work through v0.4.4 is committed in separate implementation, test, and
-documentation commits. The v0.4.5 version/roadmap handoff is committed separately.
-The feature branch is complete for now; follow the user's
-next request before starting more implementation. No merge, push, tag, release,
-or deployment is authorized. Keep runtime data, caches, screenshots, local
-wishlist files, secrets, and populated environment files out of Git.
+Working branch: main (the repository's primary branch; there is no master branch).
+The completed codex/developer-publisher-catalogs branch is merged locally into
+main with a merge commit. Implementation, test, and documentation commits remain
+separate in history, including the v0.4.5 version/roadmap handoff. The feature
+branch is retained. This local merge has not been pushed; no push, tag, release,
+or deployment is authorized. Follow the user's next request before implementing
+the planned roadmap. Keep runtime data, caches, screenshots, local wishlist
+files, secrets, and populated environment files out of Git.
