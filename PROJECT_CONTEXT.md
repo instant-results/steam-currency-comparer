@@ -8,8 +8,8 @@ Read AGENTS.md and README.md, then inspect Git status and the implementation.
 Follow the user's next request; do not invent new features or deploy the app.
 Developer and publisher searches/catalogs are implemented as independent tabs
 alongside Your wishlist. No Creator category appears in the UI. This feature
-branch is complete. CSV unification and compact wishlist credits are implemented
-on codex/unified-csv-exports; the next target is in docs/ROADMAP.md.
+branch is complete. CSV unification and compact wishlist credits are merged into
+main; the next target is in docs/ROADMAP.md.
 
 ## Publication and version
 
@@ -159,17 +159,12 @@ or persistent company index is included.
 
 ## Git state
 
-Working branch: codex/unified-csv-exports, created from main for CSV unification.
-The implementation, tests, and documentation for v0.4.6 are versioned in separate
-coherent commits. The v0.4.7 wishlist-credit changes are committed with separate
-implementation, test, and documentation commits. docs/TEXT_AND_LOCALIZATION.md
-has its own commit, as requested by the user.
-No push is authorized.
-main is the repository's primary branch; there is no master branch.
-The completed codex/developer-publisher-catalogs branch is merged locally into
-main with a merge commit. Implementation, test, and documentation commits remain
-separate in history, including the v0.4.5 version/roadmap handoff. The completed
-catalog feature branch is retained. The local merge and CSV branch have not been
-pushed; no push, tag, release, or deployment is authorized. Follow the user's next request before implementing
-the planned roadmap. Keep runtime data, caches, screenshots, local wishlist
-files, secrets, and populated environment files out of Git.
+Working branch: main (the repository's primary branch; there is no master branch).
+The completed codex/unified-csv-exports branch is merged locally into main with
+a merge commit, following the earlier developer/publisher catalog merge.
+Implementation, tests, and documentation remain separate in history;
+docs/TEXT_AND_LOCALIZATION.md has its own commit as requested. Both completed
+feature branches are retained. The merges have not been pushed; no push, tag,
+release, or deployment is authorized. Follow the user's next request before
+implementing the owned-library stage. Keep runtime data, caches, screenshots,
+local wishlist files, secrets, and populated environment files out of Git.
