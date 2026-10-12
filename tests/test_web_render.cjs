@@ -708,20 +708,48 @@ test("price tooltips show standalone provenance for baseline and combined calcul
   assert.equal(altSpan.title, "5.00 USD × 4 · live");
 });
 
-for (const kind of ["developer", "publisher"]) test(`${kind} credit toggle shows the opposite role and persists without requests`, async () => {
-  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
-  const title = () => ctx.body().children[0].children[0];
-  const count = title().children.length, calls = ctx.calls.length;
-  ctx.get("creator-show-credits").checked = true;
-  ctx.get("creator-show-credits").listeners.change();
-  assert.equal(title().children.at(-1).textContent, kind === "developer" ? "Publisher: Test publisher, Co-publisher" : "Developer: Test developer");
-  assert.equal(ctx.calls.length, calls);
-  const restored = creatorSetup(Object.fromEntries(ctx.storage), kind);
+for (const kind of ["developer", "publisher"]) test(`${kind} credits switch between compact text and an aligned column without requests`, async () => {
+  const ctx = creatorSetup(); ctx.get(kind + "s-tab").listeners.click(); await settle();
+  const get = id => ctx.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
+  const group = () => get("creator-groups").children[0];
+  const table = () => group().children[1].children[0].children[0];
+  const row = () => table().children[2].children[0];
+  const credit = kind === "developer" ? "Test publisher, Co-publisher" : "Test developer";
+  const label = kind === "developer" ? "Publisher" : "Developer";
+  assert.equal(row().children[0].children.at(-1).textContent, `${label}: ${credit}`);
+  assert.equal(row().children.length,4);
+  const calls = ctx.calls.length;
+  get("creator-show-credits").checked = true; get("creator-show-credits").listeners.change();
+  assert.equal(row().children.length,5); assert.equal(row().children[1].textContent,credit);
+  assert.equal(row().children[0].children.length,1);
+  assert.equal(table().children[0].children.length,5);
+  assert.equal(table().children[1].children[0].children[1].children[0].children[0].textContent,label.toUpperCase());
+  assert.equal(get("creator-columns-colgroup").children.length,5);
+  assert.equal(get("creator-columns-head").children[0].children.length,5);
+  assert.equal(row().children[3].className,"catalog-foreign-price");
+  assert.equal(ctx.calls.length,calls);
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
   restored.get("creators-tab").listeners.click(); await settle();
-  assert.equal(restored.get("creator-show-credits").checked, true);
-  assert.equal(restored.body().children[0].children[0].children.at(-1).textContent, title().children.at(-1).textContent);
-  ctx.get("creator-show-credits").checked = false; ctx.get("creator-show-credits").listeners.change();
-  assert.equal(title().children.length, count);
+  assert.equal(restored.get("creator-show-credits").checked,true);
+  assert.equal(restored.body().children[0].children[1].textContent,credit);
+  get("creator-show-credits").checked = false; get("creator-show-credits").listeners.change();
+  assert.equal(row().children.length,4);
+  assert.equal(row().children[0].children.at(-1).textContent,`${label}: ${credit}`);
+  assert.equal(table().children[0].children.length,4);
+  assert.equal(get("creator-columns-head").children[0].children.length,4);
+});
+
+test("credit columns preserve pending and uncompared price spans", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push({state:"running",message:"Checking…",catalogs:{},items:[skipped("1","app_unavailable")],rates:[],warnings:[]});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  const rows = ctx.body().children;
+  assert.equal(rows[0].children[1].textContent,"Unavailable");
+  assert.equal(rows[1].children[1].textContent,"Loading…");
+  assert.equal(rows[0].children[2].colSpan,3);
+  assert.equal(rows[1].children[2].colSpan,3);
+  assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
 });
 
 test("saved catalog prices without credits refresh once and retain loaded products", async () => {
