@@ -54,10 +54,20 @@
       updateSelections();
     }
 
+    function columnNames() {
+      return $("creator-show-credits").checked ? ["game", "credit", "home", "foreign", "difference"] : ["game", "home", "foreign", "difference"];
+    }
+
+    function tableColumns() {
+      return columnNames().map(name => node("col", undefined, `${name}-column`));
+    }
+
     function tableHeading(home) {
       const row = node("tr");
-      for (const label of ["GAME NAME", `PRICE IN ${storefronts[home].name.toUpperCase()}`, "OTHER STOREFRONTS", "DIFFERENCE"]) {
-        const th = node("th"); th.scope = "col";
+      const labels = ["GAME NAME", `PRICE IN ${storefronts[home].name.toUpperCase()}`, "OTHER STOREFRONTS", "DIFFERENCE"];
+      if ($("creator-show-credits").checked) labels.splice(1, 0, kind === "developer" ? "PUBLISHER" : "DEVELOPER");
+      for (const label of labels) {
+        const th = node("th", undefined, label === "OTHER STOREFRONTS" ? "catalog-foreign-heading" : ""); th.scope = "col";
         const stack = node("span", undefined, "header-stack");
         stack.append(node("span", label));
         if (label === "OTHER STOREFRONTS") stack.append(node("small", `CONVERTED TO ${storefronts[home].currency}`));
@@ -92,7 +102,7 @@
         const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap");
         const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
         table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
-        for (const name of ["game", "home", "foreign", "difference"]) columns.append(node("col", undefined, `${name}-column`));
+        columns.append(...tableColumns());
         head.append(tableHeading(creatorHome)); table.append(columns, head, body); wrap.append(table);
         const footer = node("div", undefined, "creator-catalog-footer"), count = node("span", "Three featured games");
         const more = node("button", undefined, "creator-load-more"); more.type = "button";
@@ -103,7 +113,7 @@
         footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-          expanded: !creator.examples.length, body, head, wrap, statistics, count, more, rowCache: new Map()});
+          expanded: !creator.examples.length, body, head, columns, wrap, statistics, count, more, rowCache: new Map()});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
       renderGroups();
@@ -168,6 +178,8 @@
     }
 
     function renderGroups() {
+      $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
+      $("creator-columns-colgroup").replaceChildren(...tableColumns());
       $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
       for (const group of groups.values()) {
         // Preserve unavailable paid products; missing prices alone do not mean free.
@@ -176,6 +188,7 @@
           return !item?.is_free && item?.comparison?.home_price?.amount !== 0;
         });
         renderStatistics(group);
+        group.columns.replaceChildren(...tableColumns());
         group.head.replaceChildren(tableHeading(creatorHome));
         const displayedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
@@ -188,11 +201,12 @@
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
             const row = comparisonRow(item, creatorHome);
-            if (showCredits) {
-              const role = kind === "developer" ? "Publisher" : "Developer";
-              const names = item[kind === "developer" ? "publishers" : "developers"];
-              row.children[0].append(node("small", `${role}: ${Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable"}`, "catalog-credit"));
-            }
+            if (item.comparison) row.children[2].className = "catalog-foreign-price";
+            const role = kind === "developer" ? "Publisher" : "Developer";
+            const names = item[kind === "developer" ? "publishers" : "developers"];
+            const credit = Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable";
+            if (showCredits) row.insertBefore(node("td", credit, "catalog-credit-cell"), row.children[1]);
+            else row.children[0].append(node("small", `${role}: ${credit}`, "catalog-credit"));
             if (cached) cached.row.remove();
             cached = {row, signature}; group.rowCache.set(product.app_id, cached);
           }
