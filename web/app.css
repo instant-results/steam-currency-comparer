@@ -1216,6 +1216,15 @@ td:first-child { min-width: 0; }
 
 .catalog-credit-toggle { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; }
 .catalog-credit { display: block; color: var(--muted); margin-top: 0.4rem; overflow-wrap: anywhere; }
+.wishlist-credits {
+  display: grid;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  column-gap: 0.4em;
+  row-gap: 0.4rem;
+  align-items: start;
+  text-align: start;
+}
+.wishlist-credits .credit-names { min-width: 0; }
 
 .creator-panel.credit-column-visible { --creator-game-width: 28%; --creator-credit-width: 16%; --creator-home-width: 14%; --creator-foreign-width: 26%; --creator-difference-width: 16%; }
 .creator-panel .credit-column { width: var(--creator-credit-width); }

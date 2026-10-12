@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.7-beta — 2026-10-13
+
+- Show compact Developer and Publisher lines beneath the artwork/title in
+  wishlist rows, including all reported names and missing-metadata labels.
+- Align both credit-name lists in a shared fluid grid. Record wording, typography,
+  and future translation boundaries in docs/TEXT_AND_LOCALIZATION.md.
+- Reuse catalog credit typography and cached appdetails metadata without extra
+  requests to display credits. Preserve table columns, sorting, filters, artwork,
+  and the unified CSV; catalog credit-column modes retain their own behavior.
+
+## 0.4.6-beta — 2026-10-13
+
+- Use one fixed, versioned CSV schema for Wishlist, Developers, and Publishers,
+  including both credit lists, catalog membership, and a wishlist-profile column
+  whose values remain blank unless attribution is enabled.
+- Add comparison storefronts, Steam links, individual price sources, converted
+  base prices, per-storefront differences, cheapest alternatives, failure details,
+  request/cache counts, and flags distinguishing unknown from empty credit lists.
+- Refresh older wishlist price-cache entries missing credits on comparison;
+  subsequent comparisons reuse the enriched cache. Exporting adds no requests.
+
 ## 0.4.5-beta — 2026-10-13
 
 - Close out the developer/publisher feature branch with its implemented searches,

@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch, Mock
 
 from steam_price_polisher.configuration import ComparisonConfig
-from steam_price_polisher.models import ExchangeRate, WishlistItem, WishlistResult, StorePrice, RegionalPriceResult
+from steam_price_polisher.models import ExchangeRate, WishlistItem, WishlistResult, StorePrice, RegionalPriceResult, PriceStatus
 from steam_price_polisher.web_app import WebApplication, JobManager, validate_request, InputError, BusyError
 
 PROFILE = "76561198000000000"
@@ -178,7 +178,9 @@ class WebAppTests(unittest.TestCase):
         with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
             steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10", "Test Game"),), "mock")
             nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
-            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, 40 if region == "pl" else 12, 40 if region == "pl" else 12, 0), "Test Game")
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult(
+                status=PriceStatus.AVAILABLE, price=StorePrice(region, currency, 40 if region == "pl" else 12, 40 if region == "pl" else 12, 0),
+                game_name="Test Game", developers=("Developer",), publishers=("Publisher",))
             self.manager.execute(stored)
             result = stored.snapshot()
             self.assertEqual(result["state"], "complete")
@@ -188,6 +190,32 @@ class WebAppTests(unittest.TestCase):
             self.assertNotIn("wishlist_file", steam.call_args.kwargs)
             second = self.manager.submit(PROFILE, ComparisonConfig(), "other")
             self.manager.execute(second)
+            self.assertEqual(second.snapshot()["items"][0]["source_summary"], "cache 3")
+            self.assertEqual(steam.return_value.get_regional_price.call_count, 3)
+
+    def test_wishlist_refreshes_old_price_cache_for_credits_then_reuses_it(self):
+        from steam_price_polisher.cache import SQLiteCache
+
+        cache = SQLiteCache(Path(self.directory.name) / "cache.sqlite3")
+        for region, currency in (("pl", "PLN"), ("us", "USD"), ("de", "EUR")):
+            cache.put_price("10", region, currency, RegionalPriceResult.available(
+                StorePrice(region, currency, 12, 12, 0), "Old Game"))
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+            steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
+            nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
+            steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult(
+                PriceStatus.AVAILABLE, StorePrice(region, currency, 15, 15, 0), "Updated Game",
+                developers=("First developer", "Second developer"), publishers=("Publisher",))
+            first = self.manager.submit(PROFILE, ComparisonConfig(), "first")
+            self.manager.execute(first)
+            first_item = first.snapshot()["items"][0]
+            self.assertEqual(first_item["developers"], ("First developer", "Second developer"))
+            self.assertEqual(first_item["publishers"], ("Publisher",))
+            self.assertEqual(first_item["comparison"]["home_price"]["amount"], 15)
+            self.assertEqual(first_item["source_summary"], "live 3")
+            second = self.manager.submit(PROFILE, ComparisonConfig(), "second")
+            self.manager.execute(second)
+            self.assertEqual(second.snapshot()["items"][0]["developers"], first_item["developers"])
             self.assertEqual(second.snapshot()["items"][0]["source_summary"], "cache 3")
             self.assertEqual(steam.return_value.get_regional_price.call_count, 3)
 

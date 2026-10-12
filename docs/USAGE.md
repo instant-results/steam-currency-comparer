@@ -343,19 +343,23 @@ existing results without extra Steam requests.
 
 ## CSV export
 
+All three tabs use the same fixed column names and order (CSV schema 1).
 Download CSV exports all currently loaded results, including products hidden by
 filters. A running comparison exports only its completed results so far. There
 is one row per game/storefront and one row for each uncompared game. Wishlist
-profile attribution is optional and off by default; access tokens are never exported.
+profile attribution is optional and off by default: the `wishlist_profile` column
+is always present, but its values remain blank unless enabled. Access tokens are
+never exported. Source-specific fields are blank where inapplicable.
 
 Developer and publisher tabs export all checked, non-free products in their
 selected catalogs, including uncompared products. Both `developers` and
-`publishers` columns are always included, regardless of the display checkbox;
+`publishers` columns are included in every tab, regardless of the display checkbox;
 multiple names are separated by semicolons, and unavailable credits are blank.
 `catalog_role` and `catalog_name` identify membership. A product belonging to
 several selected catalogs has separate rows for each catalog. Unchecked pending
 products are omitted during a comparison. Catalog exports retain the currency
-choices of their own results and contain no wishlist profile or job credentials.
+choices of their own results; their wishlist-profile values are always blank.
+Job credentials are excluded from every export.
 
 The UTF-8 CSV includes original/base/final prices, discounts, prices converted to the baseline currency,
 absolute and percentage differences, and exchange-rate provenance. NBP publication
@@ -367,10 +371,51 @@ has no NBP timestamps. Example exports carry an `example_data` flag identifying 
 curated game selection; their prices and exchange rates come from the same live
 and cached sources as normal comparisons.
 
-CSV is intended for spreadsheets and analysis; numeric values use decimal points.
+Wishlist comparisons now refresh older price-cache entries missing credits, then
+reuse the enriched cache. Already completed results from an older server may still
+have blank credits; run another comparison to obtain them. Exporting itself adds
+no Steam or NBP requests.
+
+CSV is intended for spreadsheets and analysis; numeric values use decimal points,
+without currency symbols, grouping, or display rounding. Booleans are `true`/`false`.
+Unknown or inapplicable values are empty fields; zero remains numeric zero. The file
+has a UTF-8 BOM, comma separators, quoted fields, and CRLF row endings. Quotes,
+commas, and line breaks inside text are preserved. Credit names and comparison
+storefronts/currencies are joined with `; ` in the order received.
 Untrusted text starting with spreadsheet formula characters is prefixed with an
 apostrophe. JSON could preserve nested results more naturally, but is not currently
 offered. Export is generated locally in the browser without additional requests.
+
+### Shared CSV schema
+
+The original 29 price columns keep their names and positions. Profile, catalog,
+and credit columns are now fixed across tabs, followed by additional metadata.
+Consumers should read fields by header name and use `csv_schema_version` (`1`).
+`source_tab` is `wishlist`, `developer`, or `publisher`. The columns below appear
+in exactly this order, reading each row from left to right:
+
+| Fields | Meaning |
+| --- | --- |
+| `exported_at_utc`, `example_data`, `game_id`, `game`, `status` | Export time, example flag, Steam App ID, title, and `compared` or the skip category. |
+| `storefront`, `currency`, `final_price`, `base_price`, `discount_percent` | Observed storefront code and its original-currency final/base prices and discount. Blank for uncompared products. |
+| `rate_to_pln`, `rate_publication_date`, `rate_retrieved_at_utc`, `rate_checked_at_utc`, `rate_source`, `rate_cache_status` | The row currency's NBP quote and provenance. PLN uses an identity rate with no NBP dates. |
+| `final_price_baseline`, `baseline_difference`, `baseline_difference_percent`, `different_regional_discounts`, `price_provenance` | Converted final price, product-wide difference against the cheapest alternative, discount mismatch, and aggregate price-request sources. |
+| `baseline_storefront`, `baseline_currency`, `rate_to_baseline`, `baseline_rate_to_pln`, `baseline_rate_publication_date`, `baseline_rate_retrieved_at_utc`, `baseline_rate_checked_at_utc`, `baseline_rate_cache_status` | Baseline identity, the row conversion factor, and the second NBP conversion leg. |
+| `wishlist_profile`, `catalog_role`, `catalog_name`, `developers`, `publishers` | Opt-in wishlist attribution, catalog membership, and both credit lists. Wishlist catalog fields and catalog profile values are blank. |
+| `csv_schema_version`, `source_tab`, `catalog_id`, `steam_url`, `comparison_storefronts`, `comparison_currencies`, `wishlist_loading_order`, `checked_index` | Schema/source identifiers, catalog ID, Steam product link, alternatives used by the results, wishlist loading order, and check position within the job. |
+| `baseline_final_price`, `cheapest_alternative_storefront`, `cheapest_alternative_currency`, `cheapest_alternative_final_price_baseline`, `baseline_is_cheaper_or_equal` | Baseline price and cheapest-alternative details repeated on each observed-storefront row. Ties retain the first selected alternative. |
+| `storefront_difference_baseline`, `storefront_difference_percent`, `base_price_baseline`, `storefront_price_source`, `baseline_rate_source` | Difference against this row's alternative, converted base price, individual price source, and baseline rate provider. Row-specific differences are blank on baseline rows. |
+| `skipped_reason`, `skipped_storefront`, `skipped_retryable`, `cache_hits`, `stale_cache_hits`, `live_price_requests`, `developers_known`, `publishers_known` | Controlled failure label, affected region, retry flag, product-level lookup counts, and whether each credit list was supplied. |
+
+Both difference types use `(baseline final - alternative final)`, in the baseline
+currency. Percentages divide that difference by the corresponding alternative
+final and multiply by 100. Negative means cheaper in the baseline. Percentages
+are blank when the reference is zero. Product-wide differences repeat across
+storefront rows; row-specific differences compare each alternative separately.
+An uncompared row contains no partial regional prices, because those observations
+are not retained in the comparison result. Available credits and failure metadata
+are still included. `developers_known`/`publishers_known` distinguish an empty
+reported list (`true`, blank names) from missing metadata (`false`, blank names).
 
 
 ## Storefront thumbnails
@@ -428,12 +473,9 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Continuing development
 
-The developer/publisher feature branch is complete for now. Follow the ordered
-[development roadmap](ROADMAP.md): first unify CSV formats and add compact
-wishlist developer/publisher descriptions, then add an owned-library tab.
-These targets are not yet implemented. The current CSV formats still differ in
-credit/membership columns, and compact credit descriptions currently appear
-only on the Developers and Publishers tabs.
+CSV formats are unified across all three tabs, and wishlist rows show both compact
+product credits. The next stage in the [development roadmap](ROADMAP.md) is an
+owned-library tab, which is not yet implemented.
 
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
 handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
@@ -442,7 +484,19 @@ the detailed change history. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
 changing wishlist retrieval or adding Steam-compatible loading orders.
 
-### Other product credits
+### Product credits
+
+Your wishlist shows both **Developer:** and **Publisher:** beneath each game's
+artwork/title, using the same small, muted text as the catalog tabs. Role labels
+and names share a fluid grid, so both name lists align and wrapped names stay in
+their own column. See [text and localization decisions](TEXT_AND_LOCALIZATION.md)
+for wording and future translation guidance. All reported
+names appear, including multiple developers and co-publishers. Missing or empty
+credits show Unavailable; pending rows show Loading…. Credit text also appears
+on example comparisons and skipped results when metadata is available.
+Existing results from an older server show Unavailable until a new comparison
+supplies their missing credits. Sorting, filtering, and displaying credits do not
+fetch additional prices or metadata. Both lists are already included in CSV.
 
 The Developers tab shows publishers, and the Publishers tab shows developers.
 By default, credits appear as small text below each product title. Check
