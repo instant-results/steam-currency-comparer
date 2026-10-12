@@ -437,9 +437,11 @@ changing wishlist retrieval or adding Steam-compatible loading orders.
 
 ### Other product credits
 
-Use **Show publisher** above the Developers search or **Show developer** above
-the Publishers search to show the opposite role below each product title. All
-reported names appear, including co-publishers. Each tab remembers its choice;
+The Developers tab shows publishers, and the Publishers tab shows developers.
+By default, credits appear as small text below each product title. Check
+**Show publisher column** / **Show developer column** above search to move the
+credits into a separate labeled column. All reported names appear, including
+co-publishers. Each tab remembers its display mode;
 missing credits are labeled Unavailable. Credits come from the same Steam
 appdetails response as prices and are cached with them. Older saved catalog
 comparisons refresh once to obtain credits.
