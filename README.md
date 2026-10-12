@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.5-beta** · Beta for local use.
+**Version: 0.4.6-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -34,8 +34,9 @@ change over time. No personal Steam profile is used.
   result sorting once results arrive.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
-- Exports wishlist, developer, and publisher results to CSV. Catalog exports
-  always include both developer and publisher credits; wishlist attribution is optional.
+- Exports wishlist, developer, and publisher results with one CSV schema, including
+  both credit lists, regional prices, comparison details, and provenance.
+  Wishlist profile attribution is optional and off by default.
 - Separate **Developers** and **Publishers** tabs compare featured games without
   a wishlist. Developers starts with Supergiant Games, CD PROJEKT RED, and
   Techland. Publishers starts with Devolver Digital (US), THQ Nordic (Austria),
@@ -197,8 +198,8 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.5-beta` closes the developer/publisher feature branch and records
-its next development targets. Upcoming changes are described in the
+The current `0.4.6-beta` unifies and expands CSV exports across all three tabs.
+Upcoming changes are described in the
 [development roadmap](docs/ROADMAP.md).
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
@@ -211,9 +212,8 @@ does not publish the app.
 
 ## Planned development
 
-The developer/publisher feature branch is complete for now. Next: unify CSV
-formats between tabs and add compact developer/publisher descriptions beneath
-wishlist game icons/titles. The following stage adds a tab for the user's owned
+CSV formats are unified across tabs. Next: add compact developer/publisher descriptions
+beneath wishlist game icons/titles. The following stage adds a tab for the user's owned
 Steam library. These are planned features; see the [roadmap](docs/ROADMAP.md)
 for scope and completion criteria.
 

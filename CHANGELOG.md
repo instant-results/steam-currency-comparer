@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.6-beta — 2026-10-13
+
+- Use one fixed, versioned CSV schema for Wishlist, Developers, and Publishers,
+  including both credit lists, catalog membership, and a wishlist-profile column
+  whose values remain blank unless attribution is enabled.
+- Add comparison storefronts, Steam links, individual price sources, converted
+  base prices, per-storefront differences, cheapest alternatives, failure details,
+  request/cache counts, and flags distinguishing unknown from empty credit lists.
+- Refresh older wishlist price-cache entries missing credits on comparison;
+  subsequent comparisons reuse the enriched cache. Exporting adds no requests.
+
 ## 0.4.5-beta — 2026-10-13
 
 - Close out the developer/publisher feature branch with its implemented searches,

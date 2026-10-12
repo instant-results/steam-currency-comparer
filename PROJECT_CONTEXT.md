@@ -8,11 +8,12 @@ Read AGENTS.md and README.md, then inspect Git status and the implementation.
 Follow the user's next request; do not invent new features or deploy the app.
 Developer and publisher searches/catalogs are implemented as independent tabs
 alongside Your wishlist. No Creator category appears in the UI. This feature
-branch is complete for now; the next targets are in docs/ROADMAP.md.
+branch is complete. CSV unification is implemented on codex/unified-csv-exports;
+the remaining targets are in docs/ROADMAP.md.
 
 ## Publication and version
 
-Current version: `0.4.5-beta`, defined in `steam_price_polisher/version.py` and
+Current version: `0.4.6-beta`, defined in `steam_price_polisher/version.py` and
 shown in the header, startup log, and `/api/health`. Follow README.md versioning:
 0.MINOR.PATCH-beta, minor for substantial features, patch for refinements.
 The intended first stable release is 1.0.0. Version bumps do not publish the app.
@@ -31,6 +32,8 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   prefetch learns missing names and reuses baseline prices. Rows append stably;
   table sorting resets to loading order. Search, filters, unavailable toggle,
   CSV export with optional profile attribution, retry, and cancellation remain.
+  Wishlist comparisons now also require cached developer/publisher credits;
+  older cache entries refresh once during comparison, without export-time requests.
 - Developers starts with three games each from Supergiant Games, CD PROJEKT RED,
   and Techland. Publishers features Devolver Digital (US), THQ Nordic (Austria),
   and 11 bit studios (Poland), with examples made by different studios.
@@ -68,9 +71,12 @@ README screenshots in docs/images show the 2026-09-23 seven-game example.
   and filter. Differences use the cheapest converted alternative. Zero reference
   makes percentages unavailable. Per-price provenance appears in hover tooltips.
 - Results/rates persist in the browser tab; completed saved comparisons can outlive
-  server jobs. Refresh explicitly requests new checks. Catalog tabs also export checked products, with catalog role/name and both
-  developer/publisher credits independent of their display checkbox. CSV uses
-  one row per observed storefront and repeats products for each catalog membership.
+  server jobs. Refresh explicitly requests new checks. All tabs export CSV schema 1
+  with the same fixed columns, both credit lists, price/rate provenance, per-storefront
+  differences, failure details, and cache/request counts. Wishlist attribution stays
+  opt-in; catalog profile values and wishlist catalog fields are blank. CSV uses one
+  row per observed storefront (one for uncompared products) and repeats products
+  for each catalog membership. Pending products are omitted. See docs/USAGE.md.
 
 ## Architecture and constraints
 
@@ -111,7 +117,11 @@ Python WSGI and SQLite, vanilla HTML/CSS/JavaScript, no frontend build step.
 
 ## Verification and open work
 
-Latest checks: 128 Python tests and 47 frontend tests, plus JS syntax/diff checks.
+Latest checks: 129 Python tests and 51 frontend tests, plus JS syntax/diff checks.
+CSV checks cover identical headers across tabs and attribution settings, enriched
+wishlist cache reuse, mixed provenance, both conversion legs, escaping/missing values,
+zero references, overlapping catalog membership, and partial exports. This export
+change was verified offline; no new live browser QA or network comparison was run.
 New checks cover role-only search/cache keys, featured role registry selectors,
 separate tab state/restoration, cross-tab worker locking, legacy migration, and
 three-tab keyboard navigation. Live browser QA verified ConcernedApe developer and publisher searches/additions,
@@ -124,11 +134,9 @@ console errors. Minimal DOM tests require complementary browser QA.
 
 Next targets (planned, not implemented; see [docs/ROADMAP.md](docs/ROADMAP.md)):
 
-1. Unify CSV schema/format across Wishlist, Developers, and Publishers. The price
-   serializer is already shared, but wishlist exports lack catalog credit fields.
-2. Add compact developer/publisher descriptions beneath wishlist game icons/titles,
+1. Add compact developer/publisher descriptions beneath wishlist game icons/titles,
    reusing appdetails credits and price caching while preserving table alignment.
-3. In the following stage, add a separate tab for the user's owned Steam library;
+2. In the following stage, add a separate tab for the user's owned Steam library;
    verify retrieval, credentials, and privacy constraints before implementation.
 
 The sorted wishlist API remains research only; see docs/STEAM_SORTED_WISHLIST_API.md.
@@ -138,11 +146,14 @@ or persistent company index is included.
 
 ## Git state
 
-Working branch: main (the repository's primary branch; there is no master branch).
+Working branch: codex/unified-csv-exports, created from main for CSV unification.
+The implementation, tests, and documentation for v0.4.6 are versioned in separate
+coherent commits, as authorized by the user. No push is authorized.
+main is the repository's primary branch; there is no master branch.
 The completed codex/developer-publisher-catalogs branch is merged locally into
 main with a merge commit. Implementation, test, and documentation commits remain
-separate in history, including the v0.4.5 version/roadmap handoff. The feature
-branch is retained. This local merge has not been pushed; no push, tag, release,
-or deployment is authorized. Follow the user's next request before implementing
+separate in history, including the v0.4.5 version/roadmap handoff. The completed
+catalog feature branch is retained. The local merge and CSV branch have not been
+pushed; no push, tag, release, or deployment is authorized. Follow the user's next request before implementing
 the planned roadmap. Keep runtime data, caches, screenshots, local wishlist
 files, secrets, and populated environment files out of Git.

@@ -1,15 +1,19 @@
 # Development roadmap
 
-Updated: 2026-10-13. These are planned changes, not implemented features.
+Updated: 2026-10-13. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
-The developer/publisher feature branch is complete for now. The next work is
-ordered below; this document records scope and does not start implementation.
+The developer/publisher feature branch is complete. The export and wishlist-credit
+stage is underway, with remaining work ordered below.
 
 ## Next stage: consistent exports and wishlist credits
 
 ### Unify CSV formats between tabs
+
+Completed in `0.4.6-beta` on `codex/unified-csv-exports`. All three tabs use
+CSV schema 1, with regression coverage for headers, credits, missing values,
+attribution, currencies, and overlapping catalog membership.
 
 - Define one consistent CSV schema for Your wishlist, Developers, and Publishers:
   column names and order, number/date formats, credit formatting, and missing values.
@@ -21,9 +25,7 @@ ordered below; this document records scope and does not start implementation.
   Preserve catalog membership when one product belongs to multiple selected catalogs.
 - Retain UTF-8 spreadsheet compatibility, formula escaping, credential exclusion,
   and the current rule that running comparisons export only checked results.
-- Reuse the existing shared `buildPriceCsv` serializer. It currently shares price
-  fields, but catalog exports add credit/membership columns that wishlist exports
-  do not yet include; a shared function alone is not a unified format.
+- Reuse the shared `buildPriceCsv` serializer with fixed columns for every tab.
 
 Done when all three tabs use the agreed schema and regression checks cover their
 headers, credits, missing values, attribution, and comparison currencies.
