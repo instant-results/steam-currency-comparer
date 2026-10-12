@@ -1116,7 +1116,7 @@ td:first-child { min-width: 0; }
 .comparison-tabs button[aria-selected=true] {
   color: var(--text); border-color: var(--blue); background: var(--blue-subtle);
 }
-.creator-panel { padding-bottom: 26px; container: creator-panel / inline-size; --creator-game-width: 34%; --creator-home-width: 16%; --creator-foreign-width: 30%; --creator-difference-width: 20%; }
+.creator-panel { padding-bottom: 26px; container: creator-panel / inline-size; --creator-credit-width: 0%; --creator-game-width: 34%; --creator-home-width: 16%; --creator-foreign-width: 30%; --creator-difference-width: 20%; }
 .creator-panel-heading { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
 .creator-panel-heading h2 { font-size: 26px; letter-spacing: -.7px; margin: 0; }
 .creator-panel-heading .eyebrow { margin-bottom: 9px; }
@@ -1179,9 +1179,9 @@ td:first-child { min-width: 0; }
 .creator-panel .home-column { width: var(--creator-home-width); }
 .creator-panel .foreign-column { width: var(--creator-foreign-width); }
 .creator-panel .difference-column { width: var(--creator-difference-width); }
-.creator-catalog td:nth-child(3), .creator-panel th:nth-child(3) { padding-left: 16px; padding-right: 16px; }
-.creator-panel th:nth-child(3) { border-left: 1px solid var(--line); }
-.creator-catalog tbody tr { background-image: linear-gradient(var(--line), var(--line)); background-repeat: no-repeat; background-position: calc(var(--creator-game-width) + var(--creator-home-width)) 0; background-size: 1px 100%; }
+.creator-catalog td.catalog-foreign-price, .creator-panel th.catalog-foreign-heading { padding-left: 16px; padding-right: 16px; }
+.creator-panel th.catalog-foreign-heading { border-left: 1px solid var(--line); }
+.creator-catalog tbody tr { background-image: linear-gradient(var(--line), var(--line)); background-repeat: no-repeat; background-position: calc(var(--creator-game-width) + var(--creator-credit-width) + var(--creator-home-width)) 0; background-size: 1px 100%; }
 .creator-catalog tbody tr:last-child > td { border-bottom: 0; }
 .creator-catalog tbody tr:last-child { background-size: 1px 80%; }
 .creator-catalog .foreign { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -1216,3 +1216,27 @@ td:first-child { min-width: 0; }
 
 .catalog-credit-toggle { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; }
 .catalog-credit { display: block; color: var(--muted); margin-top: 0.4rem; overflow-wrap: anywhere; }
+
+.creator-panel.credit-column-visible { --creator-game-width: 28%; --creator-credit-width: 16%; --creator-home-width: 14%; --creator-foreign-width: 26%; --creator-difference-width: 16%; }
+.creator-panel .credit-column { width: var(--creator-credit-width); }
+.credit-column-visible .table-wrap table { min-width: 920px; }
+.catalog-credit-cell { color: var(--muted); overflow-wrap: anywhere; }
+.credit-column-visible .creator-group-heading { grid-template-columns: var(--creator-game-width) var(--creator-credit-width) var(--creator-home-width) calc(var(--creator-foreign-width) / 2) calc(var(--creator-foreign-width) / 2) var(--creator-difference-width); }
+.credit-column-visible .creator-identity { grid-column: 1 / 4; }
+.credit-column-visible .creator-statistic:first-child { grid-column: 4; }
+.credit-column-visible .creator-statistic:nth-child(2) { grid-column: 5; }
+.credit-column-visible .creator-statistics-coverage { grid-column: 4 / -1; }
+@container creator-panel (max-width: 919px) {
+  .credit-column-visible .creator-group-heading { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .credit-column-visible .creator-identity { grid-column: 1 / -1; grid-row: auto; padding-right: 0; }
+  .credit-column-visible .creator-statistic:first-child { grid-column: 1; padding: 0; }
+  .credit-column-visible .creator-statistic:nth-child(2) { grid-column: 2; padding: 0; }
+  .credit-column-visible .creator-statistics-coverage { grid-column: 1 / -1; padding-left: 0; }
+}
+
+.credit-column-visible .creator-catalog-footer { grid-template-columns: var(--creator-game-width) var(--creator-credit-width) var(--creator-home-width) var(--creator-foreign-width) var(--creator-difference-width); }
+.credit-column-visible .creator-load-more { grid-column: 3 / 5; }
+@media (max-width: 600px) {
+  .credit-column-visible .creator-catalog-footer { grid-template-columns: 1fr; }
+  .credit-column-visible .creator-load-more { grid-column: 1; }
+}

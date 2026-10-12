@@ -21,7 +21,7 @@
 </div>
 <div class="results-panel creator-panel" id="developers-panel" role="tabpanel" aria-labelledby="developers-tab" hidden>
 <div class="creator-panel-heading"><div><p class="eyebrow">EXPLORE THEIR CATALOGS</p><h2>Developers</h2><p class="hint">Free products, including demos, are hidden after checking.</p></div><div class="creator-actions"><button id="developers-refresh" type="button">Refresh comparisons ↻</button><button id="developers-cancel" type="button" hidden>Cancel comparison ■</button></div></div>
-<label class="catalog-credit-toggle"><input id="developer-show-credits" type="checkbox"> Show publisher</label>
+<label class="catalog-credit-toggle"><input id="developer-show-credits" type="checkbox"> Show publisher column</label>
 <section class="creator-search" aria-labelledby="developer-search-label">
 <form id="developer-search-form"><label id="developer-search-label" for="developer-query">Find a developer</label><div class="creator-search-controls"><input id="developer-query" type="search" minlength="2" maxlength="100" required placeholder="e.g. ConcernedApe or Valve" autocomplete="off" aria-describedby="developer-search-help"><button id="developer-search-submit" type="submit">Search Steam</button></div></form>
 <p id="developer-search-help" class="hint">Search by the developer name listed on a game's store page. Featured developers stay below.</p>
@@ -29,13 +29,13 @@
 </section>
 <p id="developers-notice" role="status" aria-live="polite" hidden></p><p id="developers-progress" class="hint" role="status" aria-live="polite">Open this tab to load comparisons.</p>
 <p class="hint creator-statistics-help">Averages and medians cover loaded products only, with equal weight per product. Negative means cheaper in the baseline; positive means pricier.<span>Missing and zero reference prices are excluded.</span></p>
-<div class="creator-columns"><div id="developer-columns-scroll" class="table-wrap"><table aria-hidden="true"><colgroup><col class="game-column"><col class="home-column"><col class="foreign-column"><col class="difference-column"></colgroup><thead id="developer-columns-head"></thead></table></div></div>
+<div class="creator-columns"><div id="developer-columns-scroll" class="table-wrap"><table aria-hidden="true"><colgroup id="developer-columns-colgroup"><col class="game-column"><col class="home-column"><col class="foreign-column"><col class="difference-column"></colgroup><thead id="developer-columns-head"></thead></table></div></div>
 <div id="developer-groups"></div>
 <div class="export-options"><button id="developers-export" type="button" disabled>Download CSV</button><small>All checked products in this tab, including developer and publisher credits.</small></div>
 </div>
 <div class="results-panel creator-panel" id="publishers-panel" role="tabpanel" aria-labelledby="publishers-tab" hidden>
 <div class="creator-panel-heading"><div><p class="eyebrow">EXPLORE THEIR CATALOGS</p><h2>Publishers</h2><p class="hint">Free products, including demos, are hidden after checking.</p></div><div class="creator-actions"><button id="publishers-refresh" type="button">Refresh comparisons ↻</button><button id="publishers-cancel" type="button" hidden>Cancel comparison ■</button></div></div>
-<label class="catalog-credit-toggle"><input id="publisher-show-credits" type="checkbox"> Show developer</label>
+<label class="catalog-credit-toggle"><input id="publisher-show-credits" type="checkbox"> Show developer column</label>
 <section class="creator-search" aria-labelledby="publisher-search-label">
 <form id="publisher-search-form"><label id="publisher-search-label" for="publisher-query">Find a publisher</label><div class="creator-search-controls"><input id="publisher-query" type="search" minlength="2" maxlength="100" required placeholder="e.g. Devolver Digital or Valve" autocomplete="off" aria-describedby="publisher-search-help"><button id="publisher-search-submit" type="submit">Search Steam</button></div></form>
 <p id="publisher-search-help" class="hint">Search by the publisher name listed on a game's store page. Featured publishers stay below.</p>
@@ -43,7 +43,7 @@
 </section>
 <p id="publishers-notice" role="status" aria-live="polite" hidden></p><p id="publishers-progress" class="hint" role="status" aria-live="polite">Open this tab to load comparisons.</p>
 <p class="hint creator-statistics-help">Averages and medians cover loaded products only, with equal weight per product. Negative means cheaper in the baseline; positive means pricier.<span>Missing and zero reference prices are excluded.</span></p>
-<div class="creator-columns"><div id="publisher-columns-scroll" class="table-wrap"><table aria-hidden="true"><colgroup><col class="game-column"><col class="home-column"><col class="foreign-column"><col class="difference-column"></colgroup><thead id="publisher-columns-head"></thead></table></div></div>
+<div class="creator-columns"><div id="publisher-columns-scroll" class="table-wrap"><table aria-hidden="true"><colgroup id="publisher-columns-colgroup"><col class="game-column"><col class="home-column"><col class="foreign-column"><col class="difference-column"></colgroup><thead id="publisher-columns-head"></thead></table></div></div>
 <div id="publisher-groups"></div>
 <div class="export-options"><button id="publishers-export" type="button" disabled>Download CSV</button><small>All checked products in this tab, including developer and publisher credits.</small></div>
 </div></section>
