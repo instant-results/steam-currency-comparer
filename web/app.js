@@ -26,18 +26,20 @@ function updateSelections(event) {
   for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
   const count = selected.length;
-  const caption = $("welcome-currencies");
-  caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
-  for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
+  for (const caption of [$("welcome-currencies"), $("library-welcome-currencies")].filter(Boolean)) {
+    caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
+    for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
+  }
   for (const el of options) {
-    el.disabled = running || window.creatorPane?.busy || el.value === home || (!el.checked && count >= 2);
+    el.disabled = running || window.libraryPane?.busy || window.creatorPane?.busy || el.value === home || (!el.checked && count >= 2);
     el.closest('label').hidden = el.value === home;
   }
-  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running || !!window.creatorPane?.busy);
+  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy);
   window.creatorPane?.refreshControls();
-  $("analyze").disabled = running || !!window.creatorPane?.busy;
-  $("demo").disabled = running || !!window.creatorPane?.busy;
-  $("retry").disabled = running || !!window.creatorPane?.busy;
+  window.libraryPane?.refreshControls();
+  $("analyze").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
+  $("demo").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
+  $("retry").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
   $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
 }
@@ -202,11 +204,11 @@ function render() {
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
   $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
   $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
-  document.querySelectorAll('.sort').forEach(button => {
+  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
     button.closest('th').removeAttribute('aria-sort');
     button.setAttribute('aria-pressed', String(button.dataset.sort === sort));
   });
-  document.querySelectorAll('.sort').forEach(button => {
+  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
     if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
   });
 }
@@ -222,7 +224,7 @@ function formatRateTime(isoString) {
 }
 function showRates(rates) {
   currentRates = rates;
-  if (!window.creatorPane?.active) renderRates(rates, $("rates"));
+  if (!window.creatorPane?.active && !window.libraryPane?.active) renderRates(rates, $("rates"));
 }
 function renderRates(rates, target) {
   target.replaceChildren();
@@ -241,6 +243,7 @@ function renderRates(rates, target) {
 }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
+  if (window.libraryPane?.busy) { notice("An owned-library comparison is running. Cancel it on the Owned library tab or wait for it to finish.", true); return; }
   if (window.creatorPane?.busy) { notice("A catalog comparison is running. Wait for it or cancel it on the Developers or Publishers tab.", true); return; }
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
@@ -284,7 +287,7 @@ const priceCsvHeaders = Object.freeze([
   "storefront_difference_baseline", "storefront_difference_percent", "base_price_baseline",
   "storefront_price_source", "baseline_rate_source", "skipped_reason", "skipped_storefront",
   "skipped_retryable", "cache_hits", "stale_cache_hits", "live_price_requests",
-  "developers_known", "publishers_known"
+  "developers_known", "publishers_known", "library_profile", "library_loading_order"
 ]);
 function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
   const baseline = () => storefronts[home];
@@ -324,7 +327,8 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
         price.source, homeIdentity ? "Identity conversion" : homeRate.source,
         item.skipped?.reason, item.skipped?.region, item.skipped?.retryable,
         item.cache_hits, item.stale_cache_hits, item.live_requests,
-        Array.isArray(item.developers), Array.isArray(item.publishers));
+        Array.isArray(item.developers), Array.isArray(item.publishers),
+        sourceTab === "library" && includeOwner ? profile : null, sourceTab === "library" ? order : null);
       rows.push(row);
     }
   }
@@ -348,8 +352,8 @@ $("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest);
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
 $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
-document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
-document.querySelectorAll('.sort').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
+document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
+document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
 $("demo").addEventListener("click", () => {
   const selected = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
   const home = selectedHome();

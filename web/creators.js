@@ -16,7 +16,7 @@
     const groups = new Map(), results = new Map(), defaultIds = new Set();
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
-    const otherBusy = () => [...panes.values()].some(pane => pane.kind !== kind && pane.busy);
+    const otherBusy = () => !!window.libraryPane?.busy || [...panes.values()].some(pane => pane.kind !== kind && pane.busy);
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
 
     function save() {
@@ -463,39 +463,46 @@
 
   for (const kind of ["developer", "publisher"]) panes.set(kind, createPane(kind));
   function selectTab(tab) {
+    if (tab === "library" && !libraryEnabled) tab = "wishlist";
     selectedTab = tab;
-    const catalog = tab !== "wishlist";
+    const catalog = tab === "developer" || tab === "publisher";
     document.getElementById("currencies-step").textContent = catalog ? "01 / CURRENCIES" : "02 / CURRENCIES";
-    document.getElementById("wishlist-panel").hidden = catalog;
-    document.getElementById("compare-form").hidden = catalog;
+    document.getElementById("wishlist-panel").hidden = tab !== "wishlist";
+    document.getElementById("compare-form").hidden = tab !== "wishlist";
+    document.getElementById("library-panel").hidden = tab !== "library";
+    document.getElementById("library-compare-form").hidden = tab !== "library";
+    window.libraryPane?.activate(tab === "library");
     for (const [kind, pane] of panes) {
       document.getElementById(kind + "s-panel").hidden = tab !== kind;
       pane.activate(tab === kind);
     }
-    if (!catalog) renderRates(currentRates, document.getElementById("rates"));
-    for (const name of ["wishlist", "developer", "publisher"]) {
-      const button = document.getElementById(name === "wishlist" ? "wishlist-tab" : name + "s-tab");
+    if (tab === "wishlist") renderRates(currentRates, document.getElementById("rates"));
+    for (const name of ["wishlist", "library", "developer", "publisher"]) {
+      const button = document.getElementById(tabId(name));
       button.setAttribute("aria-selected", String(tab === name)); button.tabIndex = tab === name ? 0 : -1;
     }
     try { sessionStorage.setItem("polisher-active-tab", tab); } catch (_) {}
   }
-  window.creatorPane = {get active() { return selectedTab !== "wishlist"; }, get busy() { return anyBusy(); },
+  window.creatorPane = {get active() { return selectedTab === "developer" || selectedTab === "publisher"; }, get busy() { return anyBusy(); },
     refreshControls() { for (const pane of panes.values()) pane.refreshControls(); }};
-  const tabs = ["wishlist", "developer", "publisher"];
+  const tabId = name => ["wishlist", "library"].includes(name) ? name + "-tab" : name + "s-tab";
+  const libraryEnabled = document.documentElement?.dataset.ownedLibraryEnabled === "true";
+  document.getElementById("library-tab").hidden = !libraryEnabled;
+  const tabs = libraryEnabled ? ["wishlist", "library", "developer", "publisher"] : ["wishlist", "developer", "publisher"];
   for (const [index, name] of tabs.entries()) {
-    const button = document.getElementById(name === "wishlist" ? "wishlist-tab" : name + "s-tab");
+    const button = document.getElementById(tabId(name));
     button.addEventListener("click", () => selectTab(name));
     button.addEventListener("keydown", event => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
-      const targetIndex = event.key === "Home" ? 0 : event.key === "End" ? 2
-        : (index + (event.key === "ArrowRight" ? 1 : 2)) % 3;
+      const targetIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length;
       selectTab(tabs[targetIndex]);
-      document.getElementById(targetIndex === 0 ? "wishlist-tab" : tabs[targetIndex] + "s-tab").focus();
+      document.getElementById(tabId(tabs[targetIndex])).focus();
     });
   }
   try {
     const saved = sessionStorage.getItem("polisher-active-tab");
-    if (["developer", "publisher", "creators"].includes(saved)) selectTab(saved === "creators" ? "developer" : saved);
+    if (["library", "developer", "publisher", "creators"].includes(saved)) selectTab(saved === "creators" ? "developer" : saved);
   } catch (_) {}
 })();

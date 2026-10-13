@@ -1,11 +1,12 @@
 # Development roadmap
 
-Updated: 2026-10-13. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-14. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
 The developer/publisher feature branch and the export/wishlist-credit stage are
-complete. The next stage is the user's owned library.
+complete. Owned-library code is retained in 0.5.0-beta, hidden behind an internal
+flag while authenticated live testing is deferred.
 
 ## Completed stage: consistent exports and wishlist credits
 
@@ -47,17 +48,42 @@ Done when wishlist rows show both credits with the existing compact styling,
 including the built-in example and restored comparisons, without disturbing
 price columns or issuing requests merely to change the display.
 
-## Next stage: the user's owned library
+## Deferred stage: the user's owned library
 
-- Add an Owned library tab alongside Your wishlist, Developers, and Publishers
-  to compare the games the user owns on Steam.
-- Research and verify Steam's owned-library retrieval before implementation,
-  including required credentials, visibility/privacy constraints, and pagination.
-  Document the supported input and clear handling of private or unavailable libraries.
-- Reuse storefront choices, price/rate caching, comparison arithmetic, and the
-  unified CSV format; keep library results/state separate and honor shared job locking.
-- Define ownership-specific product handling during that stage, with tests for
-  successful retrieval, empty/unavailable libraries, and restoration of tab state.
+Code and automated fixtures are implemented in 0.5.0-beta, merged locally from
+codex/owned-library-tab. This stage is **not complete**: successful authenticated
+live retrieval remains TODO. Steam Guard access/key registration is deferred at
+the user's request. The tab and profile form are hidden by default; library
+initialization/reconnection and /api/library-jobs are disabled too. Existing
+library session data is preserved but cannot affect the visible comparisons.
+Your wishlist, Developers, and Publishers remain available.
+
+When internally enabled, Owned library appears immediately after Your wishlist
+and shares its row renderer, table styling, credits, filters, sorting, exports,
+unavailable handling, and cancellation/retry. State stays separate; prices,
+rates, pacing, and job locking are shared. See [research](STEAM_OWNED_LIBRARY_API.md)
+and [internal QA behavior](USAGE.md#owned-library). Automated coverage and sample
+browser checks do not establish successful live ownership retrieval.
+
+### TODO: authenticated API-key and library testing
+
+- Complete Steam Guard/key registration locally. Keep the key out of chat, Git,
+  browser requests, fixtures, screenshots, and diagnostics.
+- Use an isolated QA WebApplication with owned_library_enabled=True; the normal
+  launcher stays disabled. Test the previously supplied profile without adding
+  its ID or ownership list to tracked files.
+- Verify valid-key retrieval, numeric/community/custom-profile inputs, returned
+  game count/selection, Name/Steam order, and documented coverage/limits.
+- Verify real regional prices and rates, sale/credit metadata, cancellation,
+  retry/cache reuse, and shared locking with wishlist/catalog comparisons.
+- Check reload restoration, filters/sorts, CSV profile opt-in, safe diagnostics,
+  and desktop/narrow layouts. Verify unavailable/empty or rejected-key handling
+  where suitable test cases are available; automated cases remain complementary.
+- Record authenticated live evidence and resolve failures. Only then decide to
+  enable OWNED_LIBRARY_ENABLED by default and update README/usage/context.
+
+Until that checklist passes, keep the owned-library stage deferred and avoid
+presenting its UI or describing it as an available, fully verified feature.
 
 ## Deferred research
 

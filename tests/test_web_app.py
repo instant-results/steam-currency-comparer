@@ -82,7 +82,7 @@ class WebAppTests(unittest.TestCase):
         return response["json"]
 
     def test_assets_are_allowlisted_and_security_headers_apply(self):
-        for asset in ["/", "/app.js", "/app.css", "/favicon.svg"]:
+        for asset in ["/", "/app.js", "/library.js", "/app.css", "/favicon.svg"]:
             with self.subTest(asset=asset):
                 response = self.request(asset)
                 self.assertEqual(response["status"], 200)
@@ -97,8 +97,44 @@ class WebAppTests(unittest.TestCase):
         page = self.request("/")["body"].decode()
         self.assertIn(f"v{__version__}", page)
         self.assertNotIn("{{APP_VERSION}}", page)
+        self.assertNotIn("{{OWNED_LIBRARY_ENABLED}}", page)
         self.assertEqual(self.request("/api/health")["json"],
                          {"status": "ok", "version": __version__})
+
+    def test_owned_library_flag_controls_page_and_submission_without_initializing_jobs(self):
+        from steam_price_polisher.web_app import OWNED_LIBRARY_ENABLED
+        self.assertFalse(OWNED_LIBRARY_ENABLED)
+        page = self.request("/")["body"].decode()
+        self.assertIn('data-owned-library-enabled="false"', page)
+        self.assertIn('<button id="library-tab" hidden', page)
+        response = self.request("/api/library-jobs", "POST", {"identifier":PROFILE,"regions":["us"]})
+        self.assertEqual(response["status"],404)
+        self.assertEqual(len(self.manager.jobs),0)
+        self.app = WebApplication(self.manager, owned_library_enabled=True)
+        page = self.request("/")["body"].decode()
+        self.assertIn('data-owned-library-enabled="true"',page)
+        self.assertNotIn('<button id="library-tab" hidden',page)
+        response = self.request("/api/library-jobs", "POST", {"identifier":PROFILE,"regions":["us"]})
+        self.assertEqual(response["status"],202)
+
+    def test_library_controls_follow_wishlist_and_have_unique_accessible_ids(self):
+        from html.parser import HTMLParser
+        class PageControls(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.ids = []; self.library_filters = []; self.references = []
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if "id" in attrs: self.ids.append(attrs["id"])
+                if "library-filter" in attrs.get("class", "").split(): self.library_filters.append(tag)
+                for key in ("for", "aria-controls", "aria-labelledby", "aria-describedby"):
+                    if key in attrs: self.references.extend(attrs[key].split())
+        page = self.request("/")["body"].decode()
+        parser = PageControls(); parser.feed(page)
+        self.assertEqual(len(parser.ids), len(set(parser.ids)))
+        self.assertEqual(parser.library_filters, ["button"] * 5)
+        self.assertTrue(set(parser.references) <= set(parser.ids))
+        self.assertLess(page.index('id="wishlist-tab"'), page.index('id="library-tab"'))
+        self.assertLess(page.index('id="library-tab"'), page.index('id="developers-tab"'))
 
     def test_job_requires_capability_token_and_can_be_cancelled(self):
         job = self.submit(); path = "/api/jobs/" + job["id"]

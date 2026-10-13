@@ -1,13 +1,13 @@
 # Text and localization decisions
 
-Updated: 2026-10-13. This is the current reference for user-facing wording,
+Updated: 2026-10-14. This is the current reference for user-facing wording,
 typography, and text alignment. Update the relevant decision when changing copy
 or its presentation. English is the current interface language; a translation
 system and language selector have not been implemented.
 
 ## Product credits
 
-Wishlist credits appear below the game's artwork/title, in this order:
+Wishlist and owned-library credits appear below the game's artwork/title, in this order:
 
 | Meaning | Current English text |
 | --- | --- |
@@ -28,11 +28,11 @@ pending metadata, not completed results with missing credits.
 
 Developers catalogs show Publisher: credits; Publishers catalogs show Developer:
 credits. Their optional credit-column mode uses the corresponding role heading.
-Wishlist shows both roles together.
+Wishlist and owned library show both roles together.
 
 ## Credit alignment and typography
 
-- Role labels and names occupy separate columns in a shared grid per wishlist
+- Role labels and names occupy separate columns in a shared grid per wishlist/library
   game. Developer and publisher names start at the same position.
 - Size the label column from its content, capped at 45% of the credit block.
   The names column uses the remaining space and allows wrapping. Long localized
@@ -52,6 +52,22 @@ Wishlist shows both roles together.
 
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
+
+## Owned-library wording
+
+These decisions apply to the internal prototype. Its tab and profile form are
+hidden by default pending authenticated live QA; do not advertise it as available.
+
+Use Owned library for the tab immediately after Your wishlist. The table uses
+Your library comparison. Name is the default loading order; Steam order means
+the order returned by the API, not purchase date, playtime, or wishlist priority.
+Explain that these are current storefront prices, not historical purchase prices.
+Keep missing credentials and unavailable Game details distinct from an explicitly
+empty library. Include library profile is opt-in and off by default.
+The required server-side key setup is explained next to the profile input; bound
+its text beside/below the comparison button so it cannot squeeze the input.
+The wishlist row renderer and existing credit/table styles are shared, including
+narrow-screen scrolling and matching header/cell boundaries.
 
 ## Wording and translation boundaries
 
