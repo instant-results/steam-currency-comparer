@@ -38,6 +38,70 @@ private result tokens, and a persistent price cache. Deploy it as one Python
 process behind HTTPS. The source is published on GitHub; the app has not been
 deployed as a public service.
 
+## Owned library
+
+**Deferred / hidden by default.** This prototype is retained for internal testing;
+it is not an available feature in the normal app. Successful authenticated live
+API retrieval is TODO until Steam Guard/key setup can be completed. Merely setting
+STEAM_WEB_API_KEY does not enable it. See the [test checklist](ROADMAP.md#deferred-stage-the-users-owned-library).
+
+The server's internal OWNED_LIBRARY_ENABLED flag defaults to false. Isolated QA
+can explicitly construct WebApplication with owned_library_enabled=True; this
+opt-in enables both the tab and its job endpoint. Normal runs hide the tab/form,
+skip initialization and saved-job reconnection, and reject /api/library-jobs.
+Saved library session state is preserved for later QA and cannot lock the visible
+controls or change currencies. Keyboard navigation covers the three visible tabs;
+a saved library selection falls back to Your wishlist.
+
+The following describes the prototype when explicitly enabled for internal QA.
+Its **Owned library** tab appears immediately to the right of **Your wishlist**. Enter a
+17-digit SteamID64 or a Steam community `/profiles/` or `/id/` profile URL.
+It uses the same table, credits, filters, sorting, unavailable toggle, sale-price
+handling, cancel/retry actions, and shared currencies as the wishlist. It shows
+current storefront prices for games you own, not historical purchase prices.
+
+Steam's owned-games API requires a Web API key for numeric profiles too. Register
+your own [Steam user Web API key](https://steamcommunity.com/dev/apikey), then set
+it in the terminal that launches an explicitly enabled internal QA server:
+
+```powershell
+$env:STEAM_WEB_API_KEY = "your-key"
+```
+
+On macOS/Linux, use `export STEAM_WEB_API_KEY="your-key"` before starting the
+server. Replace the placeholder locally and keep the key out of chat, Git, and
+browser profile fields. Restart the server after configuring the key.
+The project does not automatically read `.env`. Wishlist and catalog comparisons
+still work without a key when custom profile resolution is not needed.
+
+Set profile **Game details** to **Public**. The app uses no Steam sign-in/cookies
+and changes no privacy settings. Missing or rejected keys have specific messages.
+A response without an exposed library reports private or unavailable Game details
+rather than claiming it is empty. Explicitly empty libraries complete without
+exchange-rate or price requests.
+
+**Name** is the default loading order; **Steam order** preserves the API's order,
+without implying purchase dates, playtime, or wishlist priority. Free-to-play
+games are excluded in the request. The returned games are not a full license/DLC
+inventory; individual private games may be hidden. Products without current prices
+follow wishlist unavailable/uncompared rules. Up to 1,000 distinct games can be
+compared; larger libraries fail explicitly without silently truncating results.
+See the [retrieval research](STEAM_OWNED_LIBRARY_API.md) for credentials and coverage.
+
+Library results, filters, sorting, profile, currency settings, and job access are
+saved independently under `polisher-library-job` in session storage. Completed
+results survive reload in the same tab, even after server jobs expire. Active jobs
+reconnect; retry uses that run's settings. Changing sidebar choices does not
+relabel results; submit the profile again to compare with new choices. All four
+tabs share one paced worker and job locking. Return to the owning tab to cancel.
+Price/rate caches are shared; ownership mappings are never saved in the server cache.
+
+CSV uses the shared schema with `source_tab=library`. `library_profile` is blank
+unless **Include library profile** is checked (off by default), and
+`library_loading_order` records `name`/`steam`. Wishlist/catalog attribution stays
+blank. Export includes checked results hidden by filters and adds no requests.
+Credentials never appear in CSV.
+
 ## Developer and publisher catalogs
 
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
@@ -79,7 +143,7 @@ currencies until **Refresh comparisons** applies the sidebar choices.
 
 Search remains available during comparisons, while adding, refreshing, and
 expanding catalogs wait for the active comparison to finish or be cancelled.
-Return to the tab running the comparison to cancel it. All three tabs share the
+Return to the tab running the comparison to cancel it. The visible tabs and internally enabled library share the
 paced worker and price cache. See the [search implementation notes](STEAM_CREATOR_SEARCH.md).
 
 The footer labels the initial curated selection as **featured games**. That label
@@ -343,7 +407,9 @@ existing results without extra Steam requests.
 
 ## CSV export
 
-All three tabs use the same fixed column names and order (CSV schema 1).
+The three visible tabs and the internal owned-library prototype use the same
+fixed column names and order (CSV schema 1). Library columns remain present and
+blank in the visible tabs; no library request is needed to export.
 Download CSV exports all currently loaded results, including products hidden by
 filters. A running comparison exports only its completed results so far. There
 is one row per game/storefront and one row for each uncompared game. Wishlist
@@ -391,7 +457,7 @@ offered. Export is generated locally in the browser without additional requests.
 The original 29 price columns keep their names and positions. Profile, catalog,
 and credit columns are now fixed across tabs, followed by additional metadata.
 Consumers should read fields by header name and use `csv_schema_version` (`1`).
-`source_tab` is `wishlist`, `developer`, or `publisher`. The columns below appear
+`source_tab` is `wishlist`, `library`, `developer`, or `publisher`. The columns below appear
 in exactly this order, reading each row from left to right:
 
 | Fields | Meaning |
@@ -406,6 +472,7 @@ in exactly this order, reading each row from left to right:
 | `baseline_final_price`, `cheapest_alternative_storefront`, `cheapest_alternative_currency`, `cheapest_alternative_final_price_baseline`, `baseline_is_cheaper_or_equal` | Baseline price and cheapest-alternative details repeated on each observed-storefront row. Ties retain the first selected alternative. |
 | `storefront_difference_baseline`, `storefront_difference_percent`, `base_price_baseline`, `storefront_price_source`, `baseline_rate_source` | Difference against this row's alternative, converted base price, individual price source, and baseline rate provider. Row-specific differences are blank on baseline rows. |
 | `skipped_reason`, `skipped_storefront`, `skipped_retryable`, `cache_hits`, `stale_cache_hits`, `live_price_requests`, `developers_known`, `publishers_known` | Controlled failure label, affected region, retry flag, product-level lookup counts, and whether each credit list was supplied. |
+| `library_profile`, `library_loading_order` | Additive columns at the end of the shared schema. Opt-in profile and `name`/`steam` library loading order; blank on other tabs. Existing columns retain their positions. |
 
 Both difference types use `(baseline final - alternative final)`, in the baseline
 currency. Percentages divide that difference by the corresponding alternative
@@ -473,9 +540,10 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Continuing development
 
-CSV formats are unified across all three tabs, and wishlist rows show both compact
-product credits. The next stage in the [development roadmap](ROADMAP.md) is an
-owned-library tab, which is not yet implemented.
+The owned-library prototype is retained but hidden behind an internal flag in
+0.5.0-beta. Authenticated live testing remains TODO; see the
+[development roadmap](ROADMAP.md) before enabling it. The available wishlist,
+developer, and publisher features retain the shared CSV and product credits.
 
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
 handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
