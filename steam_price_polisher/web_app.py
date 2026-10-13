@@ -27,6 +27,7 @@ from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCa
 from .price_service import CachedPriceService
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
+from .owned_library import LibraryAccessError
 from .version import __version__
 from .creators import (CREATORS, FEATURED_CREATORS, CreatorCatalogService, CreatorSearchService, featured_by_role,
                        validate_selector, validate_search_term, selector_id)
@@ -34,11 +35,14 @@ from .event_log import (configure_event_logging, runtime_data_directory, emit,
                         job_context, elapsed_ms, error_metadata)
 
 TERMINAL = {"complete", "partial", "cancelled", "failed"}
+# TODO: Enable only after authenticated owned-library live QA is complete.
+OWNED_LIBRARY_ENABLED = False
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/app.css": ("app.css", "text/css; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml"),
           "/creators.js": ("creators.js", "text/javascript; charset=utf-8"),
+          "/library.js": ("library.js", "text/javascript; charset=utf-8"),
           "/steam-logo.svg": ("steam-logo.svg", "image/svg+xml")}
 
 EXAMPLE_WISHLIST = (
@@ -104,6 +108,15 @@ def rates_to_baseline(rates, currency):
     return {key: rate.rate_to_pln / baseline for key, rate in rates.items()}
 
 
+def validate_library_request(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("order", "name"), str) or payload.get("order", "name") not in {"name", "steam"}:
+        raise InputError("Choose Name or Steam order for your library.")
+    identifier, config = validate_request({**payload, "order": "name" if payload.get("order", "name") == "name" else "priority"})
+    if identifier == "example" or "store.steampowered.com" in identifier:
+        raise InputError("Use a 17-digit SteamID64 or a Steam community profile URL for your library.")
+    return identifier, config
+
+
 def validate_creator_request(payload):
     if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids", "selector"}:
         raise InputError("Supply catalog comparison settings.")
@@ -143,11 +156,12 @@ def validate_creator_request(payload):
 
 
 class Job:
-    def __init__(self, identifier, config, owner, order, creator_request=None):
+    def __init__(self, identifier, config, owner, order, creator_request=None, library=False):
         self.id = secrets.token_urlsafe(24)
         self.token = secrets.token_urlsafe(32)
         self.identifier, self.config, self.owner, self.order = identifier, config, owner, order
         self.creator_request = creator_request
+        self.library = library
         self.cancel = threading.Event()
         self.lock = threading.Lock()
         self.updated = time.monotonic()
@@ -158,6 +172,8 @@ class Job:
                      "methodology": asdict(ComparisonMethodology(rule="FAIR means the baseline price is no higher than every selected price converted to the baseline currency."))}
         if creator_request:
             self.data.update(profile="", source="creators", creator_request=creator_request, catalogs={})
+        elif library:
+            self.data.update(source="library", order="steam" if order == "priority" else order)
 
     def update(self, **values):
         with self.lock:
@@ -210,7 +226,7 @@ class JobManager:
             self.thread = threading.Thread(target=self._work, daemon=True, name="wishlist-worker")
             self.thread.start()
 
-    def submit(self, identifier, config, owner, order="priority", creator_request=None):
+    def submit(self, identifier, config, owner, order="priority", creator_request=None, library=False):
         if order not in WISHLIST_ORDERS:
             raise ValueError(f"Unsupported wishlist order: {order!r}")
         with self.lock:
@@ -224,7 +240,7 @@ class JobManager:
                 raise BusyError("Please wait a minute before starting another comparison.")
             if len(self.jobs) >= self.max_jobs or self.queue.full():
                 raise BusyError("The comparison service is busy. Please try again later.")
-            job = Job(identifier, config, owner, order, creator_request)
+            job = Job(identifier, config, owner, order, creator_request, library)
             self.jobs[job.id] = job
             emit("job_queued", job_id=job.id)
             self.queue.put_nowait(job)
@@ -294,7 +310,7 @@ class JobManager:
                 job.identifier = ""  # Attribution remains only in the private, expiring result.
 
     def _analyze(self, job):
-        job.update(state="loading", message="Loading catalog products…" if job.creator_request else "Loading public wishlist…")
+        job.update(state="loading", message="Loading owned library…" if job.library else "Loading catalog products…" if job.creator_request else "Loading public wishlist…")
         def sleep(seconds):
             if job.cancel.wait(seconds):
                 raise Cancelled()
@@ -334,6 +350,20 @@ class JobManager:
             if len(wishlist) > self.max_games:
                 raise InputError("Too many products in this comparison.")
             job.update(catalogs=catalogs)
+        elif job.library:
+            try:
+                library = steam.get_owned_library(job.identifier)
+            except LibraryAccessError as exc:
+                job.update(state="failed", error=str(exc), error_code=exc.code, message="Library retrieval failed.")
+                return
+            job.check_cancelled()
+            wishlist = deduplicate_wishlist(library.items)
+            if len(wishlist) > self.max_games:
+                job.update(state="failed", error=f"This version supports up to {self.max_games} owned games per comparison. This library exceeds that limit; no partial library was compared.", error_code="library_limit")
+                return
+            if not wishlist:
+                job.update(state="complete", message="Steam returned an empty library. Free-to-play games are excluded.")
+                return
         elif job.identifier == "example":
             wishlist = EXAMPLE_WISHLIST
         else:
@@ -388,7 +418,7 @@ class JobManager:
             "name": "Loading game names to prepare alphabetical order…",
         }
         job.update(state="running", rates=rate_rows, warnings=warnings,
-                   message="Comparing catalog products…" if job.creator_request else order_messages[job.order])
+                   message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if job.creator_request else order_messages[job.order])
         runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True, require_credits=True), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(
@@ -417,13 +447,15 @@ class JobManager:
 
 
 class WebApplication:
-    def __init__(self, manager, origin="http://127.0.0.1:8765", asset_directory=None):
+    def __init__(self, manager, origin="http://127.0.0.1:8765", asset_directory=None,
+                 *, owned_library_enabled=OWNED_LIBRARY_ENABLED):
         parsed = urlsplit(origin)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.path not in {"", "/"} or parsed.query or parsed.fragment or parsed.username:
             raise ValueError("WEB_ORIGIN must be an http(s) origin without a path")
         self.origin = origin.rstrip("/")
         self.host = parsed.netloc
         self.manager = manager
+        self.owned_library_enabled = owned_library_enabled
         self.assets = Path(asset_directory or Path(__file__).resolve().parent.parent / "web")
 
     def __call__(self, environ, start_response):
@@ -442,6 +474,9 @@ class WebApplication:
             content = (self.assets / filename).read_bytes()
             if filename == "index.html":
                 content = content.replace(b"{{APP_VERSION}}", __version__.encode("ascii"))
+                content = content.replace(b"{{OWNED_LIBRARY_ENABLED}}", b"true" if self.owned_library_enabled else b"false")
+                if self.owned_library_enabled:
+                    content = content.replace(b'<button id="library-tab" hidden', b'<button id="library-tab"')
             return respond("200 OK", content if method == "GET" else b"", content_type)
         if path == "/api/health" and method == "GET":
             return respond("200 OK", {"status": "ok", "version": __version__})
@@ -450,6 +485,8 @@ class WebApplication:
                                        "developers": [c.public() for c in featured_by_role("developer")],
                                        "publishers": [c.public() for c in featured_by_role("publisher")]})
         if method == "POST":
+            if path == "/api/library-jobs" and not self.owned_library_enabled:
+                return respond("404 Not Found", {"error": "Owned-library comparisons are not enabled."})
             if environ.get("HTTP_ORIGIN") != self.origin or environ.get("CONTENT_TYPE", "").split(";", 1)[0] != "application/json":
                 return respond("403 Forbidden", {"error": "Use this app to submit a comparison."})
             try:
@@ -484,20 +521,23 @@ class WebApplication:
                                    else "Steam developer/publisher search is unavailable. Please try again shortly."})
                 finally:
                     service.lock.release()
-            if path in {"/api/jobs", "/api/creator-jobs"}:
+            if path in {"/api/jobs", "/api/creator-jobs", "/api/library-jobs"}:
                 try:
                     creator_request = None
                     if path == "/api/creator-jobs":
                         config, creator_request = validate_creator_request(payload)
                         identifier = "creators"
+                    elif path == "/api/library-jobs":
+                        identifier, config = validate_library_request(payload)
                     else:
                         identifier, config = validate_request(payload)
                     job = self.manager.submit(
                         identifier,
                         config,
                         environ.get("REMOTE_ADDR", "unknown"),
-                        order=payload.get("order", "priority"),
+                        order=("name" if payload.get("order", "name") == "name" else "priority") if path == "/api/library-jobs" else payload.get("order", "priority"),
                         creator_request=creator_request,
+                        library=path == "/api/library-jobs",
                     )
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})

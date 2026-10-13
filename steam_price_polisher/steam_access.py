@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 import math
 import time
 from collections.abc import Callable
@@ -136,6 +137,28 @@ class SteamClient:
         self._sleep = sleep
         self._wishlist_file = wishlist_file
         self._web_api_key = web_api_key.strip()
+
+    def get_owned_library(self, raw_identifier):
+        """Get visible owned games in one request; never use cookies/local files."""
+        from .owned_library import LibraryAccessError, parse_owned_library, library_request_error
+        if not self._web_api_key:
+            raise LibraryAccessError("api_key_missing", "Owned libraries require a Steam Web API key. Set STEAM_WEB_API_KEY in the server's launching terminal and restart it. See the usage guide for setup.")
+        identifier = normalize_steam_identifier(raw_identifier)
+        if not re.fullmatch(r"[0-9]{17}", identifier):
+            resolution = self.resolve_vanity_url(identifier)
+            if not resolution.resolved:
+                code = "network_access_denied" if resolution.status is VanityResolutionStatus.NETWORK_ACCESS_DENIED else "vanity"
+                message = NETWORK_ACCESS_MESSAGE if code == "network_access_denied" else "Could not resolve that custom profile URL. Try your numeric SteamID64 instead."
+                raise LibraryAccessError(code, message)
+            identifier = resolution.steam_id
+        query = urlencode({"key": self._web_api_key, "input_json": json.dumps({
+            "steamid": identifier, "include_appinfo": True, "include_played_free_games": False,
+        })})
+        try:
+            payload = self._http_client.get_json("https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?" + query)
+        except HttpClientError as exc:
+            raise library_request_error(exc) from exc
+        return parse_owned_library(payload)
 
     def resolve_vanity_url(self, vanity_name: str) -> VanityResolution:
         if not self._web_api_key:
