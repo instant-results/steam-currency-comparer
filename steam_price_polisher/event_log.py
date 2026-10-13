@@ -37,11 +37,12 @@ EVENTS = {
 }
 ENUM_FIELDS = {
     "service": {"steam", "nbp", "other"},
-    "operation": {"wishlist", "legacy_wishlist", "vanity", "prices", "rates", "other"},
+    "operation": {"wishlist", "library", "legacy_wishlist", "vanity", "prices", "rates", "other"},
     "state": {"queued", "loading", "running", "cancelling", "cancelled", "complete", "partial", "failed"},
     "reason": {"sigint", "sigterm", "sigbreak", "parent_exited", "keyboard_interrupt", "normal"},
     "category": {"network_access_denied", "tls", "invalid_response", "http_error", "network_failure",
-                 "unexpected_error", "request", "vanity", "comparison_failed", "socket_error"},
+                 "unexpected_error", "request", "vanity", "comparison_failed", "socket_error",
+                 "api_key_missing", "api_key_rejected", "library_unavailable", "library_limit"},
     "cache_kind": {"price", "exchange_rate"},
     "source": {"cache", "stale cache", "live", "identity"},
 }
@@ -79,7 +80,7 @@ _CODE_FILES = {"serve_web.py", "steam_wishlist_compare.py"} | {
     "steam_price_polisher/" + name for name in (
         "event_log.py", "web_app.py", "http_client.py", "request_policy.py", "steam_access.py",
         "exchange_rates.py", "cache.py", "price_service.py", "analysis.py", "comparison.py",
-        "configuration.py", "models.py",
+        "configuration.py", "models.py", "owned_library.py",
     )
 }
 
@@ -125,6 +126,7 @@ def request_metadata(url):
         if parsed.hostname in {"api.steampowered.com", "store.steampowered.com"}:
             operation = ("vanity" if parsed.path == "/ISteamUser/ResolveVanityURL/v1/" else
                          "wishlist" if parsed.path == "/IWishlistService/GetWishlist/v1/" else
+                         "library" if parsed.path == "/IPlayerService/GetOwnedGames/v1/" else
                          "prices" if parsed.path == "/api/appdetails" else
                          "legacy_wishlist" if parsed.path.startswith("/wishlist/") else "other")
             return {"service": "steam", "operation": operation}
