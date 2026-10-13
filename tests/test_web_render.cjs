@@ -16,10 +16,10 @@ class Element {
   querySelector() { return new Element("p"); }
   focus() { this.focused = true; }
 }
-function setup(selectors = {}, extras = {}) {
+function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const elements = new Map();
   const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, document: {getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  const context = vm.createContext({Intl, console, document: {documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled)}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, run: source => vm.runInContext(source, context)};
 }
@@ -44,14 +44,20 @@ function parseCsv(csv) {
 }
 
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setImmediate); };
-function creatorSetup(savedValues = {}, kind = "developer") {
+const librarySnapshot = (items, state = "complete", extra = {}) => ({items, state, total:items.length, home:"pl", rates:[], warnings:[], message:"Checked owned games.", ...extra});
+const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"76561198000000000",home:"pl",regions:["us"],order:"name"},
+  rates:[],home:"pl",state:"complete", ...extra});
+function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
-  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [], searches = [], timers = new Map();
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], timers = new Map();
   let timerId = 0;
   const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
   const selectors = {'[name="home"]':radios,'[name="region"]':regions,'[name="region"]:checked':regions.filter(el => el.checked)};
+  const libraryFilters = ["all","fair","expensive","discounts","skipped"].map(value => { const el = new Element("button"); el.dataset.filter = value; return el; });
+  const librarySorts = ["name","home","difference","percentage"].map(value => { const el = new Element("button"); el.dataset.sort = value; const th = new Element("th"); el.closest = () => th; return el; });
+  selectors[".library-filter"] = libraryFilters; selectors[".library-sort"] = librarySorts;
   const testContext = setup(selectors, {
     sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
     setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
@@ -64,17 +70,21 @@ function creatorSetup(savedValues = {}, kind = "developer") {
         data = searches.shift() || {creators: [], exact_matches: []};
         if (data.error) return {ok:false, json:async () => data};
       }
-      else if (path === "/api/creator-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path === "/api/creator-jobs" || path === "/api/library-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
-      return {ok:true,json:async () => data};
+      return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
     }
-  });
+  }, ownedLibraryEnabled);
+  if (loadLibrary) {
+    testContext.get("library-wishlist-order").value = "name";
+    testContext.run(fs.readFileSync("web/library.js", "utf8"));
+  }
   testContext.run(fs.readFileSync("web/creators.js", "utf8"));
   const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
   const group = () => get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body};
+  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body,libraryFilters,librarySorts};
 }
 
 test("developer search adds a dynamic catalog while retaining featured rows and restores its catalog", async () => {
@@ -438,15 +448,186 @@ test("all twenty catalog selections survive restoration", async () => {
   assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).creators.at(-1).id,catalogs.at(-1).id);
 });
 
-test("three-tab keyboard navigation wraps and supports Home and End", async () => {
-  const ctx = creatorSetup();
+test("four-tab keyboard navigation places library after wishlist and wraps with Home and End", async () => {
+  const ctx = creatorSetup({}, "developer", true);
   ctx.get("wishlist-tab").listeners.keydown({key:"ArrowLeft",preventDefault(){}}); await settle();
   assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
   assert.equal(ctx.get("publishers-tab").focused,true);
   ctx.get("publishers-tab").listeners.keydown({key:"Home",preventDefault(){}});
   assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
   ctx.get("wishlist-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("library-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.get("library-tab").focused,true);
+  assert.equal(ctx.get("library-panel").hidden,false);
+  assert.equal(ctx.get("library-compare-form").hidden,false);
+  assert.equal(ctx.get("compare-form").hidden,true);
+  ctx.get("library-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}}); await settle();
   assert.equal(ctx.get("creators-tab").attributes["aria-selected"],"true");
+  ctx.get("creators-tab").listeners.keydown({key:"End",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
+});
+
+test("deferred library remains hidden and dormant even with a saved active library job", async () => {
+  const saved = JSON.stringify(savedLibrary([game("1","Saved library")], {
+    state:"running",job:{id:"a".repeat(32),token:"b".repeat(43)},
+    request:{identifier:"76561198000000000",home:"gb",regions:["us"],order:"name"}}));
+  const ctx = creatorSetup({"polisher-library-job":saved,"polisher-active-tab":"library"},"developer",true,[],false);
+  await settle();
+  assert.equal(ctx.get("library-tab").hidden,true);
+  assert.equal(ctx.get("library-panel").hidden,true);
+  assert.equal(ctx.get("library-compare-form").hidden,true);
+  assert.equal(ctx.get("wishlist-panel").hidden,false);
+  assert.equal(ctx.get("compare-form").hidden,false);
+  assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.run("window.libraryPane"),undefined);
+  assert.equal(ctx.calls.length,0);
+  assert.equal(ctx.timers.size,0);
+  assert.equal(ctx.storage.get("polisher-library-job"),saved);
+  assert.equal(ctx.radios.find(el => el.checked).value,"pl");
+  assert.equal(ctx.get("analyze").disabled,false);
+});
+
+test("default keyboard navigation skips the hidden library and preserves three visible tabs", async () => {
+  const ctx = creatorSetup();
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("creators-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.get("creators-tab").focused,true);
+  assert.equal(ctx.get("library-tab").listeners,undefined);
+  ctx.get("creators-tab").listeners.keydown({key:"End",preventDefault(){}}); await settle();
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
+  ctx.get("publishers-tab").listeners.keydown({key:"ArrowRight",preventDefault(){}});
+  assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
+  ctx.get("wishlist-tab").listeners.keydown({key:"ArrowLeft",preventDefault(){}});
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"],"true");
+  ctx.get("publishers-tab").listeners.keydown({key:"Home",preventDefault(){}});
+  assert.equal(ctx.get("wishlist-tab").attributes["aria-selected"],"true");
+});
+
+test("owned library submits independently and uses wishlist row credits and price columns", async () => {
+  const ctx = creatorSetup({}, "developer", true);
+  ctx.run(`items = ${JSON.stringify([game("99","Wishlist")])}; resultHome = "gb";`);
+  ctx.get("library-tab").listeners.click();
+  ctx.get("library-identifier").value = "76561198000000000";
+  ctx.snapshots.push(librarySnapshot([game("1","Library")], "running"));
+  ctx.get("library-compare-form").listeners.submit({preventDefault(){}}); await settle();
+  assert.equal(ctx.calls.find(call => call.path === "/api/library-jobs").body.order,"name");
+  assert.equal(ctx.get("library-rows").children[0].children.length,4);
+  assert.equal(ctx.get("library-rows").children[0].children[0].children[1].children[1].textContent,"Test developer");
+  assert.equal(ctx.run("items[0].app_id"),"99");
+  assert.equal(ctx.run("resultHome"),"gb");
+  assert.equal(ctx.run("window.libraryPane.busy"),true);
+  assert.ok(ctx.radios.every(el => el.disabled));
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal(ctx.get("analyze").disabled,true);
+  ctx.get("library-tab").listeners.click();
+  await ctx.get("library-cancel").listeners.click();
+  assert.ok(ctx.calls.some(call => call.path.endsWith("/cancel")));
+  assert.equal(ctx.get("library-cancel").disabled,true);
+});
+
+test("library results restore with independent filters, sorting, rows, and opt-in attribution", async () => {
+  const data = [game("1","Zebra"),game("2","Alpha"),skipped("3","app_unavailable"),skipped("4","request_failure")];
+  const ctx = creatorSetup({"polisher-active-tab":"library", "polisher-library-job":JSON.stringify(savedLibrary(data))}, "developer", true);
+  assert.equal(ctx.get("library-tab").attributes["aria-selected"],"true");
+  assert.equal(ctx.get("library-identifier").value,"76561198000000000");
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["1","2","4"]);
+  const retained = ctx.get("library-rows").children[0];
+  ctx.librarySorts[0].listeners.click();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4","2","1"]);
+  ctx.get("library-arrival-order").listeners.click();
+  assert.equal(ctx.get("library-rows").children[0],retained);
+  ctx.libraryFilters.at(-1).listeners.click();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4"]);
+  ctx.get("library-show-unavailable").checked = true; ctx.get("library-show-unavailable").listeners.change();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["3","4"]);
+  ctx.get("library-search").value = "3"; ctx.get("library-search").listeners.input();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["3"]);
+  assert.equal(ctx.calls.length,0);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-library-job")).filter,"skipped");
+  assert.equal(ctx.get("library-export-owner").checked,false);
+});
+
+test("running library restoration reconnects once and locks catalog auto-start and wishlist", async () => {
+  const saved = savedLibrary([], {state:"running",job:{id:"a".repeat(32),token:"b".repeat(43)}});
+  const ctx = creatorSetup({"polisher-library-job":JSON.stringify(saved)}, "developer", true,
+    [librarySnapshot([game("1","First")],"running")]);
+  assert.equal(ctx.run("window.libraryPane.busy"),true);
+  assert.equal(ctx.get("analyze").disabled,true);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.run("window.libraryPane.busy"),true);
+  assert.equal(ctx.calls.filter(call => /^\/api\/jobs\//.test(call.path)).length,1);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/library-jobs").length,0);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+});
+
+test("library job prevents catalog starts until its completion and cancellation stays on owning tab", async () => {
+  const ctx = creatorSetup({}, "developer", true);
+  ctx.get("library-identifier").value = "76561198000000000";
+  ctx.snapshots.push(librarySnapshot([],"running"));
+  ctx.get("library-compare-form").listeners.submit({preventDefault(){}}); await settle();
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.calls.some(call => call.path === "/api/creator-jobs"),false);
+  assert.equal(ctx.get("creators-refresh").disabled,true);
+  assert.equal(ctx.get("creators-cancel").hidden,true);
+  ctx.get("library-tab").listeners.click();
+  assert.equal(ctx.get("library-cancel").hidden,false);
+});
+
+test("library handles empty and missing credentials and releases shared locks", async () => {
+  for (const snapshot of [librarySnapshot([]),librarySnapshot([],"failed",{error:"Set STEAM_WEB_API_KEY."})]) {
+    const ctx = creatorSetup({}, "developer", true);
+    ctx.get("library-identifier").value = "76561198000000000";
+    ctx.snapshots.push(snapshot);
+    ctx.get("library-compare-form").listeners.submit({preventDefault(){}}); await settle();
+    assert.equal(ctx.run("window.libraryPane.busy"),false);
+    assert.equal(ctx.get("library-export-csv").disabled,true);
+    assert.equal(ctx.get("library-retry").hidden,false);
+    assert.equal(JSON.parse(ctx.storage.get("polisher-library-job")).job,null);
+    assert.equal(ctx.get("library-notice").hidden,!snapshot.error);
+  }
+});
+
+test("expired library reconnect retains checked results and clears only its access token", async () => {
+  const saved = savedLibrary([game("1","Saved game")],{state:"running",job:{id:"a".repeat(32),token:"b".repeat(43)}});
+  const ctx = creatorSetup({"polisher-library-job":JSON.stringify(saved)},"developer",true,[{httpStatus:404,error:"This comparison has expired."}]);
+  ctx.run(`items = ${JSON.stringify([game("99","Wishlist")])}`);
+  await settle();
+  assert.equal(ctx.run("window.libraryPane.busy"),false);
+  assert.equal(ctx.get("library-rows").children.length,1);
+  assert.equal(ctx.get("library-status-badge").textContent,"COMPARISON EXPIRED");
+  assert.equal(ctx.get("library-retry").hidden,false);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-library-job")).job,null);
+  assert.equal(ctx.run("items[0].app_id"),"99");
+});
+
+test("active restored library restores its currencies and prevents wishlist rates overwriting it", async () => {
+  const saved = savedLibrary([game("1","Saved game")],{request:{identifier:"76561198000000000",home:"gb",regions:["us"],order:"steam"},home:"gb",
+    rates:[{currency:"GBP",rate_to_pln:5,cache_status:"cache"}]});
+  const ctx = creatorSetup({"polisher-library-job":JSON.stringify(saved),"polisher-active-tab":"library"},"developer",true);
+  assert.equal(ctx.radios.find(el => el.checked).value,"gb");
+  assert.deepEqual(ctx.regions.filter(el => el.checked).map(el => el.value),["us"]);
+  assert.equal(ctx.get("library-wishlist-order").value,"steam");
+  assert.equal(ctx.get("library-home-heading").textContent,"PRICE IN UNITED KINGDOM");
+  ctx.run("showRates([{currency:'USD',rate_to_pln:4,cache_status:'live'}])");
+  assert.equal(ctx.get("rates").children[0].children[1].textContent,"5.00 PLN");
+});
+
+test("library CSV has identical shared headers, distinct source fields, and profile opt-in", () => {
+  const ctx = setup();
+  const item = game("1","Owned game");
+  const rows = [];
+  for (const includeOwner of [false,true]) {
+    const data = parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])}, "pl", [], {sourceTab:"library",regions:["us"],order:"name",profile:"76561198000000000",includeOwner:${includeOwner}})`));
+    const wishlist = parseCsv(ctx.run("buildPriceCsv([], 'pl', [])"));
+    assert.deepEqual(data.headers,wishlist.headers);
+    assert.equal(data.rows[0].source_tab,"library");
+    assert.equal(data.rows[0].library_profile,includeOwner ? "76561198000000000" : "");
+    assert.equal(data.rows[0].library_loading_order,"name");
+    assert.equal(data.rows[0].wishlist_profile,"");
+    assert.equal(data.rows[0].wishlist_loading_order,"");
+    assert.equal(data.rows[0].catalog_role,"");
+    assert.equal(data.rows[0].developers,"Test developer");
+  }
 });
 
 test("default hides unavailable products while retaining technical failures", () => {
