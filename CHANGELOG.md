@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0-beta — 2026-10-14
+
+- Retain an internal Owned library prototype immediately after Your wishlist when
+  explicitly enabled for QA, with the same row renderer,
+  credits, prices, filters, sorting, unavailable toggle, cancellation, and retry.
+- Add retrieval code for visible owned games through Steam's GetOwnedGames API with a server-side
+  Web API key. Support numeric and custom profile URLs, Name/Steam loading orders,
+  explicit empty/unavailable libraries, missing/rejected keys, and the 1,000-game limit.
+- Keep library results, filters, currencies, and job access independent in tab
+  storage; share worker locking, storefronts, exchange rates, and price caching.
+- Extend the shared CSV with source_tab=library and additive library_profile and
+  library_loading_order columns. Library attribution is off by default; existing
+  wishlist and catalog columns retain their names and positions.
+- Compare current storefront prices, exclude free-to-play games from retrieval,
+  and document that owned games are not a complete license/DLC inventory.
+
+- Hide the tab/profile form and disable library initialization, saved-job reconnect,
+  and job submission by default. Preserve stored state; visible tabs keep their
+  navigation, currency choices, and existing comparison behavior.
+- Defer successful authenticated API-key/library live testing until Steam Guard
+  access is available. Record the TODO checklist; the owned-library stage is not
+  complete. Existing automated/sample checks are retained.
+
 ## 0.4.7-beta — 2026-10-13
 
 - Show compact Developer and Publisher lines beneath the artwork/title in

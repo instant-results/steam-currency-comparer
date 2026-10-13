@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.4.7-beta** · Beta for local use.
+**Version: 0.5.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -66,8 +66,10 @@ are not a guarantee that you can buy at another storefront's price.
 - A web browser and internet access to Steam and NBP.
 - Your **public Steam wishlist**, or use the built-in example to try the app.
 
-No Steam sign-in, Steam cookies, or API key is needed when using a numeric
+Wishlist comparisons need no Steam sign-in, Steam cookies, or API key when using a numeric
 SteamID64 or a `/profiles/` URL. Custom `/id/` URLs need optional API-key setup.
+The owned-library prototype is hidden by default pending authenticated live
+API testing. An API key does not enable it. See the [deferred stage](docs/ROADMAP.md#deferred-stage-the-users-owned-library).
 Node.js is only needed for frontend tests, not to run the app.
 
 ### 1. Get the project
@@ -174,8 +176,10 @@ The web app keeps its price cache and diagnostic logs in `.steam-price-polisher/
 by default. The cache stores regional prices and exchange rates, not
 profile-to-wishlist links. Logs exclude profiles, API keys, cookies, and job tokens.
 The browser tab stores the current profile and job-access token in session storage,
-plus separate developer and publisher results and catalog positions. Private wishlist results and
-profile attribution are held temporarily in server memory.
+plus separate developer and publisher results and catalog positions. Wishlist
+results and profile attribution are held temporarily in server memory. Previously
+saved library state is left untouched while its feature is disabled; it triggers
+no library requests or control locking.
 
 Steam and NBP receive the requests needed for the comparison, and the browser
 loads game artwork directly from Steam's image CDN. Running locally does not mean
@@ -200,9 +204,11 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.4.7-beta` adds compact developer/publisher credits to wishlist rows,
-using the same metadata already included in the unified CSV exports.
-Upcoming changes are described in the
+The current `0.5.0-beta` contains an owned-library prototype with independent
+state and the shared comparison layout. Its tab, profile form, initialization,
+and job submission are disabled by default until authenticated live testing is
+complete. Your wishlist, Developers, and Publishers remain available.
+Completed and deferred work is described in the
 [development roadmap](docs/ROADMAP.md).
 It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
@@ -215,10 +221,10 @@ does not publish the app.
 
 ## Planned development
 
-CSV formats are unified across tabs, and wishlist rows show both product credits.
-The next stage adds a tab for the user's owned Steam library. This is a planned
-feature; see the [roadmap](docs/ROADMAP.md)
-for scope and completion criteria.
+The three available tabs share a CSV schema. Owned-library code and automated
+coverage are retained behind an internal flag; successful authenticated live
+retrieval remains TODO. See the [roadmap](docs/ROADMAP.md) for the test checklist
+and criteria for making the feature available. No subsequent feature is selected.
 
 ## For developers
 
@@ -249,6 +255,7 @@ Frontend checks require Node.js with its built-in test runner:
 node --test tests/test_web_render.cjs
 node --check web/app.js
 node --check web/creators.js
+node --check web/library.js
 ```
 
 - [Usage and technical reference](docs/USAGE.md): CLI commands, sale-price handling,
