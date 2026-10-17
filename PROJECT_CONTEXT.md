@@ -1,6 +1,6 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-14. Current state, not a change log.
+Updated: 2026-10-18. Current state, not a change log.
 
 ## Start here
 
@@ -8,7 +8,9 @@ Read AGENTS.md, README.md, and docs/USAGE.md, then inspect Git status/code.
 Owned-library code is retained in 0.5.0-beta but hidden/disabled by default.
 Its authenticated live API-key testing is deferred until Steam Guard/key setup
 is available. See docs/ROADMAP.md for the TODO checklist. The stage is not complete.
-Follow the user's next request; no publication is authorized.
+Current branch: codex/steam-price-batching. Backend-only Steam price batching is
+the selected next stage; implementation has not started. Deferred UI requests
+are recorded in docs/ROADMAP.md. No publication is authorized.
 
 ## Publication and version
 
@@ -145,13 +147,16 @@ Owned-library code is retained, but the stage is deferred rather than complete.
 TODO: complete key registration/Steam Guard, run authenticated live retrieval and
 comparison checks with the previously supplied profile outside tracked fixtures,
 verify restoration/export/diagnostics/locking, then decide on default visibility.
-See docs/ROADMAP.md for acceptance criteria. No subsequent feature is selected.
+See docs/ROADMAP.md for acceptance criteria. Steam price retrieval batching is
+the selected next backend stage; UI improvements remain deferred.
 Sorted wishlist API remains research only. A local developer/publisher directory
 is deferred at the user's request; no crawler or persistent company index exists.
 
 ## Git state
 
-Working branch: main. codex/owned-library-tab is merged locally with separate
+Working branch: codex/steam-price-batching, created from main on 2026-10-18.
+Only roadmap/context planning changes have been made on this branch.
+codex/owned-library-tab is merged locally into main with separate
 feature, test, and documentation commits; the feature branch is retained.
 The hidden prototype and live-testing TODO are included in the merge. No push,
 tag, release, or deployment has been performed or authorized. Keep feature/test

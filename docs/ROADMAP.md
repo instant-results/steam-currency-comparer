@@ -1,12 +1,68 @@
 # Development roadmap
 
-Updated: 2026-10-14. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-18. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
 The developer/publisher feature branch and the export/wishlist-credit stage are
 complete. Owned-library code is retained in 0.5.0-beta, hidden behind an internal
 flag while authenticated live testing is deferred.
+
+## Next stage: Steam price retrieval backend
+
+Branch: `codex/steam-price-batching`. Scope is backend retrieval and its tests;
+implementation has not started. Keep the current UI and comparison behavior.
+
+- Investigate batching multiple app IDs per country using Steam appdetails with
+  `filters=price_overview`. A small live probe on 2026-10-18 returned prices,
+  base prices, and discounts for three games in each of PL and US (two requests).
+  This establishes small-batch feasibility, not a supported maximum batch size,
+  production reliability, or multiple countries in one response.
+- Separate reusable game metadata from regional price retrieval as needed while
+  preserving names, developer/publisher credits, free-product classification,
+  regional availability, cache freshness, and provenance.
+- Validate bounded batch sizes, partial/malformed responses, per-item fallback,
+  cancellation, retries, and cache reuse before replacing individual lookups.
+- Measure batching first. Evaluate modest concurrency only if justified, retaining
+  shared pacing and upstream backoff. The current 1.5-second interval is an app
+  setting, not a verified mandatory Steam limit; countries do not imply separate
+  server quotas. Do not promise speedups before measurement.
+- Keep direct Steam observations as the initial approach. Third-party pricing
+  remains an optional investigation, requiring coverage/freshness validation;
+  no provider migration or new API-key requirement has been selected.
+
+## TODO: deferred comparison experience improvements
+
+These requests are recorded for later work and are outside the backend branch.
+
+### Load the example automatically
+
+- On a fresh visit, load the seven-game example automatically. Restore an existing
+  comparison first when available, without overwriting a user's loaded wishlist.
+- Consider removing the redundant "Try an example comparison" button and update
+  empty-state wording. Coordinate automatic work with existing cross-tab jobs.
+
+### Change currencies without reloading the game list
+
+- Allow baseline and comparison selections to update an already loaded list,
+  preserving games, search, filters, sort choices, and catalog positions.
+- Retain observations independently of the baseline, including partial regional
+  results. Recalculate immediately when the needed prices are available; fetch
+  only missing/stale data when necessary, with clear progress and provenance.
+- Evaluate preloading all five storefronts after backend batching is measured;
+  prioritize selected storefronts and avoid making large lists wait unnecessarily.
+- Consider fetching the latest NBP Table A in one request and retaining the four
+  supported foreign rates plus PLN identity. Preserve publication/retrieval dates,
+  cache rules, and cross-rate calculation through PLN.
+- Keep statistics, discount badges, availability, saved state, and CSV exports
+  consistent with the active currency selection across visible tabs.
+
+### Align the loading-order dropdown
+
+- Align the "Loading order" label and selected value's left text edges, verify
+  vertical centering, and inset the down arrow consistently from the right border.
+- Retain native keyboard/accessibility behavior and verify desktop/narrow layouts,
+  including shared control styling and header/row typographic alignment.
 
 ## Completed stage: consistent exports and wishlist credits
 
