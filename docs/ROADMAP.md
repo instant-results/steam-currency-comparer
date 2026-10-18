@@ -12,6 +12,16 @@ flag while authenticated live testing is deferred.
 
 Branch: `codex/steam-price-batching`. Scope is backend retrieval and its tests;
 implementation has not started. Keep the current UI and comparison behavior.
+Research and proposed implementation plan dated 2026-10-18:
+[batching investigation and optimization ceiling](STEAM_PRICE_BATCHING.md),
+[implementation plan](STEAM_PRICE_BATCHING_PLAN.md).
+The recommended approach is StoreBrowse metadata batches plus appdetails price
+batches per country. Use one pipeline for all list sizes, defaulting to configurable
+100-item batches plus an encoded-URL budget and completeness checks. No single-game
+fast path is planned. The measured larger limits are not upstream guarantees.
+StoreBrowse-only pricing is not equivalent (bundle selection and discount fields).
+Design retrieval to support more than three storefronts without lifting the current
+UI/API limit in this stage.
 
 - Investigate batching multiple app IDs per country using Steam appdetails with
   `filters=price_overview`. A small live probe on 2026-10-18 returned prices,
