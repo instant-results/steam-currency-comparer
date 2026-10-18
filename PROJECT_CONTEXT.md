@@ -8,9 +8,10 @@ Read AGENTS.md, README.md, and docs/USAGE.md, then inspect Git status/code.
 Owned-library code is retained in 0.5.0-beta but hidden/disabled by default.
 Its authenticated live API-key testing is deferred until Steam Guard/key setup
 is available. See docs/ROADMAP.md for the TODO checklist. The stage is not complete.
-Current branch: codex/steam-price-batching. Backend-only Steam price batching is
-the selected next stage; implementation has not started. Deferred UI requests
-are recorded in docs/ROADMAP.md. No publication is authorized.
+Current branch: codex/steam-price-batching. Steam price batching with an optional separate best-offer comparison is
+the selected next stage. Research/optimization limits: docs/STEAM_PRICE_BATCHING.md;
+proposed implementation: docs/STEAM_PRICE_BATCHING_PLAN.md. Implementation has not
+started. Deferred UI requests are recorded in docs/ROADMAP.md. No publication is authorized.
 
 ## Publication and version
 
@@ -149,13 +150,24 @@ comparison checks with the previously supplied profile outside tracked fixtures,
 verify restoration/export/diagnostics/locking, then decide on default visibility.
 See docs/ROADMAP.md for acceptance criteria. Steam price retrieval batching is
 the selected next backend stage; UI improvements remain deferred.
+Research validated 25-item StoreBrowse and appdetails batches across PL/US/DE/NO/GB.
+Recommend StoreBrowse metadata plus per-country appdetails price batches; no usable
+multi-country request found. StoreBrowse best offers can choose bundles and use
+different base/discount semantics, so they are not a drop-in price replacement.
+Retrieval should accept more storefronts independently of current UI/API limits.
+Default plan: configurable 100-item batches, URL budgets, completeness checks,
+and bounded recovery; use the same hybrid pipeline even for one game. There is
+no single-game optimization path. The discount metric is current versus regular
+base price of the same offer; Steam-selected offers will be shown separately via a checkbox.
+See docs/STEAM_PRICE_BATCHING.md and docs/STEAM_PRICE_BATCHING_PLAN.md for details.
 Sorted wishlist API remains research only. A local developer/publisher directory
 is deferred at the user's request; no crawler or persistent company index exists.
 
 ## Git state
 
 Working branch: codex/steam-price-batching, created from main on 2026-10-18.
-Only roadmap/context planning changes have been made on this branch.
+Planning documents were committed as afe782c. Subsequent batching research and
+handoff/roadmap updates are committed before the approved implementation; no application code has changed yet.
 codex/owned-library-tab is merged locally into main with separate
 feature, test, and documentation commits; the feature branch is retained.
 The hidden prototype and live-testing TODO are included in the merge. No push,
