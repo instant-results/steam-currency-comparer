@@ -405,6 +405,10 @@ class SteamClient:
                 region=region,
             ) from exc
 
+        return self.parse_regional_price(response, app_id, region, expected_currency)
+
+    @staticmethod
+    def parse_regional_price(response, app_id, region, expected_currency, *, price_only=False):
         if not isinstance(response, dict):
             raise SteamProtocolError(
                 f"Steam returned a non-object response for app {app_id} ({region}).",
@@ -437,6 +441,8 @@ class SteamClient:
             )
 
         data = app_data.get("data")
+        if price_only and data == []:
+            return RegionalPriceResult.no_regional_price(None)
         if not isinstance(data, dict):
             raise SteamProtocolError(
                 f"Steam returned invalid data for app {app_id} ({region}).",

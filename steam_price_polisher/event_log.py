@@ -33,11 +33,11 @@ EVENTS = {
     "job_cancel_requested": logging.INFO, "job_finished": logging.INFO,
     "job_failed": logging.ERROR, "request_failed": logging.WARNING,
     "request_completed": logging.DEBUG, "cache_access": logging.DEBUG,
-    "client_connection_closed": logging.DEBUG,
+    "client_connection_closed": logging.DEBUG, "batch_completed": logging.DEBUG,
 }
 ENUM_FIELDS = {
     "service": {"steam", "nbp", "other"},
-    "operation": {"wishlist", "library", "legacy_wishlist", "vanity", "prices", "rates", "other"},
+    "operation": {"wishlist", "library", "legacy_wishlist", "vanity", "prices", "storebrowse", "rates", "other"},
     "state": {"queued", "loading", "running", "cancelling", "cancelled", "complete", "partial", "failed"},
     "reason": {"sigint", "sigterm", "sigbreak", "parent_exited", "keyboard_interrupt", "normal"},
     "category": {"network_access_denied", "tls", "invalid_response", "http_error", "network_failure",
@@ -80,7 +80,7 @@ _CODE_FILES = {"serve_web.py", "steam_wishlist_compare.py"} | {
     "steam_price_polisher/" + name for name in (
         "event_log.py", "web_app.py", "http_client.py", "request_policy.py", "steam_access.py",
         "exchange_rates.py", "cache.py", "price_service.py", "analysis.py", "comparison.py",
-        "configuration.py", "models.py", "owned_library.py",
+        "configuration.py", "models.py", "owned_library.py", "batching.py",
     )
 }
 
@@ -128,6 +128,7 @@ def request_metadata(url):
                          "wishlist" if parsed.path == "/IWishlistService/GetWishlist/v1/" else
                          "library" if parsed.path == "/IPlayerService/GetOwnedGames/v1/" else
                          "prices" if parsed.path == "/api/appdetails" else
+                         "storebrowse" if parsed.path == "/IStoreBrowseService/GetItems/v1/" else
                          "legacy_wishlist" if parsed.path.startswith("/wishlist/") else "other")
             return {"service": "steam", "operation": operation}
     except ValueError:

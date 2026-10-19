@@ -24,7 +24,7 @@ from .configuration import ComparisonConfig
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
 from .http_client import HttpClientError, UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
-from .price_service import CachedPriceService
+from .batching import BatchPolicy, CachedBatchPriceService, SteamBatchProvider
 from .request_policy import RequestGate, RetryingJsonHttpClient, RetryPolicy
 from .steam_access import SteamClient
 from .owned_library import LibraryAccessError
@@ -210,10 +210,11 @@ class CancellableHttpClient:
 
 class JobManager:
     def __init__(self, data_directory, *, api_key="", max_jobs=20, max_games=1000,
-                 runner=None, start_worker=True):
+                 runner=None, start_worker=True, batch_policy=BatchPolicy()):
         self.data_directory = Path(data_directory)
         self.api_key = api_key
         self.max_jobs, self.max_games = max_jobs, max_games
+        self.batch_policy = batch_policy
         self.jobs = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue(maxsize=max_jobs)
@@ -319,7 +320,8 @@ class JobManager:
                 CancellableHttpClient(UrllibJsonHttpClient(timeout=15), job),
                 gate=gate, policy=RetryPolicy(max_attempts=3, maximum_delay=15), sleep=sleep)
         # Deliberately no STEAM_COOKIE or wishlist.txt in the web service.
-        steam = SteamClient(client(self.gate), request_delay=0, web_api_key=self.api_key)
+        steam_http = client(self.gate)
+        steam = SteamClient(steam_http, request_delay=0, web_api_key=self.api_key)
         creator_membership = {}
         catalog_warnings = []
         if job.creator_request:
@@ -419,7 +421,7 @@ class JobManager:
         }
         job.update(state="running", rates=rate_rows, warnings=warnings,
                    message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if job.creator_request else order_messages[job.order])
-        runner = AnalysisRunner(CachedPriceService(steam, cache, price_ttl=3600, require_sale_metadata=True, require_credits=True), home=job.config.home, alternatives=job.config.alternatives)
+        runner = AnalysisRunner(CachedBatchPriceService(SteamBatchProvider(steam_http, policy=self.batch_policy, check_cancelled=job.check_cancelled), cache), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(
             wishlist,
@@ -442,6 +444,10 @@ class JobManager:
                            error_code="network_access_denied", message="Server network access blocked.")
                 return
         job.check_cancelled()
+        if any(any(offer.get("status") in {"temporary_failure", "request_failure", "invalid_response", "region_mismatch"}
+                       for offer in (item.get("best_offers") or {}).values()) for item in job.snapshot()["items"]):
+            warnings.append("Some Steam best purchase offers could not be retrieved. Default game comparisons remain available.")
+            job.update(warnings=warnings)
         noun = "products" if job.creator_request else "games"
         job.update(state="partial" if partial else "complete", message=f"Checked {len(wishlist)} {noun}.")
 

@@ -69,7 +69,7 @@
     const allIds = new Set(items.map(item => item.app_id));
     for (const id of rows.keys()) if (!allIds.has(id)) rows.delete(id);
     visible.forEach((item, index) => {
-      const signature = home + JSON.stringify(item);
+      const signature = home + showBestOffers + JSON.stringify(item);
       let cached = rows.get(item.app_id);
       if (!cached || cached.signature !== signature) {
         cached?.row.remove(); cached = {signature, row:comparisonRow(item, home, true)}; rows.set(item.app_id, cached);
@@ -148,7 +148,7 @@
   buttons(".library-sort").forEach(button => button.addEventListener("click", () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); save(); }));
   $("export-csv").addEventListener("click", () => downloadCsv(buildPriceCsv(items, home, rates,
     {sourceTab:"library", includeOwner:$("export-owner").checked, profile:lastRequest?.identifier, regions:lastRequest?.regions || [], order:lastRequest?.order}), "steam-library-comparison.csv"));
-  window.libraryPane = {get busy() { return busy; }, get active() { return active; }, refreshControls,
+  window.libraryPane = {get busy() { return busy; }, get active() { return active; }, refreshControls, render,
     activate(value) { active = value; if (active) { render(); showLibraryRates(); } }};
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null"), body = saved?.request;

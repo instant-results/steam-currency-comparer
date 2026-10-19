@@ -38,7 +38,7 @@ class StorePrice:
     currency: str
     amount: float
     base_amount: float | None = None
-    discount_percent: int | None = None
+    discount_percent: float | None = None
     source: str | None = None
 
 
@@ -97,7 +97,7 @@ class ConvertedPrice:
     rate_to_home: float
     amount_in_home: float
     base_amount: float | None = None
-    discount_percent: int | None = None
+    discount_percent: float | None = None
     source: str | None = None
 
 

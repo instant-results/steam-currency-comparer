@@ -1256,3 +1256,18 @@ td:first-child { min-width: 0; }
 .library-actions .hint { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 1100px) { .library-actions { width: 230px; } }
 @media (max-width: 800px) { .library-actions { width: 100%; } .library-actions .comparison-action { max-width: 300px; } }
+
+/* Keep both offer types inside their existing aligned table columns. */
+.offer-controls { margin: 1.25rem 0; max-width: 75rem; }
+.offer-controls label { display: flex; align-items: center; gap: .6rem; font-size: .95rem; }
+.offer-controls input { accent-color: #80baff; }
+.best-offer { display: flex; flex-direction: column; gap: .35rem; margin-top: 1rem; padding-top: .75rem; border-top: 1px solid #293349; font-size: .9rem; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.best-offer .offer-label { color: #9cbde7; font-size: .75rem; }
+.best-offer .offer-name { font-size: .75rem; line-height: 1.4; }
+.best-offer small { font-size: .72rem; font-weight: 400; }
+.best-offer .offer-price { font-size: 1rem; }
+
+.best-offer { color: var(--text); min-width: 0; }
+.offer-difference.offer-fair { color: var(--green, #4fd399); }
+.offer-difference.offer-pricier { color: var(--red, #ff7979); }
+.best-offer small:not(.offer-label) { color: var(--muted); }
