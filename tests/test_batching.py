@@ -136,9 +136,26 @@ class BatchTests(unittest.TestCase):
                 'original_price_in_cents':'9999','discount_pct':33}
         self.assertEqual(parse_offer(option,'us','USD')['price']['discount_percent'],33)
         option['discount_pct']=0
-        self.assertEqual(parse_offer(option,'us','USD')['price']['discount_percent'],33.33)
+        self.assertEqual(parse_offer(option,'us','USD')['price']['discount_percent'],33)
         option['hide_discount_pct_for_compliance']=True
         self.assertIsNone(parse_offer(option,'pl','PLN')['price']['discount_percent'])
+
+    def test_calculated_discount_is_floored_and_provenance_survives_cache_and_conversion(self):
+        from steam_price_polisher.comparison import compare_game
+        payload={'1':{'success':True,'data':{'price_overview':{
+            'currency':'PLN','initial':10000,'final':6666,'discount_percent':0}}}}
+        result=parse_prices(payload,['1'],'pl','PLN')['1']
+        self.assertEqual(result.price.discount_percent,33)
+        self.assertTrue(result.price.discount_calculated)
+        self.cache.put_price('1','pl','PLN',result)
+        self.service.prepare(['1'],self.regions[:1])
+        cached=self.service.get_regional_price('1','pl','PLN').result.price
+        self.assertTrue(cached.discount_calculated)
+        self.assertEqual(cached.discount_percent,33)
+        converted=compare_game('1','Game',cached,[replace(cached,region='us',currency='USD')],{'USD':4})
+        self.assertTrue(converted.alternatives[0].discount_calculated)
+        self.assertEqual(regular_discount(100,99.5,None),0)
+        self.assertEqual(regular_discount(199,59.7,None),70)
 
     def test_best_offer_keeps_bundle_identity_and_never_uses_game_base(self):
         option={'bundleid':22978,'purchase_option_name':'Complete edition','final_price_in_cents':'1999','original_price_in_cents':'7999','discount_pct':75}
