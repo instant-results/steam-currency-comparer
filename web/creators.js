@@ -9,14 +9,13 @@
     const plural = kind + "s";
     const $ = id => document.getElementById(id.replace(/^creators-/, plural + "-").replace(/^creator-/, kind + "-"));
     let active = false, busy = false, initialized = false, initializing = false;
-    let creators = [], creatorJob = null, pollTimer = null, autoTimer = null;
+    let creators = [], creatorJob = null, pollTimer = null;
     let creatorHome = "pl", creatorRegions = ["us", "de"], creatorRates = [];
     let savedRequest = null, cancelRequested = false;
     let searching = false, searchChoices = [];
     const groups = new Map(), results = new Map(), defaultIds = new Set();
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
-    const otherBusy = () => !!window.libraryPane?.busy || [...panes.values()].some(pane => pane.kind !== kind && pane.busy);
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
 
     function save() {
@@ -36,22 +35,22 @@
 
     function refreshControls() {
       $("creators-export").disabled = ![...groups.values()].some(group => group.products.some(product => results.has(product.app_id)));
-      $("creators-refresh").disabled = busy || running || otherBusy() || !initialized;
+      $("creators-refresh").disabled = comparisonCoordinator.busy || !initialized;
       $("creators-cancel").hidden = !busy;
       $("creators-cancel").disabled = !creatorJob || cancelRequested;
       $("creators-cancel").textContent = cancelRequested ? "Cancelling…" : "Cancel comparison ■";
-      for (const group of groups.values()) group.more.disabled = busy || running || otherBusy();
+      for (const group of groups.values()) group.more.disabled = comparisonCoordinator.busy;
       $("creator-search-submit").disabled = searching || !initialized;
       for (const {creator, button, action} of searchChoices) {
         const added = groups.has(creator.id);
         button.textContent = added ? "Added" : action;
-        button.disabled = added || busy || running || otherBusy() || !initialized;
+        button.disabled = added || comparisonCoordinator.busy || !initialized;
       }
     }
 
     function setCreatorBusy(value) {
       busy = value;
-      updateSelections();
+      comparisonCoordinator.setBusy(kind, value);
     }
 
     function columnNames() {
@@ -241,7 +240,7 @@
         if (terminal.has(data.state)) {
           setCreatorBusy(false);
           creatorJob = null; save();
-          if (defaultsChanged && active) waitForWishlist();
+          if (defaultsChanged && active) scheduleFeatured();
           if (data.state === "cancelled") message("Comparison cancelled. Use Refresh comparisons to finish checking displayed products.");
           else if (data.state === "partial") message("Some products could not be compared. Refresh comparisons to retry using cached prices.");
         } else pollTimer = setTimeout(pollCreators, 1200);
@@ -261,8 +260,9 @@
     }
 
     async function startCreators(body) {
-      if (busy || running || otherBusy()) return;
       if (!body.regions.length) { message("Choose one or two comparison currencies.", true); return; }
+      if (!comparisonCoordinator.claim(kind)) return;
+      comparisonCoordinator.cancel(`${kind}-featured`);
       clearTimeout(pollTimer); cancelRequested = false; creatorJob = null;
       savedRequest = body; setCreatorBusy(true); message("");
       $("creators-progress").textContent = "Connecting to Steam…";
@@ -276,7 +276,7 @@
     }
 
     function refreshFeatured() {
-      if (busy || running || otherBusy()) return;
+      if (comparisonCoordinator.busy) return;
       const selected = selections();
       if (!selected.regions.length) { message("Choose one or two comparison currencies.", true); return; }
       const mode = "products";
@@ -344,7 +344,7 @@
           button.title = `Compare products listing ${creator.name} as ${kind}`;
           button.setAttribute("aria-label", `Add and compare ${creator.name}, ${creator.role}`);
           button.addEventListener("click", () => {
-            if (busy || running || otherBusy() || groups.has(creator.id)) return;
+            if (comparisonCoordinator.busy || groups.has(creator.id)) return;
             if (creators.length >= 20) { message("Up to 20 catalogs can be displayed in one tab. Open a new tab to start another selection.", true); return; }
             creators.push(creator); buildGroups(); save(); loadMore(creator.id);
           });
@@ -373,7 +373,7 @@
       }
       buildGroups();
       savedRequest = saved.request;
-      if (active && !running && !otherBusy()) {
+      if (active && !comparisonCoordinator.active) {
         preferredComparisons = [...creatorRegions];
         document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === creatorHome);
         document.querySelectorAll('[name="region"]').forEach(el => el.checked = creatorRegions.includes(el.value));
@@ -399,6 +399,7 @@
     async function initialize() {
       if (initialized || initializing) return;
       initializing = true;
+      const release = comparisonCoordinator.hold(`${kind}-initializing`);
       try {
         const data = await request("/api/creators"); creators = data[plural];
         for (const creator of creators) defaultIds.add(creator.id);
@@ -422,20 +423,15 @@
             save();
           }
         } catch (_) { /* Ignore invalid saved state. */ }
-        if (!restored || (defaultsChanged && !creatorJob)) {
-          if (running || otherBusy()) {
-            $("creators-progress").textContent = "Waiting for the current comparison to finish…";
-            waitForWishlist();
-          } else refreshFeatured();
-        }
+        if (active && (!restored || (defaultsChanged && !creatorJob))) scheduleFeatured();
       } catch (error) { message(error.message, true); }
-      finally { initializing = false; refreshControls(); }
+      finally { initializing = false; release(); refreshControls(); }
     }
 
-    function waitForWishlist() {
-      clearTimeout(autoTimer);
+    function scheduleFeatured() {
       if (!active) return;
-      if (running || otherBusy()) autoTimer = setTimeout(waitForWishlist, 1200); else refreshFeatured();
+      $("creators-progress").textContent = "Waiting for the current comparison to finish…";
+      comparisonCoordinator.whenIdle(`${kind}-featured`, refreshFeatured, () => active && initialized && !busy);
     }
 
     function activate(value) {
@@ -443,8 +439,8 @@
       if (active) {
         renderRates(creatorRates, $("rates"));
         initialize();
-        if (initialized && (!savedRequest || defaultsChanged) && !busy) waitForWishlist();
-      } else clearTimeout(autoTimer);
+        if (initialized && (!savedRequest || defaultsChanged) && !busy) scheduleFeatured();
+      } else comparisonCoordinator.cancel(`${kind}-featured`);
     }
 
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
@@ -458,7 +454,7 @@
       try { await request(`/api/jobs/${creatorJob.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${creatorJob.token}`}}); }
       catch (error) { cancelRequested = false; refreshControls(); message(error.message, true); }
     });
-    return {kind, get busy() { return busy; }, activate, refreshControls, render: renderGroups};
+    return {kind, get busy() { return busy; }, activate, initialize, refreshControls, render: renderGroups};
   }
 
   for (const kind of ["developer", "publisher"]) panes.set(kind, createPane(kind));
@@ -482,6 +478,7 @@
       button.setAttribute("aria-selected", String(tab === name)); button.tabIndex = tab === name ? 0 : -1;
     }
     try { sessionStorage.setItem("polisher-active-tab", tab); } catch (_) {}
+    comparisonCoordinator.wake();
   }
   window.creatorPane = {get active() { return selectedTab === "developer" || selectedTab === "publisher"; }, get busy() { return anyBusy(); },
     refreshControls() { for (const pane of panes.values()) pane.refreshControls(); },
@@ -501,6 +498,13 @@
       selectTab(tabs[targetIndex]);
       document.getElementById(tabId(tabs[targetIndex])).focus();
     });
+  }
+  // Reconnect saved work even on a hidden tab before permitting automatic jobs.
+  for (const [kind, pane] of panes) {
+    try {
+      const savedJob = JSON.parse(sessionStorage.getItem(`polisher-${kind}-job`) || "null")?.job;
+      if (savedJob && /^[A-Za-z0-9_-]{32}$/.test(savedJob.id) && /^[A-Za-z0-9_-]{43}$/.test(savedJob.token)) pane.initialize();
+    } catch (_) { /* Invalid storage on one tab must not prevent other restoration. */ }
   }
   try {
     const saved = sessionStorage.getItem("polisher-active-tab");

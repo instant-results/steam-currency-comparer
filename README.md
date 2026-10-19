@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.6.1-beta** · Beta for local use.
+**Version: 0.6.2-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -123,8 +123,11 @@ install your distribution's Python virtual-environment package, then retry.
 
 Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)** in your browser.
 
-1. Enter your 17-digit SteamID64 or your numeric Steam profile URL, or click
-   **Try an example comparison** to compare seven selected games without a profile.
+A fresh visit automatically compares seven selected games without a profile.
+An existing wishlist comparison is restored first.
+
+1. Enter your 17-digit SteamID64 or your numeric Steam profile URL to compare
+   your own public wishlist.
 2. Select a baseline and one or two comparison currencies.
 3. Choose the loading order and click **Compare regional prices**.
 
@@ -210,9 +213,9 @@ During development toward that release, use **0.MINOR.PATCH-beta**:
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 
-The current `0.5.0-beta` contains an owned-library prototype with independent
-state and the shared comparison layout. Its tab, profile form, initialization,
-and job submission are disabled by default until authenticated live testing is
+The current version retains an owned-library prototype introduced in `0.5.0-beta`,
+with independent state and the shared comparison layout. Its tab, profile form,
+initialization and job submission are disabled by default until authenticated live testing is
 complete. Your wishlist, Developers, and Publishers remain available.
 Completed and deferred work is described in the
 [development roadmap](docs/ROADMAP.md).
