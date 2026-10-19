@@ -8,3 +8,5 @@
 - When committing work that includes new features and added tests, place the feature changes and test changes in separate, coherent commits, as requested by the user.
 - For a new development session, read PROJECT_CONTEXT.md and README.md, then inspect the current code and Git status. PROJECT_CONTEXT.md is a concise current-state handoff; keep it current rather than appending a detailed change history.
 - Maintain visual alignment and typographic consistency between table column headers and row contents when modifying frontend layouts or styles.
+
+- Match test scope to the changes: run focused relevant tests for small changes; reserve the full suite for broad changes, branch merge checks, or evidence of wider regressions.

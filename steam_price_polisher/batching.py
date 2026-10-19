@@ -11,6 +11,7 @@ import re
 import time
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, replace
+from decimal import Decimal, ROUND_FLOOR
 from urllib.parse import urlencode
 
 from .event_log import emit
@@ -76,7 +77,7 @@ def request_error(exc, app_id, country):
     return kind('Steam batch request failed', app_id=app_id, region=country)
 
 
-def regular_discount(base, current, reported):
+def discount_details(base, current, reported):
     """Prefer Steam's percentage when consistent with the known regular price.
 
     Accept integer rounding/truncation and one minor unit of price rounding.
@@ -84,20 +85,32 @@ def regular_discount(base, current, reported):
     or missing data. Callers must establish that base is a regular-price reference.
     """
     if base is None:
-        return None
+        return None, False
     valid = type(reported) in {int, float} and math.isfinite(reported) and 0 <= reported <= 100
     if valid:
         if base == current and reported == 0:
-            return reported
+            return reported, False
         if base > 0 and current == 0 and reported == 100:
-            return reported
+            return reported, False
         if base > current > 0 and 0 < reported < 100:
             integer = float(reported).is_integer()
             lower = max(0, reported - (0.5 if integer else 0.005))
             upper = min(100, reported + (1 if integer else 0.005))
             if base * (1 - upper / 100) - 0.01 < current <= base * (1 - lower / 100) + 0.01:
-                return reported
-    return round(100 * (base - current) / base, 2) if base else 0
+                return reported, False
+    # Decimal avoids turning an exact 70% into 69% through binary rounding.
+    percent = (Decimal(str(base)) - Decimal(str(current))) * 100 / Decimal(str(base)) if base else Decimal(0)
+    return int(percent.to_integral_value(rounding=ROUND_FLOOR)), True
+
+
+def regular_discount(base, current, reported):
+    return discount_details(base, current, reported)[0]
+
+
+def normalize_discount(price):
+    reported = None if price.discount_calculated else price.discount_percent
+    discount, calculated = discount_details(price.base_amount, price.amount, reported)
+    return replace(price, discount_percent=discount, discount_calculated=calculated)
 
 
 def parse_prices(payload, ids, country, currency):
@@ -106,9 +119,7 @@ def parse_prices(payload, ids, country, currency):
         try:
             result = SteamClient.parse_regional_price(payload, app_id, country, currency, price_only=True)
             if result.price and result.price.base_amount is not None:
-                base = result.price.base_amount
-                result = replace(result, price=replace(result.price,
-                    discount_percent=regular_discount(base, result.price.amount, result.price.discount_percent)))
+                result = replace(result, price=normalize_discount(result.price))
             output[app_id] = replace(result, developers=None, publishers=None, is_free=None)
         except SteamAccessError as exc:
             output[app_id] = exc
@@ -140,6 +151,7 @@ def parse_offer(option, country, currency):
             return {'status': 'subscription_unsupported'}
         amount = _cents(option.get('final_price_in_cents')) / 100
         base = discount = None
+        calculated = False
         # Bundles' reference can mean component savings, not a regular bundle price.
         # Compliance/display reference prices are never our regular-price baseline.
         if not bundle and not option.get('hide_discount_pct_for_compliance') and not option.get('price_cannot_be_displayed_as_discount'):
@@ -148,14 +160,14 @@ def parse_offer(option, country, currency):
                 base = _cents(original) / 100
                 if base < amount:
                     raise ValueError('Invalid regular price')
-                discount = regular_discount(base, amount, option.get('discount_pct'))
+                discount, calculated = discount_details(base, amount, option.get('discount_pct'))
             elif not option.get('discount_pct') and not option.get('active_discounts'):
                 base, discount = amount, 0
         return {'status': 'available', 'kind': 'bundle' if bundle else 'package',
                 'id': bundle or package, 'name': name,
                 'must_purchase_as_set': bool(option.get('must_purchase_as_set')),
                 'currency_basis': 'requested storefront; currency code not supplied by Steam',
-                'price': asdict(StorePrice(country, currency, amount, base, discount))}
+                'price': asdict(StorePrice(country, currency, amount, base, discount, discount_calculated=calculated))}
     except (ValueError, TypeError):
         return {'status': 'invalid_response'}
 
@@ -272,7 +284,7 @@ class CachedBatchPriceService:
         if cached is None:
             return False
         price = cached.result.price
-        ttl = (900 if price and price.discount_percent else 3600) if cached.result.status != PriceStatus.APP_UNAVAILABLE else 21600
+        ttl = (900 if price and price.base_amount is not None and price.amount < price.base_amount else 3600) if cached.result.status != PriceStatus.APP_UNAVAILABLE else 21600
         return self.clock() - cached.fetched_at <= ttl and (not price or price.base_amount is not None)
 
     def prepare_metadata(self, ids, region):
@@ -353,10 +365,7 @@ class CachedBatchPriceService:
                 is_free=meta['is_free'] if not value.result.price else False,
                 developers=tuple(meta['developers']), publishers=tuple(meta['publishers'])))
         if value.result.price and value.result.price.base_amount is not None:
-            price = value.result.price
-            base = price.base_amount
-            value = replace(value, result=replace(value.result, price=replace(price,
-                discount_percent=regular_discount(base, price.amount, price.discount_percent))))
+            value = replace(value, result=replace(value.result, price=normalize_discount(value.result.price)))
         return value
 
     def best_offers(self, app_id, regions):
@@ -367,6 +376,10 @@ class CachedBatchPriceService:
             if isinstance(default, SteamAccessError) and default.category is SkipCategory.REGION_MISMATCH:
                 value = {'status': 'region_mismatch'}
             if value.get('price'):
-                value['price'] = {**value['price'], 'source': value.get('source')}
+                price = dict(value['price'])
+                if 'discount_calculated' not in price:
+                    percent = price.get('discount_percent')
+                    price['discount_calculated'] = percent is not None and not float(percent).is_integer()
+                value['price'] = asdict(normalize_discount(StorePrice(**{**price, 'source': value.get('source')})))
             output[region.region] = value
         return output

@@ -5,9 +5,9 @@ Updated: 2026-10-19. Current state, not a change log.
 ## Start here
 
 Read AGENTS.md, README.md and docs/USAGE.md, then inspect code and Git status.
-Current branch: `codex/steam-price-batching`. Version: **0.6.0-beta** in
+Current branch: `codex/steam-price-batching`. Version: **0.6.1-beta** in
 steam_price_polisher/version.py. Substantial features increment MINOR; refinements
-increment PATCH; first stable version is 1.0.0. The user authorized committing and pushing this branch. No tag, release or deployment
+increment PATCH; first stable version is 1.0.0. The preceding batching work was committed and pushed. The user authorized committing the whole-percent discount refinement and origin tooltips; keep feature and tests in separate commits. No tag, release or deployment
 is authorized. Repository: https://github.com/instant-results/steam-currency-comparer.
 
 The requested Steam batching backend and separate best-offer checkbox are
@@ -40,7 +40,7 @@ loading-order dropdown changes were made; see docs/ROADMAP.md.
   best-offer currency is attributed to requested storefront context and labeled as such.
 - Discounts prefer Steam's reported percentage when consistent with regular/current
   prices, allowing integer rounding/truncation and cent rounding. Only missing or
-  inconsistent percentages use (regular-current)/regular × 100, rounded to two decimals.
+  inconsistent percentages use (regular-current)/regular × 100, floored to whole percentage points and marked ≈. Provenance is retained in cache/results/CSV and shown when hovering over discount badges.
   Never borrow game base prices for bundles or treat compliance recent-low fields as
   regular prices. Bundle/ambiguous regular discounts stay unknown; current prices work.
 - Artwork, both credits, search, filters, sale badges, absolute/percentage differences,
@@ -62,7 +62,7 @@ Python WSGI/SQLite, vanilla JS/CSS, no build step. serve_web.py is a loopback pr
 with exclusive listener and lifecycle cleanup. Check listener/health before restarting;
 keep its launching session alive. Do not expose it publicly.
 Preview was restarted after the interruption: http://127.0.0.1:8765/, health
-confirmed 0.6.0-beta with one listener. Temporary QA fixture server was stopped.
+confirmed 0.6.1-beta with one listener. Temporary QA fixture server was stopped.
 
 web_app.py retains same-origin POST checks, capability-token job access, one paced
 worker, one active job per owner, three starts per minute and one-hour job expiry.
@@ -84,7 +84,7 @@ Only incomplete/malformed/400/414 batches split. 429/transient/TLS/denial do not
 out. Retry-After defers later work even after final failure; pacing waits are cancellable.
 Normal Steam pacing remains 1.5 seconds. Local permission denial stops jobs.
 
-Cache schema 7 adds country-context English metadata (24 h) and best offers (15 min).
+Cache schema 8 tracks calculated discounts and retains country-context English metadata (24 h) and best offers (15 min).
 Default prices retain regular 1 h/sale 15 min/missing 1 h/unavailable 6 h. Existing
 price/rate cache rows remain compatible. Enrichment does not reset price age. Known
 empty credits do not refetch forever. Temporary failures may use labeled stale data.
@@ -103,7 +103,7 @@ source lines, locals and private paths. Aggregate batch logs are privacy-filtere
 
 ## Verification and measurement
 
-164 Python tests and 68 frontend tests pass; final JS syntax and Git diff checks pass.
+165 Python tests and 69 frontend tests pass; final JS syntax and Git diff checks pass.
 Tests cover batching limits/recovery/cache/cancellation, five/six storefronts, offer
 semantics, shared physical-attempt accounting, rate-limit backoff, all existing job
 contracts, checkbox rendering without requests, credit columns and CSV separation.
