@@ -1,3 +1,4 @@
+from tests.batch_fixtures import mock_batch_prices
 import io
 import json
 import tempfile
@@ -31,7 +32,7 @@ class WebAppTests(unittest.TestCase):
                 denial = urllib.error.URLError(PermissionError(errno.EACCES, "private path"))
                 def respond(request, **kwargs):
                     url = request.full_url
-                    if stage in {"wishlist", "vanity"} or (stage == "rates" and "api.nbp.pl" in url) or "appdetails" in url:
+                    if stage in {"wishlist", "vanity"} or (stage == "rates" and "api.nbp.pl" in url) or "appdetails" in url or "/GetItems/" in url:
                         raise denial
                     if "GetWishlist" in url:
                         payload = {"response": {"items": [{"appid": 10}, {"appid": 20}]}}
@@ -211,7 +212,7 @@ class WebAppTests(unittest.TestCase):
 
     def test_analysis_integrates_prices_rates_and_cache_resume(self):
         job = self.submit(); stored = self.manager.jobs[job["id"]]
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10", "Test Game"),), "mock")
             nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult(
@@ -222,7 +223,7 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(result["state"], "complete")
             self.assertTrue(result["items"][0]["comparison"]["is_fair"])
             self.assertEqual(result["rates"][0]["effective_date"], "2026-09-08")
-            self.assertEqual(result["items"][0]["source_summary"], "live 3")
+            self.assertEqual(result["items"][0]["source_summary"], "live 6")
             self.assertNotIn("wishlist_file", steam.call_args.kwargs)
             second = self.manager.submit(PROFILE, ComparisonConfig(), "other")
             self.manager.execute(second)
@@ -236,7 +237,7 @@ class WebAppTests(unittest.TestCase):
         for region, currency in (("pl", "PLN"), ("us", "USD"), ("de", "EUR")):
             cache.put_price("10", region, currency, RegionalPriceResult.available(
                 StorePrice(region, currency, 12, 12, 0), "Old Game"))
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
             nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult(
@@ -247,8 +248,8 @@ class WebAppTests(unittest.TestCase):
             first_item = first.snapshot()["items"][0]
             self.assertEqual(first_item["developers"], ("First developer", "Second developer"))
             self.assertEqual(first_item["publishers"], ("Publisher",))
-            self.assertEqual(first_item["comparison"]["home_price"]["amount"], 15)
-            self.assertEqual(first_item["source_summary"], "live 3")
+            self.assertEqual(first_item["comparison"]["home_price"]["amount"], 12)
+            self.assertEqual(first_item["source_summary"], "cache 3, live 3")
             second = self.manager.submit(PROFILE, ComparisonConfig(), "second")
             self.manager.execute(second)
             self.assertEqual(second.snapshot()["items"][0]["developers"], first_item["developers"])
@@ -258,7 +259,7 @@ class WebAppTests(unittest.TestCase):
     def test_partial_results_hide_upstream_error_details(self):
         from steam_price_polisher.steam_access import SteamTemporaryError
         job = self.submit(); stored = self.manager.jobs[job["id"]]
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
             nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
             steam.return_value.get_regional_price.side_effect = SteamTemporaryError("secret", app_id="10", region="pl")
@@ -293,7 +294,7 @@ class WebAppTests(unittest.TestCase):
     def test_non_pln_baseline_converts_both_legs_and_preserves_rate_dates(self):
         _, config = validate_request({"identifier": PROFILE, "home": "gb", "regions": ["no", "pl"]})
         stored = self.manager.submit(PROFILE, config, "test-gbp")
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             steam.return_value.get_wishlist.return_value = WishlistResult((WishlistItem("10"),), "mock")
             nbp.return_value.get_rate_details.return_value = {"NOK": ExchangeRate("NOK", .4, "2026-09-08"), "GBP": ExchangeRate("GBP", 5, "2026-09-09")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, {"gb":10,"no":100,"pl":60}[region]), "Game")
@@ -334,7 +335,7 @@ class WebAppTests(unittest.TestCase):
         self.assertIn("1245620", app_ids)
 
         stored = self.manager.submit("example", config, "test-example")
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             nbp.return_value.get_rate_details.return_value = {"USD": ExchangeRate("USD", 4, "2026-09-08"), "EUR": ExchangeRate("EUR", 4.3, "2026-09-08")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: RegionalPriceResult.available(StorePrice(region, currency, 50, 50, 0), "Game " + app)
             self.manager.execute(stored)

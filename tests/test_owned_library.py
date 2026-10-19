@@ -1,3 +1,4 @@
+from tests.batch_fixtures import mock_batch_prices
 import io
 import json
 import tempfile
@@ -135,7 +136,7 @@ class LibraryJobTests(unittest.TestCase):
             return {"code": currency, "table": "A", "rates": [{"mid": 4, "effectiveDate": "2026-09-08"}]}
         def price(app_id, region, currency):
             return replace(RegionalPriceResult.available(StorePrice(region,currency,10,10,0), "Alpha" if app_id == "10" else "Zebra"), developers=("Studio",), publishers=("Publisher",))
-        with patch("steam_price_polisher.web_app.UrllibJsonHttpClient") as factory, patch.object(SteamClient,"get_regional_price",side_effect=price) as prices:
+        with patch("steam_price_polisher.web_app.UrllibJsonHttpClient") as factory, patch.object(SteamClient,"get_regional_price",side_effect=price) as prices, mock_batch_prices(prices):
             factory.return_value.get_json.side_effect = upstream
             first = self.submit(); self.manager.execute(first)
             self.assertEqual(first.snapshot()["state"], "complete")
