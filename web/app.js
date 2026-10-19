@@ -87,12 +87,24 @@ function restoreRequest(saved) {
   showProfile(request.identifier);
   return true;
 }
+function isCalculatedDiscount(price) {
+  return price.discount_calculated ?? !Number.isInteger(price.discount_percent);
+}
+function discountLabel(price, negative = false) {
+  const calculated = isCalculatedDiscount(price);
+  const percent = calculated ? Math.floor(price.discount_percent) : price.discount_percent;
+  return `${calculated ? "≈" : ""}${negative && percent > 0 ? "−" : ""}${percent}%`;
+}
 function saleNote(price, currency) {
   const note = node("div", undefined, "sale-note");
   if (price.discount_percent == null || price.base_amount == null) {
     note.append(node("small", "Sale details unavailable"));
-  } else if (price.discount_percent > 0) {
-    note.append(node("span", `−${price.discount_percent}%`, "sale-badge"), node("s", `${money(price.base_amount)} ${currency}`));
+  } else if (price.discount_percent > 0 || price.discount_calculated && price.base_amount > (price.amount ?? price.original_amount)) {
+    const badge = node("span", discountLabel(price, true), "sale-badge");
+    badge.title = isCalculatedDiscount(price)
+      ? "Calculated by this app from the regular and current prices, rounded down to a whole percentage point."
+      : "Discount percentage provided by Steam.";
+    note.append(badge, node("s", `${money(price.base_amount)} ${currency}`));
   } else { note.append(node("small", "Base price · no sale")); }
   return note;
 }
@@ -190,7 +202,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     if (hasDifferentDiscounts(c)) {
       const badge = node("span", "Different regional discounts", "regional-discount-badge");
       const values = [{...c.home_price, region: c.home_price.region || resultHome}, ...c.alternatives].map(price =>
-        `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
+        `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? discountLabel(price) + " off" : "sale details unavailable"}`);
       badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
       title.append(badge);
     }
@@ -342,7 +354,7 @@ const priceCsvHeaders = Object.freeze([
   "developers_known", "publishers_known", "library_profile", "library_loading_order",
   "best_offer_status", "best_offer_kind", "best_offer_id", "best_offer_name", "best_offer_final_price",
   "best_offer_currency", "best_offer_currency_basis", "best_offer_regular_price", "best_offer_discount_percent",
-  "best_offer_final_price_baseline", "best_offer_source", "best_offer_difference_baseline", "best_offer_difference_percent"
+  "best_offer_final_price_baseline", "best_offer_source", "best_offer_difference_baseline", "best_offer_difference_percent", "discount_calculated", "best_offer_discount_calculated"
 ]);
 function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
   const baseline = () => storefronts[home];
@@ -390,7 +402,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
         offer?.price?.currency, offer?.currency_basis, offer?.price?.base_amount, offer?.price?.discount_percent,
         offer?.amount_in_home ?? bestPrice?.amount_in_home, offer?.source,
         best ? best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home)) : null,
-        best ? percentageDifference(best) : null);
+        best ? percentageDifference(best) : null, price.discount_calculated, offer?.price?.discount_calculated);
       rows.push(row);
     }
   }

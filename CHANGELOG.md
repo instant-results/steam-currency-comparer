@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1-beta — 2026-10-19
+
+- Floor calculated discount percentages to whole points and mark them with ≈;
+  preserve suitable Steam-provided percentages. Hover text identifies the source.
+- Retain calculated-discount provenance in caches, comparisons, and CSV exports.
+  Sales below 1% retain their sale status and shorter cache lifetime.
+
 ## 0.6.0-beta — 2026-10-18
 
 - Batch regional default prices through appdetails and metadata/best offers through

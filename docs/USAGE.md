@@ -600,8 +600,13 @@ checkout price. Recurring subscription options are not compared. StoreBrowse doe
 not supply an explicit currency code in these responses: currency is attributed
 to the requested supported storefront and that basis is retained in tooltips/CSV.
 
-Discount percentages mean `(regular price - current price) / regular price × 100`,
-rounded to two decimals. Compliance-only references such as a recent low are not
+Discounts prefer Steam's percentage when it matches the regular/current-price relation.
+Only missing or inconsistent percentages are calculated as
+`(regular price - current price) / regular price × 100`, rounded down to whole
+percentage points and marked ≈ (for example, ≈−33%). Calculated sales below 1%
+show ≈0%. Hover over a discount badge to see whether Steam supplied the percentage
+or the app calculated it. CSV appends `discount_calculated` and `best_offer_discount_calculated`
+flags so consumers can distinguish calculated percentages from Steam's values. Compliance-only references such as a recent low are not
 used. Regular bundle discounts remain unavailable when only component savings or
 ambiguous reference prices are supplied. This does not prevent comparing current
 bundle prices. Default game prices remain separately available with their own base.
@@ -622,7 +627,7 @@ item-country observations. These per-game fields repeat in regional CSV rows;
 do not sum them across those duplicates. Wishlist/NBP requests are counted
 separately in the performance report, not this legacy per-row field.
 
-Cache schema 7 retains existing prices/rates and adds independent metadata (24 h)
+Cache schema 8 tracks calculated-discount provenance, retains existing prices/rates and adds independent metadata (24 h)
 and best-offer (15 min) observations. Default-price TTLs remain one hour normally,
 15 minutes on sale, one hour for missing prices and six hours for unavailable apps.
 Metadata/offer refreshes do not reset default-price age. Partial and cancelled jobs
