@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.2-beta — 2026-10-20
+
+- Automatically compare the seven-game example on a fresh visit and remove the
+  redundant example button. Restore existing wishlist comparisons first; typing
+  a profile dismisses a pending example. Failed examples use the existing retry.
+- Centralize frontend job coordination across wishlist, developer, publisher and
+  internally enabled library comparisons. Reconnect hidden saved catalog jobs
+  before automatic work; defer examples until the wishlist is visible and idle.
+- Replace catalog auto-start polling with shared idle scheduling. Keep active
+  comparisons, selected currencies, cancellation and per-tab results independent.
+
 ## 0.6.1-beta — 2026-10-19
 
 - Floor calculated discount percentages to whole points and mark them with ≈;

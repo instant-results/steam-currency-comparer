@@ -38,6 +38,26 @@ private result tokens, and a persistent price cache. Deploy it as one Python
 process behind HTTPS. The source is published on GitHub; the app has not been
 deployed as a public service.
 
+## Automatic example on a fresh visit
+
+On a fresh visit, the wishlist tab automatically compares seven selected games
+using the current baseline and comparison currencies. The example is labeled and
+uses live Steam prices and NBP rates through the normal shared cache. No profile
+is needed, and there is no separate example button.
+
+An existing saved wishlist comparison reconnects first, including its retry
+context if the server job has expired. An example never replaces that comparison.
+Saved catalog jobs also reconnect before automatic work, even on hidden tabs.
+If another comparison is running, the example waits until work finishes and the
+wishlist tab is visible. Typing a profile dismisses a pending example; submit
+**Compare regional prices** to compare your own wishlist. A failed or cancelled
+example is retried only with **Retry comparison**.
+
+All comparison tabs use one frontend coordinator for job starts, shared control
+locking and automatic work that waits for idle. User-started work reserves the
+worker immediately; catalog auto-loading has priority over a queued example.
+The server's shared worker, request pacing and job limits still apply.
+
 ## Owned library
 
 **Deferred / hidden by default.** This prototype is retained for internal testing;
@@ -643,9 +663,8 @@ batches; Retry-After also delays subsequent batches after a final failed attempt
 These settings are operational bounds, not published Valve guarantees.
 
 See [measured performance](STEAM_PRICE_PERFORMANCE.md) and
-[implemented design](STEAM_PRICE_BATCHING_PLAN.md). Automatic example loading,
-changing loaded-result currencies, and the loading-order dropdown adjustment are
-still deferred in [ROADMAP.md](ROADMAP.md).
+[implemented design](STEAM_PRICE_BATCHING_PLAN.md). Changing loaded-result currencies
+and the loading-order dropdown adjustment remain deferred in [ROADMAP.md](ROADMAP.md).
 
 
 Discount percentage preference: retain Steam's reported percentage when it agrees

@@ -65,21 +65,27 @@ publication implementation has been approved; this is a potential future TODO.
 Other unselected investigations: new countries, opt-in best-offer retrieval and
 regular bundle/package price enrichment. Concurrency remains unselected.
 
-## TODO: deferred comparison experience improvements
+## Comparison experience improvements
 
-These requests are recorded for later work and are outside the backend branch.
+Automatic examples are complete on main; the remaining requests are recorded
+for later work.
 
-### Load the example automatically
+### Completed: load the example automatically
 
-- On a fresh visit, load the seven-game example automatically. Restore an existing
-  comparison first when available, without overwriting a user's loaded wishlist.
-- Consider removing the redundant "Try an example comparison" button and update
-  empty-state wording. Coordinate automatic work with existing cross-tab jobs.
+Completed in `0.6.2-beta` and merged from `codex/automatic-example-loading` into main.
 
-### Change currencies without reloading the game list
+- Fresh visits load the seven-game example automatically; the redundant button
+  is removed. Existing wishlist jobs restore first, including expired-job retry
+  context. Typing a profile dismisses a queued example.
+- A shared frontend coordinator reserves job starts and schedules automatic work
+  when idle. Saved catalog work reconnects even on hidden tabs. Examples wait
+  until the wishlist is visible; active catalog work takes priority.
+- Failures and cancellations retain the existing explicit retry behavior.
 
-- Allow baseline and comparison selections to update an already loaded list,
-  preserving games, search, filters, sort choices, and catalog positions.
+### TODO: change currencies without reloading the game list
+
+- Allow baseline and comparison selections to update a list during loading and
+  after completion, preserving games, search, filters, sort choices, and catalog positions.
 - Retain observations independently of the baseline, including partial regional
   results. Recalculate immediately when the needed prices are available; fetch
   only missing/stale data when necessary, with clear progress and provenance.
@@ -91,7 +97,7 @@ These requests are recorded for later work and are outside the backend branch.
 - Keep statistics, discount badges, availability, saved state, and CSV exports
   consistent with the active currency selection across visible tabs.
 
-### Align the loading-order dropdown
+### TODO: align the loading-order dropdown
 
 - Align the "Loading order" label and selected value's left text edges, verify
   vertical centering, and inset the down arrow consistently from the right border.
