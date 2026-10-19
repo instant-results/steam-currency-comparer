@@ -1,6 +1,6 @@
 # Development roadmap
 
-Updated: 2026-10-18. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-20. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
@@ -26,10 +26,44 @@ Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
 - Research and observed optimization ceiling: [investigation](STEAM_PRICE_BATCHING.md).
   Implemented architecture and acceptance checks: [plan](STEAM_PRICE_BATCHING_PLAN.md).
 
-Possible later tuning: a smaller first window to improve first-result latency,
-opt-in retrieval instead of always retaining best offers, and authoritative regular
-bundle/package price enrichment. These require their own product/performance checks.
-Third-party providers and new countries remain unselected future investigations.
+## TODO: loading performance research
+
+Decisions recorded on 2026-10-20; these are research tasks, not implemented changes.
+
+- **Larger batches:** test 120 and other candidate sizes against the 100-item
+  default. Measure first-result and total latency, request counts, encoded URL
+  and response sizes, completeness, retries and errors. Include list lengths near
+  batch boundaries and more than three storefronts. A 200-game list still needs
+  two windows at either 100 or 120; acceptance alone does not establish a speedup.
+- **Smaller first window:** investigate a small initial batch followed by larger
+  batches. Measure the first visible results against total loading time and added
+  requests under unchanged pacing. Keep each published row complete for both offer
+  types; do not introduce later best-offer enrichment.
+- **Delivery delay:** investigate reducing the current 1.2-second polling delay.
+  Compare simpler polling adjustments with push/long-poll approaches before choosing
+  an implementation. Measure actual delivery latency and server/request overhead;
+  preserve cancellation, reconnect behavior and access controls.
+
+### Dropped approaches
+
+- Third-party price providers: rejected; keep price retrieval with Valve.
+- Publishing default offers first and attaching best offers later: rejected due
+  to added state/update complexity. Preserve complete rows with both offer datasets.
+
+### Potential TODO: publish complete fresh cached rows earlier
+
+Fresh cached observations are already reused without fetching those prices again.
+Publishing complete, fresh cached rows earlier would not inherently require later
+replacement or value comparison. Showing expired data and refreshing it in the
+background would require replacement handling; that is a different proposal.
+Investigate whether complete fresh cached rows can be published earlier without
+refreshing or replacing them during the same comparison. Exclude expired-data
+background refresh from this potential task. The design must account for independently expiring metadata,
+prices, best offers and exchange rates, plus requested row order. No cache-first
+publication implementation has been approved; this is a potential future TODO.
+
+Other unselected investigations: new countries, opt-in best-offer retrieval and
+regular bundle/package price enrichment. Concurrency remains unselected.
 
 ## TODO: deferred comparison experience improvements
 

@@ -1,22 +1,23 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-19. Current state, not a change log.
+Updated: 2026-10-20. Current state, not a change log.
 
 ## Start here
 
 Read AGENTS.md, README.md and docs/USAGE.md, then inspect code and Git status.
-Current branch: `codex/steam-price-batching`. Version: **0.6.1-beta** in
+Integration target: `main`. Version: **0.6.1-beta** in
 steam_price_polisher/version.py. Substantial features increment MINOR; refinements
-increment PATCH; first stable version is 1.0.0. The preceding batching work was committed and pushed. The user authorized committing the whole-percent discount refinement and origin tooltips; keep feature and tests in separate commits. No tag, release or deployment
-is authorized. Repository: https://github.com/instant-results/steam-currency-comparer.
+increment PATCH; first stable version is 1.0.0. The user authorized full merging
+of `codex/steam-price-batching`, including committing documentation and pushing.
+No tag, release or deployment is authorized.
+Repository: https://github.com/instant-results/steam-currency-comparer.
 
-The requested Steam batching backend and separate best-offer checkbox are
-implemented. Planning/research/performance protocol was committed as `aae90ee`
-before coding (initial branch plan: `afe782c`). Feature changes are committed as `97a5c98`; tests as `88cb5de`. Delivery
-documentation is committed separately for the authorized branch push. Keep future
-feature and added test changes in separate coherent commits. Do not commit local QA, caches, profile identifiers,
-wishlists, secrets or runtime data. No automatic examples, dynamic currencies or
-loading-order dropdown changes were made; see docs/ROADMAP.md.
+Steam batching, separate best offers, whole-percent calculated discounts and origin
+tooltips are complete. Feature and test changes were committed separately. Keep
+future feature and added test changes in separate coherent commits. Do not commit
+local QA, caches, profile identifiers, wishlists, secrets or runtime data.
+Automatic examples, dynamic currencies and loading-order dropdown improvements
+remain deferred; see docs/ROADMAP.md.
 
 ## Current product behavior
 
@@ -118,7 +119,10 @@ regional current/base price pairs shared by the 157 comparable games matched.
 One wishlist and two NBP requests in each run. New best-offer comparisons: 158.
 This measures HTTP-delivered backend results, not browser paint, and is not a
 statistical speed guarantee. See docs/STEAM_PRICE_PERFORMANCE.md for full results.
-Smaller initial windows are possible future tuning for first-row latency.
+Approved research TODOs: larger batches, smaller initial windows, and reduced delivery delay.
+Third-party price providers and publishing default offers before best offers are
+rejected. Early publication of complete fresh cached rows is a potential future TODO,
+without expired-data background refresh; see docs/ROADMAP.md.
 
 Owned-library successful authenticated live QA remains deferred until Steam Guard/
 API-key setup. Do not claim the public wishlist benchmark validates owned-library
