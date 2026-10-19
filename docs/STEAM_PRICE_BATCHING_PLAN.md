@@ -1,173 +1,121 @@
-# Steam price batching - implementation plan
+# Steam price batching — implemented design
 
-Updated: 2026-10-18. Branch: `codex/steam-price-batching`.
-Status: approved for implementation, following one baseline performance run.
-Evidence, observed limits, and the optimization ceiling are in
-[the research document](STEAM_PRICE_BATCHING.md).
+Updated: 2026-10-18. Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
+Research and limits: [STEAM_PRICE_BATCHING.md](STEAM_PRICE_BATCHING.md).
+Measured before/after results: [STEAM_PRICE_PERFORMANCE.md](STEAM_PRICE_PERFORMANCE.md).
 
-## Scope and decisions
+## Retrieval and sizing
 
-- One hybrid pipeline for every nonempty list: StoreBrowse metadata batches,
-  followed by appdetails price-only batches for the requested countries.
-- No special single-game/small-list fast path. A batch of one uses the same
-  provider/parser/cache/progress machinery as larger batches. The one extra
-  cold metadata request is an accepted simplicity trade-off.
-- Default maximum 100 games per request, independently configurable for metadata
-  and prices. Also enforce an encoded full-URL budget (proposed initial 6,000
-  bytes) before sending. These are operational guardrails, not Valve guarantees.
-- Keep shared pacing, backoff, job locking, current comparison semantics, and
-  existing UI/API currency limits. Add an optional checkbox for separately labeled
-  Steam best-offer comparisons. Do not add concurrency, new storefronts, automatic
-  example loading, dynamic currency switching, or unrelated frontend layout work here.
-- Retrieval accepts a collection of supported storefronts without assuming a
-  maximum of three. Public comparison validation still enforces one baseline
-  plus one or two alternatives. Baseline-only submission remains invalid.
-- Preserve appdetails price semantics initially. The user's discount reference
-  is the same offer's regular base price; offer/bundle selection remains a
-  separate observation. Retain default offers and additionally retrieve Steam-selected
-  purchase options. A checkbox shows their separate comparison; never silently
-  substitute a bundle into the default-offer comparison. Preserve offer identity
-  and leave regular-price discounts unavailable when the source cannot establish them.
+Every nonempty web comparison uses the same hybrid batch pipeline, including a
+single game. Wishlist, example, catalog, and internally enabled library jobs use
+it. The legacy command-line provider remains compatible; it is not a small-list
+optimization path selected by web jobs.
 
-## 1. Define the backend contracts and batch planner
+`BatchPolicy` configures metadata size (100), price size (100), encoded full-URL
+budget (6,000 bytes), logical recovery calls (7 including the original), and
+physical attempt budget (21 including retries). `JobManager(batch_policy=...)`
+accepts an override; no user-facing settings or environment variables were added.
+The planner deduplicates IDs stably and never issues empty batches. One country
+per request; neither endpoint aggregates several countries in one call.
 
-Relevant modules: configuration.py, models.py, steam_access.py, analysis.py.
+The current version always retains both price interpretations so the display
+checkbox needs no additional requests. Per window and country it requests:
 
-Define independent metadata and regional-price observations, including explicit
-completeness, source, fetch time, and per-item error state. Key price observations
-by app ID and country, with a validated currency. Metadata retains context/language
-and field-known status, with provenance for reuse across requested countries.
-Do not treat metadata obtained in one country as proof of sale availability there
-or elsewhere. A restricted response cannot globally overwrite known good metadata.
+1. appdetails with only `price_overview`, preserving the default game offer.
+2. StoreBrowse `GetItems`, with basic info and Steam's best purchase option.
 
-A pure planner deduplicates requested IDs, retains their output order, removes
-fresh cache hits, and chunks remaining work using both item count and the actual
-encoded URL length. It accepts one item naturally. Constructing an empty batch
-must produce no network request. Keep country identity separate from currency
-identity to support future storefronts sharing a currency.
+Cold data therefore needs approximately `2 × countries × windows` requests,
+subject to URL limits, cache misses and recovery. This supersedes the earlier
+`countries + 1` estimate for a metadata-only hybrid without regional best offers.
+For 100 games across five countries, the new dual-offer floor is ten data
+requests; for the measured 200 games across three countries, it is twelve.
 
-Acceptance: deterministic batches never exceed either configured budget, and
-retrieval-level tests exercise one, two, five, and more storefronts independently
-of the public UI selection cap.
+## Validation and recovery
 
-## 2. Implement and validate the two batch adapters
+Match results by app ID, never array position. Duplicate StoreBrowse IDs, missing
+items, wrong item types, invalid prices/currencies and malformed response shapes
+cannot silently shift observations. Valid siblings are retained. A successful
+empty appdetails data array means no price supplied, not a free game. Free status
+comes from successfully retrieved StoreBrowse metadata.
 
-Relevant modules: steam_access.py, http_client.py, request_policy.py.
+Only malformed/incomplete responses and HTTP 400/414 shrink into smaller groups.
+Normal transient retries run first; 429/5xx/TLS/local-denial failures do not cause
+split storms. Split children share both budgets. Rate-limit Retry-After delays
+also apply after the final failed attempt, and pacing waits are cancellable.
+Permission denial stops the job. Completed country/batch observations remain
+cached if later work fails or is cancelled.
 
-StoreBrowse metadata requests include basic info and explicitly disable best
-purchase options. Match response records by requested ID and item type. Interpret
-successful metadata, missing creator fields, free status, region restrictions,
-and invalid IDs without conflating absent data with a definite false value.
+## Cache and progress
 
-appdetails requests use only price_overview, one country per request. Validate
-currency, amounts, base price, discount, and each returned ID. Handle the observed
-successful empty-array response as no supplied price, not proof of a free game.
-HTTP 200 with an empty body is a protocol failure, not a completed empty batch.
+Schema 7 adds independent regional metadata and offer observations. Existing
+price/rate tables remain compatible. Metadata is English and country-contextual,
+with a 24-hour TTL. Offers, including known absence, have a 15-minute TTL.
+Default prices retain one hour normally, 15 minutes on sale, one hour for missing
+prices, and six hours for unavailable apps. Fresh legacy prices can be enriched
+without resetting their fetch time. Missing credits are known empty lists after
+a successful metadata response; unrequested/failed metadata remains unknown.
+Restricted metadata cannot overwrite a known successful record.
 
-Return independent per-item outcomes. Missing/duplicate/unexpected entries cannot
-silently shift rows or mark every item unavailable. Preserve valid sibling data
-where the response allows it and recover only unresolved work.
+Default prices and best offers may use labeled stale observations on temporary
+errors. Local denial cannot be hidden by stale fallback. No profile-to-game or
+ownership mapping enters the shared cache. Job-local results retain both offer
+sets, including available best offers from incomplete regional comparisons.
 
-Acceptance: fixtures cover regular/sale prices, credits, free/DLC/soundtrack items,
-region mismatches/restrictions, missing/reordered/duplicate records, malformed
-payloads, and empty successful HTTP responses. StoreBrowse bundle/compliance price
-fields must never replace appdetails price observations through metadata joins.
+Your Rank and Date Added prepare bounded windows, then emit rows in order. Name
+order first resolves metadata for sorting and reuses the resulting observations.
+Physical Steam data attempts are charged once to the first emitted row in each
+window; name-prefetch attempts join the first window. Cache-hit fields still count
+item-country observations. The legacy `live_price_requests` CSV field now includes
+metadata and best-offer requests; it must not be summed across repeated regional
+CSV rows without deduplicating games/windows. Wishlist/NBP calls are not included
+in that per-row field. The benchmark independently counts all physical calls.
 
-## 3. Decouple metadata caching from price freshness
+## Two price interpretations
 
-Relevant modules: cache.py, price_service.py.
+Default offers continue to drive game filters, sorting, totals and catalog
+statistics. The shared checkbox reveals a separately calculated comparison of
+Steam-selected offers. It preserves package/bundle IDs, names, prices and source
+labels, persists in tab storage, and works across comparison tabs. CSV always
+retains both datasets in separate fields, regardless of checkbox state.
 
-Add a versioned metadata cache with independent completeness and timestamps;
-retain regional price freshness and the existing regular/sale/unavailable TTLs.
-Choose and document a metadata TTL independently (initial proposal: 24 hours).
-Do not reset metadata age during a price refresh, erase known credits with an
-unrequested field, or repeatedly fetch valid responses with unavailable credits.
-Do not infer permanent free status from an absent price or a temporary promotion.
+StoreBrowse prices have no explicit currency code in the observed schema.
+Their currency is attributed to the requested supported storefront and that
+basis is retained in results, tooltips and CSV. An appdetails currency mismatch
+also blocks the corresponding best offer. This is not an independent currency
+code validation of StoreBrowse. Current support remains the existing five pairs;
+additional real storefronts require validation before enabling them.
 
-Migrate existing cached observations without fabricating metadata provenance or
-freshness. Older entries with insufficient metadata can be enriched once. Join
-metadata at the service boundary to preserve the current result/CSV contract.
-Cache writes for successfully fetched siblings must survive a later batch failure.
+A best offer is Steam's anonymous selection, not a personalized checkout quote.
+Bundles can differ by country and existing ownership. Recurring subscription
+options are explicitly unsupported. The discount metric is `(regular-current) /
+regular × 100`, rounded to two decimals, for the same offer. Compliance-only
+reference fields never supply that regular baseline. Bundle regular-price
+percentages remain unavailable because component savings are not proof of a
+regular bundle price. Current offer prices and regional comparisons remain usable.
 
-Acceptance: migration, stale fallback, absent-versus-known-empty metadata, partial
-success, and repeat runs produce correct records and avoid unnecessary requests.
-Keep local network permission denial non-retryable and do not conceal it with stale
-fallback. Store no profile-to-game or ownership mapping in the metadata cache.
+## Verification and remaining scope
 
-## 4. Integrate ordered progress and bounded recovery
+Deterministic tests cover planner limits, one/200 items, five and six storefronts,
+empty/reordered/missing/duplicate responses, currency errors, free/restricted apps,
+cache reuse and legacy enrichment, stale fallback, cancellation, shared attempt
+budgets, throttling, request accounting, and both offer calculations. UI tests
+cover toggling without requests, retained default values, credit columns, exports
+and refresh. The live benchmark is one run per version, not a repeated load test.
 
-Relevant modules: analysis.py, web_app.py, creators.py, owned_library.py,
-request_policy.py, event_log.py (only where their integration requires changes).
+The baseline is preserved by its pre-change commit and an isolated running process
+that imported the original modules before implementation edits. Raw responses,
+benchmark selection, caches and UI fixtures stay ignored. The research documents
+were committed before implementation. Feature changes are committed as `97a5c98`
+and tests as `88cb5de`, with delivery documentation committed separately. The user
+authorized pushing the branch. No release, deployment or owned-library enablement
+is authorized.
 
-Route wishlist, example, catalog, and internally enabled library comparisons
-through the same batch service. Fetch metadata needed for Name order first;
-other orders can work through bounded windows. Fetch required countries for a
-window, then emit the current per-game progress format in the requested order.
-Continue excluding free catalog products only with sufficient metadata evidence.
 
-Cancel before every request, split/fallback, and progress emission. Retry jobs
-reuse successfully cached data. Preserve existing one-worker and cross-tab locks.
-Use the normal bounded transient retry policy before considering split recovery.
-A 429/Retry-After response defers the shared schedule; it must not trigger a burst
-of split requests. Local denial/TLS/configuration errors must not produce a split
-storm. Deterministic 414 or persistent batch-shape failures may shrink batches.
-
-Recovery needs a finite HTTP-attempt budget shared by split children and fallbacks,
-not a fresh full retry allowance at every node. Set the budget explicitly during
-implementation and cover exhaustion; report unresolved items as failures rather
-than dropping them. Singleton requests may be recovery leaves or metadata
-fallbacks, never an optimization selected because the original list is small.
-Avoid persisting a globally reduced batch size after one unexplained 5xx response.
-
-Acceptance: cancellation, bounded request counts, partial recovery, backoff,
-retry/cache reuse, and stable ordering are covered without additional UI flows.
-
-## 5. Keep diagnostics and exports honest
-
-Count HTTP attempts separately from item-country observations and cache hits.
-One 100-game batch is one request, not 100. Review how existing per-row counters
-and repeated CSV storefront rows represent shared fetches; do not duplicate a
-physical batch count across every product and call the sum network traffic.
-Document the attribution policy without changing CSV headers in this stage.
-
-Log aggregate batch size, duration, successes, misses, and fallback attempts.
-Retain current restrictions on profiles, credentials, request URLs, response
-bodies, and private paths. Avoid adding a performance dashboard or UI controls.
-
-Acceptance: request accounting reconciles with actual HTTP calls, and existing
-provenance and privacy expectations remain valid.
-
-## 6. Regression checks and limited live measurement
-
-Run the Python suite and the existing frontend regression/syntax checks required
-by changed contracts. Add meaningful deterministic tests for the adapter, planner,
-cache, error, and job behaviors above; no permanent network-dependent test suite.
-
-Use public samples for limited live verification. Measure both time to first
-usable row and total completion, with cold/fresh/mixed caches and batches of
-25/50/100. Include one game, the example list, and a representative larger list;
-compare two, three, and five supported storefronts. Test more storefronts in the
-backend with fixtures; validate any new real country separately before enabling it.
-
-Compare every returned price tuple against the existing source semantics, keeping
-the observations close enough in time to identify price changes. Do not infer a
-throughput guarantee from a handful of successful requests. Keep probes, raw
-responses, caches, and runtime files ignored.
-
-Start at the configurable 100-item default. Change it only on measured evidence
-of latency, reliability, URL length, payload size, and cancellation responsiveness.
-A smaller first window or bounded concurrency is later tuning, not a prerequisite.
-
-## Completion criteria and Git delivery
-
-The backend reduces redundant HTTP calls while maintaining result correctness,
-existing user behavior, cache freshness, cancellation, and diagnostics. The same
-pipeline works for one game and many, with no hard-coded three-storefront ceiling
-inside retrieval. Broken batches fail visibly within bounded request budgets.
-
-Implementation is authorized. First record the unchanged baseline, then implement
- and run the same 200-game measurement. See STEAM_PRICE_PERFORMANCE.md.
-When committing implementation work after authorization, keep feature and test
-changes in separate coherent commits, with documentation updated for actual
-behavior. The planning/research documents are committed before application changes. No push,
-release, deployment, or change to the owned-library visibility is authorized.
+Discount percentage preference: retain Steam's reported percentage when it agrees
+with the known regular/current price relationship, allowing whole-percent rounding
+or truncation and one minor unit of price rounding. Calculate a replacement only
+when the percentage is missing or inconsistent. A known regular price is required;
+compliance-only references and ambiguous bundle bases still remain unavailable.
+The same rule applies to live default prices, cached prices and eligible best offers.
+Previously cached calculated percentages cannot recover an overwritten upstream
+value; ordinary cache expiry refreshes them without extra requests for this change.

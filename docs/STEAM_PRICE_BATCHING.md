@@ -1,5 +1,12 @@
 # Steam price batching - backend investigation
 
+> Research snapshot, completed before implementation. Version 0.6.0-beta now
+> fetches both default prices and regional Steam best offers. Its request floor
+> is twice the country count per window, rather than the metadata-only hybrid's
+> country count plus one. See [implemented design](STEAM_PRICE_BATCHING_PLAN.md)
+> and [measured performance](STEAM_PRICE_PERFORMANCE.md).
+
+
 Verified: 2026-10-18 (Europe/Warsaw). Branch: `codex/steam-price-batching`.
 Status: research and implementation planning only; application code, UI, and cache schema are unchanged.
 See [implementation plan](STEAM_PRICE_BATCHING_PLAN.md) for the proposed work sequence.

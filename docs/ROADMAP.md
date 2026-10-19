@@ -8,38 +8,28 @@ The developer/publisher feature branch and the export/wishlist-credit stage are
 complete. Owned-library code is retained in 0.5.0-beta, hidden behind an internal
 flag while authenticated live testing is deferred.
 
-## Next stage: Steam price retrieval backend
+## Completed implementation: Steam price batching and separate offers
 
-Branch: `codex/steam-price-batching`. Scope is backend retrieval and its tests;
-implementation has not started. Keep the current UI and comparison behavior.
-Research and proposed implementation plan dated 2026-10-18:
-[batching investigation and optimization ceiling](STEAM_PRICE_BATCHING.md),
-[implementation plan](STEAM_PRICE_BATCHING_PLAN.md).
-The recommended approach is StoreBrowse metadata batches plus appdetails price
-batches per country. Use one pipeline for all list sizes, defaulting to configurable
-100-item batches plus an encoded-URL budget and completeness checks. No single-game
-fast path is planned. The measured larger limits are not upstream guarantees.
-StoreBrowse-only pricing is not equivalent (bundle selection and discount fields).
-Design retrieval to support more than three storefronts without lifting the current
-UI/API limit in this stage.
+Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
 
-- Investigate batching multiple app IDs per country using Steam appdetails with
-  `filters=price_overview`. A small live probe on 2026-10-18 returned prices,
-  base prices, and discounts for three games in each of PL and US (two requests).
-  This establishes small-batch feasibility, not a supported maximum batch size,
-  production reliability, or multiple countries in one response.
-- Separate reusable game metadata from regional price retrieval as needed while
-  preserving names, developer/publisher credits, free-product classification,
-  regional availability, cache freshness, and provenance.
-- Validate bounded batch sizes, partial/malformed responses, per-item fallback,
-  cancellation, retries, and cache reuse before replacing individual lookups.
-- Measure batching first. Evaluate modest concurrency only if justified, retaining
-  shared pacing and upstream backoff. The current 1.5-second interval is an app
-  setting, not a verified mandatory Steam limit; countries do not imply separate
-  server quotas. Do not promise speedups before measurement.
-- Keep direct Steam observations as the initial approach. Third-party pricing
-  remains an optional investigation, requiring coverage/freshness validation;
-  no provider migration or new API-key requirement has been selected.
+- Implemented appdetails price batches and StoreBrowse metadata/best-offer batches,
+  per country, using one pipeline for all list sizes. Default 100 items, encoded
+  URL limits, completeness validation, bounded recovery and shared pacing remain.
+- Implemented independent cache ages, ordered progress, cancellation and request
+  accounting. Retrieval accepts more than three storefronts; the current UI/API
+  selection limit remains unchanged.
+- Added the user-approved checkbox showing Steam-selected purchase options beside
+  default game prices. Bundles/packages retain their identities; discounts never
+  use a different product's base price or a compliance-only reference price.
+- Completed one fresh-cache 200-game run per version. Results and limitations:
+  [performance report](STEAM_PRICE_PERFORMANCE.md). No concurrency was introduced.
+- Research and observed optimization ceiling: [investigation](STEAM_PRICE_BATCHING.md).
+  Implemented architecture and acceptance checks: [plan](STEAM_PRICE_BATCHING_PLAN.md).
+
+Possible later tuning: a smaller first window to improve first-result latency,
+opt-in retrieval instead of always retaining best offers, and authoritative regular
+bundle/package price enrichment. These require their own product/performance checks.
+Third-party providers and new countries remain unselected future investigations.
 
 ## TODO: deferred comparison experience improvements
 
