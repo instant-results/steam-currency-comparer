@@ -1,3 +1,4 @@
+from tests.batch_fixtures import mock_batch_prices
 from dataclasses import replace
 import io
 import json
@@ -220,7 +221,7 @@ class CreatorApiTests(unittest.TestCase):
         return self.manager.jobs[result["data"]["id"]]
 
     def execute(self, job, free_ids=()):
-        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp:
+        with patch("steam_price_polisher.web_app.SteamClient") as steam, patch("steam_price_polisher.web_app.NbpExchangeRateProvider") as nbp, mock_batch_prices(steam.return_value.get_regional_price):
             nbp.return_value.get_rate_details.return_value = {
                 "USD": ExchangeRate("USD", 4, "2026-10-02"), "EUR": ExchangeRate("EUR", 4.3, "2026-10-02")}
             steam.return_value.get_regional_price.side_effect = lambda app, region, currency: (
@@ -259,9 +260,9 @@ class CreatorApiTests(unittest.TestCase):
         self.assertEqual(len(second.snapshot()["items"]), 9)
         self.assertTrue(all(item["source_summary"] == "cache 3" for item in second.snapshot()["items"]))
 
-    def test_free_products_are_identified_and_cached_without_alternative_requests(self):
+    def test_free_products_are_identified_and_cached_with_regional_batches(self):
         job = self.submit(mode="products", app_ids=["10", "11"])
-        self.assertEqual(self.execute(job, free_ids={"10"}), 4)
+        self.assertEqual(self.execute(job, free_ids={"10"}), 6)
         items = job.snapshot()["items"]
         self.assertTrue(items[0]["is_free"])
         self.assertFalse(items[1]["is_free"])

@@ -1156,3 +1156,63 @@ test("running catalog CSV preserves overlapping memberships and omits pending an
   assert.ok(!rows.some(row => ["4","5"].includes(row.game_id)));
   assert.equal(rows.find(row => row.game_id === "6").status, "no_regional_price");
 });
+
+const offerFixture = () => {
+  const item = game("330020", "Children of Morta");
+  item.best_offers = {
+    pl:{status:"available",kind:"bundle",id:22978,name:"Complete Edition",source:"live",currency_basis:"requested storefront",price:{region:"pl",currency:"PLN",amount:19.99,base_amount:null,discount_percent:null}},
+    us:{status:"available",kind:"package",id:123,name:"Base game",source:"cache",price:{region:"us",currency:"USD",amount:5,base_amount:10,discount_percent:50}}
+  };
+  item.best_offer_comparison = {home_price:item.best_offers.pl.price,alternatives:[{region:"us",currency:"USD",original_amount:5,rate_to_home:4,amount_in_home:20}],is_fair:true};
+  return item;
+};
+const contentText = el => [el.textContent || "", ...el.children.map(contentText)].join(" ");
+
+test("best-offer checkbox reveals separate offers without replacing default prices or changing counts", () => {
+  const ctx=setup();const item=offerFixture();
+  ctx.run(`items=${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.get("rows").children[0].children.length,4);
+  const before=ctx.get("rows").children[0];
+  assert.doesNotMatch(contentText(before),/Complete Edition/);
+  ctx.get("show-best-offers").checked=true;ctx.get("show-best-offers").listeners.change();
+  const row=ctx.get("rows").children[0];
+  assert.equal(row.children.length,4);
+  assert.equal(row.children[1].textContent,"10.00 zł");
+  assert.match(contentText(row.children[1]),/19.99 zł.*Complete Edition \(bundle\)/);
+  assert.match(contentText(row.children[1]),/Regular-price discount unavailable/);
+  assert.equal(ctx.get("count-total").textContent,1);
+  ctx.get("show-best-offers").checked=false;ctx.get("show-best-offers").listeners.change();
+  assert.doesNotMatch(contentText(ctx.get("rows").children[0]),/Complete Edition/);
+});
+
+test("best-offer rendering retains columns when default offers are missing", () => {
+  const ctx=setup();const item=offerFixture();delete item.comparison;item.skipped={reason:"No regional price",category:"no_regional_price"};
+  ctx.run(`showBestOffers=true; items=${JSON.stringify([item])}; $("show-unavailable").checked=true; render();`);
+  const row=ctx.get("rows").children[0];
+  assert.equal(row.children.length,4);
+  assert.match(contentText(row.children[3]),/Steam best offers/);
+});
+
+test("CSV retains default and best-offer identity, amounts, and unknown discounts separately", () => {
+  const ctx=setup();const item=offerFixture();
+  const csv=parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])},"pl",[])`));
+  assert.equal(csv.rows[0].final_price,"10");
+  assert.equal(csv.rows[0].best_offer_final_price,"19.99");
+  assert.equal(csv.rows[0].best_offer_kind,"bundle");
+  assert.equal(csv.rows[0].best_offer_id,"22978");
+  assert.equal(csv.rows[0].best_offer_regular_price,"");
+  assert.equal(csv.rows[0].best_offer_discount_percent,"");
+  assert.equal(csv.rows[1].best_offer_discount_percent,"50");
+});
+
+for (const kind of ["developer","publisher"]) test(`${kind} best-offer toggle rerenders without requests and preserves optional credit column`, async () => {
+  const ctx=creatorSetup({},kind);ctx.snapshots.push({state:"complete",message:"Done",items:[offerFixture()],rates:[],warnings:[],catalogs:{studio:{products:[{app_id:"330020",name:"Children of Morta"}],next_start:1,has_more:false,total:1}}});
+  ctx.get("creators-tab").listeners.click();await settle();
+  const calls=ctx.calls.length;
+  ctx.get("show-best-offers").checked=true;ctx.get("show-best-offers").listeners.change();
+  ctx.get("creator-show-credits").checked=true;ctx.get("creator-show-credits").listeners.change();
+  assert.equal(ctx.calls.length,calls);
+  const row=ctx.body().children.find(row=>row.dataset.appId==="330020");
+  assert.equal(row.children.length,5);
+  assert.match(contentText(row.children[2]),/Complete Edition/);
+});
