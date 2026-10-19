@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.1-beta — 2026-10-19
+
+- Floor calculated discount percentages to whole points and mark them with ≈;
+  preserve suitable Steam-provided percentages. Hover text identifies the source.
+- Retain calculated-discount provenance in caches, comparisons, and CSV exports.
+  Sales below 1% retain their sale status and shorter cache lifetime.
+
+## 0.6.0-beta — 2026-10-18
+
+- Batch regional default prices through appdetails and metadata/best offers through
+  StoreBrowse. Use the same pipeline for every list size, with configurable
+  100-item limits, a 6,000-byte URL budget, bounded recovery and shared pacing.
+- Cache metadata and best offers separately from game prices; retain cancellation,
+  stale-price labels, ordered progress, and compatible existing price caches.
+- Add a shared checkbox for separately labeled Steam-selected packages/bundles.
+  Preserve default comparisons, offer identities, partial observations and exports.
+- Prefer Steam's percentage when consistent with the same offer's regular/current
+  prices; calculate only a missing or inconsistent percentage. Leave bundle and
+  compliance-only regular-price discounts unknown instead of borrowing game prices.
+- Add best_offer_* CSV fields after existing columns. Shared batch request counts
+  are attributed once per window; they include price, metadata and offer attempts.
+- Measure one cold 200-game run per version: 815.194 seconds before, 20.664 seconds
+  after, with 534 versus 12 Steam data requests. First delivery changed from 4.897
+  to 10.931 seconds. See docs/STEAM_PRICE_PERFORMANCE.md for coverage and limitations.
+- Keep automatic examples, dynamic currency changes and dropdown alignment deferred.
+
 ## 0.5.0-beta — 2026-10-14
 
 - Retain an internal Owned library prototype immediately after Your wishlist when

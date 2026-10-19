@@ -1,160 +1,129 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-14. Current state, not a change log.
+Updated: 2026-10-20. Current state, not a change log.
 
 ## Start here
 
-Read AGENTS.md, README.md, and docs/USAGE.md, then inspect Git status/code.
-Owned-library code is retained in 0.5.0-beta but hidden/disabled by default.
-Its authenticated live API-key testing is deferred until Steam Guard/key setup
-is available. See docs/ROADMAP.md for the TODO checklist. The stage is not complete.
-Follow the user's next request; no publication is authorized.
+Read AGENTS.md, README.md and docs/USAGE.md, then inspect code and Git status.
+Integration target: `main`. Version: **0.6.1-beta** in
+steam_price_polisher/version.py. Substantial features increment MINOR; refinements
+increment PATCH; first stable version is 1.0.0. The user authorized full merging
+of `codex/steam-price-batching`, including committing documentation and pushing.
+No tag, release or deployment is authorized.
+Repository: https://github.com/instant-results/steam-currency-comparer.
 
-## Publication and version
+Steam batching, separate best offers, whole-percent calculated discounts and origin
+tooltips are complete. Feature and test changes were committed separately. Keep
+future feature and added test changes in separate coherent commits. Do not commit
+local QA, caches, profile identifiers, wishlists, secrets or runtime data.
+Automatic examples, dynamic currencies and loading-order dropdown improvements
+remain deferred; see docs/ROADMAP.md.
 
-Version 0.5.0-beta is defined in steam_price_polisher/version.py and shown in
-startup, /api/health, and the page. Follow README versioning: 0.MINOR.PATCH-beta,
-minor for substantial features, patch for refinements; first stable release 1.0.0.
-Public display name: Steam Currency Comparer. Keep package, script, environment,
-cache, and legacy API names compatible. Source repository:
-https://github.com/instant-results/steam-currency-comparer.
-The user authorized coherent commits and a local merge into main. No push, tag,
-release, or public deployment is authorized.
-README images retain their historical 2026-09-23 example capture.
+## Current product behavior
 
-## Product behavior
+- Three visible tabs: Your wishlist, Developers, Publishers. Owned library remains
+  hidden/disabled behind OWNED_LIBRARY_ENABLED=False pending authenticated live
+  API-key QA. A key alone does not enable it. Its saved state remains dormant and
+  must not lock controls or restore currencies while disabled.
+- Five supported pairs: PL/PLN, US/USD, DE/EUR, NO/NOK, GB/GBP. Default PLN against
+  USD/EUR. Public validation still requires one baseline and one or two alternatives.
+  Remember temporarily conflicting choices; active jobs lock shared currency controls.
+- Wishlist: Your Rank, Date Added, Name; public numeric profiles need no key, vanity
+  resolution optionally uses a server-side Steam key. At most 1,000 games, no silent
+  truncation. The 200-game performance cap exists only in an ignored benchmark harness.
+- Default offers retain appdetails semantics. A shared checkbox reveals separately
+  labeled Steam best purchase options with package/bundle names and links. Both sets
+  are always fetched, retained in results and exported; toggling needs no download.
+  Default offers continue to drive filters, sorts, counts and catalog statistics.
+  The checkbox survives tab refresh; older saved results need a new comparison.
+- Anonymous best offers assume no existing ownership. Country offers can be different
+  products. Subscription offers are unsupported. StoreBrowse omits explicit currency;
+  best-offer currency is attributed to requested storefront context and labeled as such.
+- Discounts prefer Steam's reported percentage when consistent with regular/current
+  prices, allowing integer rounding/truncation and cent rounding. Only missing or
+  inconsistent percentages use (regular-current)/regular × 100, floored to whole percentage points and marked ≈. Provenance is retained in cache/results/CSV and shown when hovering over discount badges.
+  Never borrow game base prices for bundles or treat compliance recent-low fields as
+  regular prices. Bundle/ambiguous regular discounts stay unknown; current prices work.
+- Artwork, both credits, search, filters, sale badges, absolute/percentage differences,
+  cancellation/retry and unavailable toggles remain. Maintain header/cell alignment and
+  typography; see docs/TEXT_AND_LOCALIZATION.md. Best-offer differences use their own color.
+- Catalogs preserve exact developer/publisher roles, defaults, search, Load more,
+  independent saved state, optional credit columns, page cursors and grouped statistics.
+  Free products are hidden only with sufficient evidence. Paid DLC/soundtracks remain.
+  Default developers: Supergiant/CD PROJEKT RED/Techland. Publishers:
+  Devolver Digital/THQ Nordic/11 bit studios. See docs/FEATURED_CATALOGS.md.
+- CSV schema 1 keeps existing columns and appends best_offer_* columns. Profile
+  attribution remains optional/off per wishlist/library source. All tabs share headers.
+  Exports retain both offer sets regardless of checkbox, including partial best offers.
+  Formula escaping, credits, original/base/final prices, rates and provenance remain.
 
-- Three visible keyboard-accessible tabs: Your wishlist, Developers, Publishers.
-  Owned library is hidden behind the server's internal OWNED_LIBRARY_ENABLED=False
-  flag. Its tab/form stay hidden, library.js exits before touching storage/requests,
-  and /api/library-jobs returns 404 without creating jobs. A saved library active
-  tab falls back to wishlist; navigation skips the hidden button. Saved library
-  data is preserved and cannot change currencies or lock the visible controls.
-  Explicit internal QA can opt in with WebApplication(owned_library_enabled=True);
-  then library appears directly to the right of wishlist. A key alone does not
-  enable it. Leave the default off until the roadmap's live checklist passes.
-- Shared sidebar: PL/PLN, US/USD, DE/EUR, NO/NOK, GB/GBP; any baseline and one or
-  two alternatives. Default PLN against USD/EUR. Temporary baseline conflicts
-  preserve remembered comparison choices until explicit checkbox edits replace them.
-- Wishlist supports Your Rank, Date Added, Name; Name prefetch learns missing
-  titles and reuses baseline prices. Numeric wishlist profiles need no key.
-- When enabled internally, Owned library requires server-side STEAM_WEB_API_KEY for numeric profiles too.
-  Supports SteamID64 and community profiles/id URLs; no keys/cookies in browser
-  requests. GetOwnedGames on the public API host returns visible games in one
-  request, includes names, and excludes free-to-play games. Name is default;
-  Steam order preserves API order, not purchase dates/playtime/wishlist rank.
-  Responses must match game_count; deduplicate IDs and reject >1,000 distinct
-  games without silently truncating. Explicit empty libraries complete without
-  rates/prices; missing/rejected keys, private/unavailable libraries, TLS,
-  local network denial, malformed responses, and other failures have clear messages.
-  Returned games are not a complete license/DLC inventory. Prices are current
-  storefront offers, not purchase prices. See docs/STEAM_OWNED_LIBRARY_API.md.
-- Wishlist/the internal library share comparisonRow, CSS table columns, artwork, both compact
-  credits, sale prices, absolute/percentage differences, filters, search, sorting,
-  unavailable toggle, retry, cancellation, and CSV. Keep column alignment and
-  typography consistent. Credits show all names; unavailable/pending labels are
-  explicit. Shared fluid grids align name lists and contain long-name wrapping.
-  See docs/TEXT_AND_LOCALIZATION.md when editing wording or typography.
-- Internally enabled library results, filters, sorting, currencies, request/profile, and access token
-  live independently in polisher-library-job session storage. Completed library
-  results outlive server jobs. Active jobs reconnect; expiry preserves checked
-  rows and clears credentials. Active restored library restores its currencies.
-  Existing results retain their own currencies until a new comparison. Retry
-  uses the saved run's settings; submitting again uses current sidebar choices.
-- Any running comparison locks shared currencies and other tabs' starts. Search
-  on catalog tabs remains available. Return to the owning tab to cancel. Unopened
-  catalogs wait for wishlist/library/other-role work to finish before auto-start.
-- Developer defaults: Supergiant Games, CD PROJEKT RED, Techland, three games each.
-  Publisher defaults: Devolver Digital, THQ Nordic, 11 bit studios, independent
-  curation. See docs/FEATURED_CATALOGS.md. Search/add/Load more uses exact names
-  in the requested role. Paid DLC/soundtracks are included; free products are
-  hidden after checking. Missing prices alone do not mean free.
-- Catalog roles preserve independent selections, results, searches, positions,
-  rates, access tokens, and compact/column credit modes (20 catalogs per role).
-  Defaults replace retired featured entries while keeping user selections.
-  Legacy creator state migrates only explicit matching roles; homepage selections
-  are discarded. Legacy Creator classes/routes remain compatible; no Creator UI.
-- Catalog statistics use unrounded differences, equal product weights, mean,
-  median, sample/coverage counts; exclude missing/pending/free/zero-reference values.
-  One visible heading aligns role tables; hidden headings support screen readers.
-  Preserve credit-column mode, synchronized narrow scrolling, statistics slots,
-  baseline divider, and Load more arrow styling.
-- Prices retain each storefront's final/base/discount independently. Discount
-  mismatches get badges/filter. Product-wide differences use cheapest converted
-  alternative; percentage is undefined against zero. Tooltips show provenance.
-- The three visible tabs and internal library export CSV schema 1 with identical headers. Library adds
-  library_profile and library_loading_order at the end, preserving existing
-  columns' positions. source_tab includes library. Both profile attribution
-  options default off and affect only their own columns. Credits, price/rate
-  provenance, both conversion legs, failure details, and request counts remain.
-  One row per observed storefront, one per uncompared item; catalog membership
-  repeats products. Pending catalog products are omitted. Export adds no requests.
+## Architecture
 
-## Architecture and constraints
+Python WSGI/SQLite, vanilla JS/CSS, no build step. serve_web.py is a loopback preview
+with exclusive listener and lifecycle cleanup. Check listener/health before restarting;
+keep its launching session alive. Do not expose it publicly.
+Preview was restarted after the interruption: http://127.0.0.1:8765/, health
+confirmed 0.6.1-beta with one listener. Temporary QA fixture server was stopped.
 
-Python WSGI/SQLite; vanilla HTML/CSS/JavaScript, no build step.
-- serve_web.py: loopback preview with exclusive listener, duplicate rejection,
-  interrupt/termination/parent-exit cleanup. Verify listener and health before
-  restarting; keep launching sessions alive. Existing port 8765 was occupied;
-  this feature's live preview was started at 8766. Check versions before reuse.
-- web_app.py: same-origin POST checks, capability-token private jobs, one paced
-  worker, three starts per owner/minute, one active job per owner, one-hour expiry.
-  POST /api/library-jobs is disabled by default; internal opt-in accepts only
-  profile/regions/home/name-or-steam order;
-  shared GET/cancel /api/jobs routes retain private authorization. Library jobs
-  reuse AnalysisRunner, CachedPriceService, and exchange-rate conversion.
-- creators.py: exact-role public registry, bounded discovery/cache, compatibility
-  routes. Search verification rejects failed/stale role checks. Catalog pages
-  advance through actual returned slots, including skipped packages/bundles;
-  Steam may ignore count=12 and return 25. Never forward/execute upstream HTML.
-- Cache schema 6: prices/free/credits; regular price TTL one hour, sales 15 minutes,
-  rates 24 hours, catalogs six hours. Older missing sale/credit metadata refreshes
-  once on comparison. Stale fallback is labeled and never masks local network denial.
-- NBP quotes PLN per unit; A-to-B conversion rate[A]/rate[B], PLN=1; retain both
-  dates/provenance. Germany is the EUR storefront proxy.
-- Verified TLS, bounded retries, 1.5-second paced Steam requests. Live preview
-  needs outbound access. Local permission denial is non-retryable and stops jobs.
-- Structured diagnostic logs exclude profiles, keys, cookies, tokens, URLs,
-  response bodies, raw exceptions, source lines, locals, and private file paths.
-  Local data/log rotation remains ignored under .steam-price-polisher/.
+web_app.py retains same-origin POST checks, capability-token job access, one paced
+worker, one active job per owner, three starts per minute and one-hour job expiry.
+Wishlist/example/catalog/internal library jobs now use CachedBatchPriceService and
+SteamBatchProvider in batching.py. CLI's existing provider remains compatible;
+web jobs have no special single-game retrieval path.
 
-## Verification and open work
+BatchPolicy defaults: metadata/price sizes 100, encoded URL budget 6,000 bytes,
+7 logical recovery calls and 21 physical attempts per planned batch, shared across
+children. Configurable via JobManager(batch_policy=...). One country per request.
+Default price batches use appdetails filters=price_overview. StoreBrowse requests
+basic info and best_purchase_option. Both datasets require two requests per country
+per window cold. Retrieval fixtures exercise more than three/five countries; new real
+countries still require validation before enabling them in configuration/UI.
 
-141 Python tests and 63 frontend tests pass, plus JS syntax and diff checks.
-Library coverage includes retrieval, parsing, empty/private/missing/rejected key
-responses, validation, origin/tokens, cancellation, cross-tab locking, caching,
-Name/Steam order, independent filters/sorting, reload, expiry, shared CSV headers,
-profile opt-in, accessible references, unique IDs, and opt-in four-tab navigation.
-Deferral checks cover default-disabled job starts and hidden markup, three-tab
-keyboard navigation, fallback from a saved library tab, dormant saved jobs,
-unchanged saved state/currencies, and unlocked visible comparison controls.
-Real browser sample-price QA verified filters/search/reload and CSV download:
-all three loaded products export despite an active filter, with no profile values.
-Desktop and 390 CSS-pixel checks show aligned header/cell boundaries, aligned
-credit-name starts, long-name wrapping, bounded page width, and no console errors.
-QA fixture/scripts/screenshots stay ignored under .steam-price-polisher/qa/library.
+Match IDs, not array positions. Validate currencies, prices, metadata, missing and
+duplicate records. Successful empty appdetails arrays mean no price, not free.
+Only incomplete/malformed/400/414 batches split. 429/transient/TLS/denial do not fan
+out. Retry-After defers later work even after final failure; pacing waits are cancellable.
+Normal Steam pacing remains 1.5 seconds. Local permission denial stops jobs.
 
-The user-supplied live profile is absent from tracked code/docs/tests. Anonymous
-live probes returned HTTP 401 for keyless GetOwnedGames and sign-in redirects
-for games HTML/XML. The actual library UI reported the missing-key setup message
-and released controls correctly. Successful authenticated retrieval of that
-profile remains blocked by the absent local Steam API key; do not claim live
-success. Sample-price fixtures are explicitly separate from real ownership data.
+Cache schema 8 tracks calculated discounts and retains country-context English metadata (24 h) and best offers (15 min).
+Default prices retain regular 1 h/sale 15 min/missing 1 h/unavailable 6 h. Existing
+price/rate cache rows remain compatible. Enrichment does not reset price age. Known
+empty credits do not refetch forever. Temporary failures may use labeled stale data.
+Restricted metadata cannot erase known successful metadata. No profile-to-game mapping.
 
-Owned-library code is retained, but the stage is deferred rather than complete.
-TODO: complete key registration/Steam Guard, run authenticated live retrieval and
-comparison checks with the previously supplied profile outside tracked fixtures,
-verify restoration/export/diagnostics/locking, then decide on default visibility.
-See docs/ROADMAP.md for acceptance criteria. No subsequent feature is selected.
-Sorted wishlist API remains research only. A local developer/publisher directory
-is deferred at the user's request; no crawler or persistent company index exists.
+Rank/date jobs prepare bounded windows and emit ordered rows; Name prefetch learns
+names and reuses observations. Physical Steam data attempts are charged once to the
+first emitted row of a window, including prefetch on the first window. Cache-hit
+counts describe observations. The legacy CSV live_price_requests includes metadata
+and offer attempts; repeated regional CSV rows must not be summed naively.
 
-## Git state
+NBP supplies PLN per unit. Cross-rate A→B is rate[A]/rate[B]; retain dates/provenance
+for both legs, PLN=1. Germany is the EUR proxy. Rates stay cached 24 h.
+Diagnostic logs exclude profiles, credentials, URLs, bodies, raw exception text,
+source lines, locals and private paths. Aggregate batch logs are privacy-filtered.
 
-Working branch: main. codex/owned-library-tab is merged locally with separate
-feature, test, and documentation commits; the feature branch is retained.
-The hidden prototype and live-testing TODO are included in the merge. No push,
-tag, release, or deployment has been performed or authorized. Keep feature/test
-changes separate when committing future work. Runtime/cache data, local wishlists,
-QA scripts/fixtures/screenshots, downloaded files, secrets, and populated
-configuration files remain outside Git.
+## Verification and measurement
+
+165 Python tests and 69 frontend tests pass; final JS syntax and Git diff checks pass.
+Tests cover batching limits/recovery/cache/cancellation, five/six storefronts, offer
+semantics, shared physical-attempt accounting, rate-limit backoff, all existing job
+contracts, checkbox rendering without requests, credit columns and CSV separation.
+Browser QA uses labeled isolated fixture prices; it confirms both offers, aligned
+columns and refresh persistence. Fixtures/screenshots are ignored local QA artifacts.
+
+One live cold run per version with the supplied wishlist capped at the same 200 IDs,
+PL vs US/DE, normal pacing. Before: 815.194 s, first row 4.897 s, 534 price attempts,
+8 HTTP 429s, 157 comparisons, 2 technical failures. After: 20.664 s, first 100 rows
+10.931 s, 6 appdetails + 6 StoreBrowse attempts, no errors, 158 comparisons. All 471
+regional current/base price pairs shared by the 157 comparable games matched.
+One wishlist and two NBP requests in each run. New best-offer comparisons: 158.
+This measures HTTP-delivered backend results, not browser paint, and is not a
+statistical speed guarantee. See docs/STEAM_PRICE_PERFORMANCE.md for full results.
+Approved research TODOs: larger batches, smaller initial windows, and reduced delivery delay.
+Third-party price providers and publishing default offers before best offers are
+rejected. Early publication of complete fresh cached rows is a potential future TODO,
+without expired-data background refresh; see docs/ROADMAP.md.
+
+Owned-library successful authenticated live QA remains deferred until Steam Guard/
+API-key setup. Do not claim the public wishlist benchmark validates owned-library
+retrieval. Existing hidden prototype and local main merge remain as before this branch.

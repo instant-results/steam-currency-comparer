@@ -87,12 +87,24 @@ function restoreRequest(saved) {
   showProfile(request.identifier);
   return true;
 }
+function isCalculatedDiscount(price) {
+  return price.discount_calculated ?? !Number.isInteger(price.discount_percent);
+}
+function discountLabel(price, negative = false) {
+  const calculated = isCalculatedDiscount(price);
+  const percent = calculated ? Math.floor(price.discount_percent) : price.discount_percent;
+  return `${calculated ? "≈" : ""}${negative && percent > 0 ? "−" : ""}${percent}%`;
+}
 function saleNote(price, currency) {
   const note = node("div", undefined, "sale-note");
   if (price.discount_percent == null || price.base_amount == null) {
     note.append(node("small", "Sale details unavailable"));
-  } else if (price.discount_percent > 0) {
-    note.append(node("span", `−${price.discount_percent}%`, "sale-badge"), node("s", `${money(price.base_amount)} ${currency}`));
+  } else if (price.discount_percent > 0 || price.discount_calculated && price.base_amount > (price.amount ?? price.original_amount)) {
+    const badge = node("span", discountLabel(price, true), "sale-badge");
+    badge.title = isCalculatedDiscount(price)
+      ? "Calculated by this app from the regular and current prices, rounded down to a whole percentage point."
+      : "Discount percentage provided by Steam.";
+    note.append(badge, node("s", `${money(price.base_amount)} ${currency}`));
   } else { note.append(node("small", "Base price · no sale")); }
   return note;
 }
@@ -117,6 +129,56 @@ function setBusy(value) { running = value; $("analyze").disabled = value; $("ana
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
+let showBestOffers = false;
+try { showBestOffers = sessionStorage.getItem("polisher-best-offers") === "true"; } catch (_) {}
+function offerPriceBlock(offer, converted, currency) {
+  const block = node("div", undefined, "best-offer");
+  block.append(node("small", "Steam best offer", "offer-label"));
+  if (!offer?.price) {
+    block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable"));
+    return block;
+  }
+  block.append(node("span", `${money(converted)} ${currency}`, "offer-price"));
+  const link = node("a", `${offer.name} (${offer.kind})`, "offer-name");
+  if (["bundle", "package"].includes(offer.kind) && Number.isSafeInteger(offer.id) && offer.id > 0) {
+    link.href = `https://store.steampowered.com/${offer.kind === "bundle" ? "bundle" : "sub"}/${offer.id}/`;
+    link.target = "_blank"; link.rel = "noopener noreferrer";
+  }
+  block.append(link);
+  block.title = `${money(offer.price.amount)} ${offer.price.currency} · ${formatProvenance(offer.source)} · Currency: ${offer.currency_basis || "storefront context"}`;
+  if (offer.price.base_amount == null) block.append(node("small", "Regular-price discount unavailable"));
+  else block.append(saleNote(offer.price, offer.price.currency));
+  return block;
+}
+function appendBestOffers(tr, item, home) {
+  if (!showBestOffers || item.pending) return;
+  const offers = item.best_offers, best = item.best_offer_comparison;
+  if (!offers) { tr.children[0].append(node("small", "Refresh comparison to load Steam best offers.", "best-offer")); return; }
+  if (!item.comparison) {
+    tr.children[1].remove();
+    tr.append(node("td", item.skipped?.reason || "Default offer unavailable", "skip-reason"), node("td"), node("td"));
+  }
+  const currency = storefronts[home].currency === "PLN" ? "zł" : storefronts[home].currency;
+  tr.children[1].append(offerPriceBlock(offers[home], offers[home]?.price?.amount, currency));
+  const alternatives = node("div", undefined, "foreign");
+  for (const [region, offer] of Object.entries(offers)) {
+    if (region === home) continue;
+    const converted = best?.alternatives.find(p => p.region === region);
+    const block = offerPriceBlock(offer, offer.amount_in_home ?? converted?.amount_in_home ?? offer.price?.amount, (offer.amount_in_home != null || converted) ? currency : offer.price?.currency);
+    block.insertBefore(node("small", region.toUpperCase()), block.children[0]);
+    alternatives.append(block);
+  }
+  tr.children[2].append(alternatives);
+  const delta = node("div", undefined, "best-offer offer-difference" + (best ? best.is_fair ? " offer-fair" : " offer-pricier" : ""));
+  delta.append(node("small", "Steam best offers", "offer-label"));
+  if (best) {
+    const amount = best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home));
+    delta.append(node("span", `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${money(Math.abs(amount))} ${currency}`));
+    delta.append(node("small", percentageLabel(percentageDifference(best))));
+    delta.append(node("small", "Offers may include different editions or bundles"));
+  } else delta.append(node("small", "Not all storefront offers could be compared"));
+  tr.children[3].append(delta);
+}
 function comparisonRow(item, resultHome, showWishlistCredits = false) {
   const baseline = () => storefronts[resultHome];
   const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
@@ -132,6 +194,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
       const credit = Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable";
       credits.append(node("span", `${label}: `, "credit-label"), node("span", credit, "credit-names"));
     }
+    if (item.metadata_source) credits.title = `Credits: ${formatProvenance(item.metadata_source)}`;
     title.append(credits);
   }
   if(item.comparison) {
@@ -139,7 +202,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     if (hasDifferentDiscounts(c)) {
       const badge = node("span", "Different regional discounts", "regional-discount-badge");
       const values = [{...c.home_price, region: c.home_price.region || resultHome}, ...c.alternatives].map(price =>
-        `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? price.discount_percent + "% off" : "sale details unavailable"}`);
+        `${price.region.toUpperCase()}: ${Number.isFinite(price.discount_percent) ? discountLabel(price) + " off" : "sale details unavailable"}`);
       badge.title = values.join(" · ") + ". Observed discounts differ; regional prices may have been checked at different times.";
       title.append(badge);
     }
@@ -161,6 +224,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
     difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
   } else { const td = node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
+  appendBestOffers(tr, item, resultHome);
   return tr;
 }
 function render() {
@@ -186,7 +250,7 @@ function render() {
   for (const id of rowCache.keys()) if (!currentIds.has(id)) rowCache.delete(id);
   let position = 0;
   for (const item of visible) {
-    const signature = resultHome + JSON.stringify(item);
+    const signature = resultHome + showBestOffers + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
     const tr = comparisonRow(item, resultHome, true);
@@ -287,7 +351,10 @@ const priceCsvHeaders = Object.freeze([
   "storefront_difference_baseline", "storefront_difference_percent", "base_price_baseline",
   "storefront_price_source", "baseline_rate_source", "skipped_reason", "skipped_storefront",
   "skipped_retryable", "cache_hits", "stale_cache_hits", "live_price_requests",
-  "developers_known", "publishers_known", "library_profile", "library_loading_order"
+  "developers_known", "publishers_known", "library_profile", "library_loading_order",
+  "best_offer_status", "best_offer_kind", "best_offer_id", "best_offer_name", "best_offer_final_price",
+  "best_offer_currency", "best_offer_currency_basis", "best_offer_regular_price", "best_offer_discount_percent",
+  "best_offer_final_price_baseline", "best_offer_source", "best_offer_difference_baseline", "best_offer_difference_percent", "discount_calculated", "best_offer_discount_calculated"
 ]);
 function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
   const baseline = () => storefronts[home];
@@ -297,7 +364,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
   const rows = [priceCsvHeaders];
   for (const item of exportItems) {
     const c = item.comparison;
-    const prices = c ? [{...c.home_price, region:home, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : [{}];
+    const prices = c ? [{...c.home_price, region:home, currency:baseline().currency, original_amount:c.home_price.amount, amount_in_home:c.home_price.amount}, ...c.alternatives] : item.best_offers ? Object.keys(item.best_offers).map(region => ({region})) : [{}];
     const cheapest = c ? c.alternatives.reduce((best, price) => price.amount_in_home < best.amount_in_home ? price : best) : null;
     const reference = cheapest?.amount_in_home;
     const comparisonRegions = c ? c.alternatives.map(price => price.region) : regions;
@@ -329,6 +396,13 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
         item.cache_hits, item.stale_cache_hits, item.live_requests,
         Array.isArray(item.developers), Array.isArray(item.publishers),
         sourceTab === "library" && includeOwner ? profile : null, sourceTab === "library" ? order : null);
+      const offer = item.best_offers?.[price.region], best = item.best_offer_comparison;
+      const bestPrice = best && (price.region === home ? {amount_in_home:best.home_price.amount} : best.alternatives.find(p => p.region === price.region));
+      row.push(offer?.status, offer?.kind, offer?.id, offer?.name, offer?.price?.amount,
+        offer?.price?.currency, offer?.currency_basis, offer?.price?.base_amount, offer?.price?.discount_percent,
+        offer?.amount_in_home ?? bestPrice?.amount_in_home, offer?.source,
+        best ? best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home)) : null,
+        best ? percentageDifference(best) : null, price.discount_calculated, offer?.price?.discount_calculated);
       rows.push(row);
     }
   }
@@ -351,6 +425,12 @@ $("cancel").addEventListener("click", async () => { if(!job) return; $("cancel")
 $("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest); });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
+$("show-best-offers").checked = showBestOffers;
+$("show-best-offers").addEventListener("change", () => {
+  showBestOffers = $("show-best-offers").checked;
+  try { sessionStorage.setItem("polisher-best-offers", String(showBestOffers)); } catch (_) {}
+  render(); window.creatorPane?.render(); window.libraryPane?.render();
+});
 $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
 document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));

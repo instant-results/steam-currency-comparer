@@ -96,6 +96,24 @@ class RequestPolicyTests(unittest.TestCase):
 
         self.assertEqual(clock.sleeps, [1.5])
 
+    def test_terminal_rate_limit_defers_next_request_and_honors_full_retry_after(self):
+        clock = MutableClock()
+        gate = RequestGate(1.5, clock=clock, sleep=clock.sleep)
+        upstream = SequenceHttpClient([HttpClientError('Busy', status_code=429, transient=True, retry_after=90), {'ok': True}])
+        client = RetryingJsonHttpClient(upstream, gate=gate, policy=RetryPolicy(max_attempts=1, maximum_delay=15))
+        with self.assertRaises(HttpClientError): client.get_json('https://example.test')
+        client.get_json('https://example.test')
+        self.assertEqual(clock.sleeps, [90])
+
+    def test_gate_wait_uses_cancellable_sleep_without_changing_shared_schedule(self):
+        clock = MutableClock()
+        gate = RequestGate(1.5, clock=clock, sleep=clock.sleep)
+        gate.wait()
+        def cancelled(seconds): raise RuntimeError('cancelled')
+        with self.assertRaisesRegex(RuntimeError, 'cancelled'): gate.wait(sleep=cancelled)
+        gate.wait()
+        self.assertEqual(clock.sleeps, [1.5])
+
 
 if __name__ == "__main__":
     unittest.main()
