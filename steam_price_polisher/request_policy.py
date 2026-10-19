@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import random
 import threading
 import time
@@ -31,12 +32,12 @@ class RequestGate:
         self._next_allowed = 0.0
         self._lock = threading.Lock()
 
-    def wait(self) -> None:
+    def wait(self, *, sleep=None) -> None:
         with self._lock:
             now = self._clock()
             delay = max(0.0, self._next_allowed - now)
             if delay:
-                self._sleep(delay)
+                (sleep or self._sleep)(delay)
                 now = self._clock()
             self._next_allowed = max(self._next_allowed, now) + self._minimum_interval
 
@@ -81,6 +82,18 @@ class RetryingJsonHttpClient:
         self._gate = gate
         self._sleep = sleep
         self._uniform = uniform
+        self.attempts = 0
+        self._attempt_deadline = None
+
+    @contextmanager
+    def limit_attempts(self, maximum):
+        """Share a physical-attempt ceiling across batch recovery children."""
+        previous = self._attempt_deadline
+        self._attempt_deadline = min(previous, self.attempts + maximum) if previous is not None else self.attempts + maximum
+        try:
+            yield
+        finally:
+            self._attempt_deadline = previous
 
     def get_json(
         self,
@@ -88,8 +101,11 @@ class RetryingJsonHttpClient:
         headers: Mapping[str, str] | None = None,
     ) -> Any:
         for attempt in range(self._policy.max_attempts):
+            if self._attempt_deadline is not None and self.attempts >= self._attempt_deadline:
+                raise HttpClientError("Batch attempt budget exhausted")
             if self._gate is not None:
-                self._gate.wait()
+                self._gate.wait(sleep=self._sleep if self._sleep is not time.sleep else None)
+            self.attempts += 1
             started = time.monotonic()
             try:
                 result = self._upstream.get_json(url, headers)
@@ -104,6 +120,8 @@ class RetryingJsonHttpClient:
                      attempt=attempt + 1, duration_ms=elapsed_ms(started),
                      will_retry=will_retry, retry_in_ms=delay * 1000)
                 if not will_retry:
+                    if self._gate is not None and exc.status_code == 429:
+                        self._gate.defer(self._retry_delay(attempt, exc.retry_after))
                     raise
 
                 if self._gate is not None:
@@ -115,7 +133,7 @@ class RetryingJsonHttpClient:
 
     def _retry_delay(self, attempt: int, retry_after: float | None) -> float:
         if retry_after is not None:
-            return min(self._policy.maximum_delay, retry_after)
+            return max(0, retry_after)
         base = min(
             self._policy.maximum_delay,
             self._policy.base_delay * (2**attempt),

@@ -79,10 +79,14 @@ class SQLiteCache:
             if "effective_date" not in columns:
                 connection.execute("ALTER TABLE exchange_rates ADD COLUMN effective_date TEXT")
             price_columns = {row["name"] for row in connection.execute("PRAGMA table_info(regional_prices)")}
-            for name, kind in (("base_amount", "REAL"), ("discount_percent", "INTEGER"), ("is_free", "INTEGER"), ("developers", "TEXT"), ("publishers", "TEXT")):
+            for name, kind in (("base_amount", "REAL"), ("discount_percent", "INTEGER"), ("is_free", "INTEGER"), ("developers", "TEXT"), ("publishers", "TEXT"), ("discount_calculated", "INTEGER")):
                 if name not in price_columns:
                     connection.execute(f"ALTER TABLE regional_prices ADD COLUMN {name} {kind}")
-            connection.execute("PRAGMA user_version = 6")
+            connection.execute("""CREATE TABLE IF NOT EXISTS batch_observations (
+                kind TEXT NOT NULL, app_id TEXT NOT NULL, region TEXT NOT NULL,
+                payload TEXT NOT NULL, fetched_at REAL NOT NULL,
+                PRIMARY KEY(kind, app_id, region))""")
+            connection.execute("PRAGMA user_version = 8")
 
     @staticmethod
     def _create_price_table(connection: sqlite3.Connection) -> None:
@@ -140,7 +144,7 @@ class SQLiteCache:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent, is_free, developers, publishers
+                SELECT currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent, is_free, developers, publishers, discount_calculated
                 FROM regional_prices
                 WHERE app_id = ? AND region = ?
                 """,
@@ -158,7 +162,8 @@ class SQLiteCache:
                 return None
             result = RegionalPriceResult.available(
                 StorePrice(region.lower(), row["currency"], float(row["amount"]),
-                           row["base_amount"], row["discount_percent"]),
+                           row["base_amount"], row["discount_percent"],
+                           discount_calculated=bool(row["discount_calculated"]) or (row["discount_calculated"] is None and row["discount_percent"] is not None and not float(row["discount_percent"]).is_integer())),
                 row["game_name"],
             )
         elif status is PriceStatus.NO_REGIONAL_PRICE:
@@ -190,13 +195,14 @@ class SQLiteCache:
             connection.execute(
                 """
                 INSERT INTO regional_prices (
-                    app_id, region, currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent, is_free, developers, publishers
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    app_id, region, currency, amount, game_name, status, detail, fetched_at, base_amount, discount_percent, is_free, developers, publishers, discount_calculated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(app_id, region) DO UPDATE SET
                     currency = excluded.currency,
                     amount = excluded.amount,
                     base_amount = excluded.base_amount,
                     discount_percent = excluded.discount_percent,
+                    discount_calculated = excluded.discount_calculated,
                     is_free = excluded.is_free,
                     developers = excluded.developers,
                     publishers = excluded.publishers,
@@ -219,6 +225,7 @@ class SQLiteCache:
                     result.is_free,
                     None if result.developers is None else json.dumps(result.developers),
                     None if result.publishers is None else json.dumps(result.publishers),
+                    result.price.discount_calculated if result.price else None,
                 ),
             )
 
@@ -254,3 +261,18 @@ class SQLiteCache:
                 """,
                 (currency.upper(), rate, self._clock(), effective_date),
             )
+
+    def get_observation(self, kind, app_id, region):
+        """Metadata (English, regional context) and offers have independent ages."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT payload, fetched_at FROM batch_observations WHERE kind=? AND app_id=? AND region=?",
+                (kind, str(app_id), region.lower())).fetchone()
+        return (json.loads(row["payload"]), row["fetched_at"]) if row else None
+
+    def put_observation(self, kind, app_id, region, payload):
+        with self._connection() as connection:
+            connection.execute("""INSERT INTO batch_observations VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(kind, app_id, region) DO UPDATE SET
+                payload=excluded.payload, fetched_at=excluded.fetched_at""",
+                (kind, str(app_id), region.lower(), json.dumps(payload, allow_nan=False), self._clock()))

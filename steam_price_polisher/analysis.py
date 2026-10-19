@@ -13,6 +13,7 @@ from .models import (
     SkipCategory,
     SkippedGame,
     WishlistItem,
+    StorePrice,
 )
 from .price_service import CachedPriceService, PriceLookup
 from .steam_access import SteamAccessError
@@ -34,6 +35,9 @@ class AnalysisProgress:
     is_free: bool = False
     developers: tuple[str, ...] | None = None
     publishers: tuple[str, ...] | None = None
+    best_offer_comparison: GameComparison | None = None
+    best_offers: dict | None = None
+    metadata_source: str | None = None
 
     @property
     def status(self) -> str:
@@ -119,6 +123,9 @@ class AnalysisRunner:
         *,
         order: str = "priority",
     ) -> Iterator[AnalysisProgress]:
+        if hasattr(self._price_service, "prepare"):
+            yield from self._run_batched(wishlist, rates_to_home, order)
+            return
         prepared = self._prepare_wishlist(wishlist, order)
         total = len(prepared)
         for index, (item, home_lookup, home_error) in enumerate(prepared, start=1):
@@ -130,6 +137,46 @@ class AnalysisRunner:
                 home_lookup=home_lookup,
                 home_error=home_error,
             )
+
+    def _run_batched(self, wishlist, rates, order):
+        service = self._price_service
+        regions = (self._home, *self._alternatives)
+        prefix_requests = 0
+        wishlist = deduplicate_wishlist(wishlist)
+        if order == "name":
+            started = service.provider.attempts
+            service.prepare_metadata([item.app_id for item in wishlist], self._home)
+            prefix_requests = service.provider.attempts - started
+            wishlist = tuple(replace(item, name=service.metadata.get((item.app_id, self._home.region), {}).get("name") or item.name)
+                             for item in wishlist)
+        ordered = order_wishlist_items(wishlist, order)
+        for offset in range(0, len(ordered), service.window_size):
+            window = ordered[offset:offset + service.window_size]
+            service.prepare([item.app_id for item in window], regions)
+            requests = service.window_requests + prefix_requests
+            prefix_requests = 0
+            for position, item in enumerate(window):
+                service.provider.check()
+                progress = self._analyze_game(offset + position + 1, len(ordered), item, rates)
+                offers = service.best_offers(item.app_id, regions)
+                for region in regions:
+                    offer = offers[region.region]
+                    if offer.get("price"):
+                        factor = 1 if region.region == self._home.region else rates[region.currency]
+                        offer.update(rate_to_home=factor, amount_in_home=offer["price"]["amount"] * factor)
+                best = None
+                if all(offers[r.region].get("status") == "available" for r in regions):
+                    prices = [StorePrice(**offers[r.region]["price"]) for r in regions]
+                    best = compare_game(item.app_id, progress.name, prices[0], prices[1:], rates)
+                metadata = next((service.metadata.get((item.app_id, r.region)) for r in regions
+                                 if service.metadata.get((item.app_id, r.region), {}).get("name")), {})
+                # Attribute shared physical requests once, to the window's first row.
+                yield replace(progress, live_requests=requests if position == 0 else 0,
+                    best_offer_comparison=best, best_offers=offers,
+                    metadata_source=metadata.get("source"),
+                    name=metadata.get("name") or progress.name,
+                    developers=tuple(metadata["developers"]) if metadata else progress.developers,
+                    publishers=tuple(metadata["publishers"]) if metadata else progress.publishers)
 
     def _prepare_wishlist(
         self,

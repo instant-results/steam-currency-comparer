@@ -27,10 +27,10 @@ prices remain cached. Up to 1,000 games can be analyzed per wishlist.
 Your Rank loads the lowest Steam wishlist priority number first. Date Added loads
 the newest additions first. Items without the selected metadata retain their
 relative order at the end. Steam's current wishlist response usually omits game
-names, so alphabetical loading first resolves the baseline storefront details
-needed to learn every name; those baseline results are reused during comparison
-instead of being requested twice. The chosen order is retained for refresh and
-retry within the browser tab.
+names, so alphabetical loading first resolves StoreBrowse metadata for sorting.
+Those observations are reused. Other orders prepare up to 100 games at a time,
+then append the window's rows in order. The chosen order is retained for refresh
+and retry within the browser tab.
 
 For eventual public hosting, see [DEPLOYMENT.md](../DEPLOYMENT.md). The WSGI service
 includes bounded background jobs, input checks, same-origin POST protection,
@@ -574,3 +574,85 @@ co-publishers. Each tab remembers its display mode;
 missing credits are labeled Unavailable. Credits come from the same Steam
 appdetails response as prices and are cached with them. Older saved catalog
 comparisons refresh once to obtain credits.
+
+
+## Batched retrieval and Steam best purchase offers (0.6.0-beta)
+
+The web app uses one batch pipeline for every list size. Default prices come from
+appdetails price-only requests, and StoreBrowse supplies metadata and Steam's
+selected purchase option. Each request has one country context. The existing
+one-or-two comparison-currency selection limit is unchanged; the retrieval layer
+already accepts larger storefront collections.
+
+Enable **Show Steam's best purchase offers alongside game prices** to reveal a
+separate set of prices and regional differences. Both datasets are fetched during
+loading, so changing this checkbox requires no network request. The choice survives
+refresh in the same browser tab and applies to all comparison tabs. Older saved
+results need a new comparison to populate best offers. Default game offers still
+drive filters, sorting, counts, and catalog statistics; the secondary offer section
+has its own difference and color. Unavailable default rows remain subject to the
+existing Show unavailable products control.
+
+Each secondary offer identifies its package or bundle and links to that purchase
+option. Anonymous prices assume no existing ownership. Steam may choose different
+editions/bundles between countries, and personalized eligibility can change the
+checkout price. Recurring subscription options are not compared. StoreBrowse does
+not supply an explicit currency code in these responses: currency is attributed
+to the requested supported storefront and that basis is retained in tooltips/CSV.
+
+Discounts prefer Steam's percentage when it matches the regular/current-price relation.
+Only missing or inconsistent percentages are calculated as
+`(regular price - current price) / regular price × 100`, rounded down to whole
+percentage points and marked ≈ (for example, ≈−33%). Calculated sales below 1%
+show ≈0%. Hover over a discount badge to see whether Steam supplied the percentage
+or the app calculated it. CSV appends `discount_calculated` and `best_offer_discount_calculated`
+flags so consumers can distinguish calculated percentages from Steam's values. Compliance-only references such as a recent low are not
+used. Regular bundle discounts remain unavailable when only component savings or
+ambiguous reference prices are supplied. This does not prevent comparing current
+bundle prices. Default game prices remain separately available with their own base.
+
+CSV schema 1 gains additive `best_offer_*` fields after existing library columns:
+status, kind, ID, name, original-currency final price, currency, currency basis,
+regular price, discount percentage, converted price, source, comparison difference,
+and percentage difference. Exports always include these fields regardless of the
+checkbox. Missing values stay blank. For an uncompared default game with best-offer
+observations, one row per requested region retains those observations separately.
+No extra request is made when exporting.
+
+The legacy `live_price_requests` field now counts physical attempts for default
+price, metadata and best-offer batches. Shared attempts are attributed once to the
+first emitted game in a window; name-prefetch attempts join the first window. A
+zero on a later row does not imply that row came from cache. Cache-hit fields count
+item-country observations. These per-game fields repeat in regional CSV rows;
+do not sum them across those duplicates. Wishlist/NBP requests are counted
+separately in the performance report, not this legacy per-row field.
+
+Cache schema 8 tracks calculated-discount provenance, retains existing prices/rates and adds independent metadata (24 h)
+and best-offer (15 min) observations. Default-price TTLs remain one hour normally,
+15 minutes on sale, one hour for missing prices and six hours for unavailable apps.
+Metadata/offer refreshes do not reset default-price age. Partial and cancelled jobs
+retain completed observations. Temporary-error stale fallback is labeled; local
+network denial stops work. Metadata source is included in result data and wishlist
+credit tooltips. No wishlist/profile ownership mapping is stored in the shared cache.
+
+Programmatic configuration uses `JobManager(batch_policy=BatchPolicy(...))`.
+Defaults: `metadata_size=100`, `price_size=100`, `url_bytes=6000`,
+`recovery_calls=7`, `attempt_budget=21`. The latter ceilings apply to each planned
+batch and all recovery children, including retries. Throttling does not split
+batches; Retry-After also delays subsequent batches after a final failed attempt.
+These settings are operational bounds, not published Valve guarantees.
+
+See [measured performance](STEAM_PRICE_PERFORMANCE.md) and
+[implemented design](STEAM_PRICE_BATCHING_PLAN.md). Automatic example loading,
+changing loaded-result currencies, and the loading-order dropdown adjustment are
+still deferred in [ROADMAP.md](ROADMAP.md).
+
+
+Discount percentage preference: retain Steam's reported percentage when it agrees
+with the known regular/current price relationship, allowing whole-percent rounding
+or truncation and one minor unit of price rounding. Calculate a replacement only
+when the percentage is missing or inconsistent. A known regular price is required;
+compliance-only references and ambiguous bundle bases still remain unavailable.
+The same rule applies to live default prices, cached prices and eligible best offers.
+Previously cached calculated percentages cannot recover an overwritten upstream
+value; ordinary cache expiry refreshes them without extra requests for this change.

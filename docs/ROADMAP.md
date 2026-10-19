@@ -1,12 +1,102 @@
 # Development roadmap
 
-Updated: 2026-10-14. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-20. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
 The developer/publisher feature branch and the export/wishlist-credit stage are
 complete. Owned-library code is retained in 0.5.0-beta, hidden behind an internal
 flag while authenticated live testing is deferred.
+
+## Completed implementation: Steam price batching and separate offers
+
+Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
+
+- Implemented appdetails price batches and StoreBrowse metadata/best-offer batches,
+  per country, using one pipeline for all list sizes. Default 100 items, encoded
+  URL limits, completeness validation, bounded recovery and shared pacing remain.
+- Implemented independent cache ages, ordered progress, cancellation and request
+  accounting. Retrieval accepts more than three storefronts; the current UI/API
+  selection limit remains unchanged.
+- Added the user-approved checkbox showing Steam-selected purchase options beside
+  default game prices. Bundles/packages retain their identities; discounts never
+  use a different product's base price or a compliance-only reference price.
+- Completed one fresh-cache 200-game run per version. Results and limitations:
+  [performance report](STEAM_PRICE_PERFORMANCE.md). No concurrency was introduced.
+- Research and observed optimization ceiling: [investigation](STEAM_PRICE_BATCHING.md).
+  Implemented architecture and acceptance checks: [plan](STEAM_PRICE_BATCHING_PLAN.md).
+
+## TODO: loading performance research
+
+Decisions recorded on 2026-10-20; these are research tasks, not implemented changes.
+
+- **Larger batches:** test 120 and other candidate sizes against the 100-item
+  default. Measure first-result and total latency, request counts, encoded URL
+  and response sizes, completeness, retries and errors. Include list lengths near
+  batch boundaries and more than three storefronts. A 200-game list still needs
+  two windows at either 100 or 120; acceptance alone does not establish a speedup.
+- **Smaller first window:** investigate a small initial batch followed by larger
+  batches. Measure the first visible results against total loading time and added
+  requests under unchanged pacing. Keep each published row complete for both offer
+  types; do not introduce later best-offer enrichment.
+- **Delivery delay:** investigate reducing the current 1.2-second polling delay.
+  Compare simpler polling adjustments with push/long-poll approaches before choosing
+  an implementation. Measure actual delivery latency and server/request overhead;
+  preserve cancellation, reconnect behavior and access controls.
+
+### Dropped approaches
+
+- Third-party price providers: rejected; keep price retrieval with Valve.
+- Publishing default offers first and attaching best offers later: rejected due
+  to added state/update complexity. Preserve complete rows with both offer datasets.
+
+### Potential TODO: publish complete fresh cached rows earlier
+
+Fresh cached observations are already reused without fetching those prices again.
+Publishing complete, fresh cached rows earlier would not inherently require later
+replacement or value comparison. Showing expired data and refreshing it in the
+background would require replacement handling; that is a different proposal.
+Investigate whether complete fresh cached rows can be published earlier without
+refreshing or replacing them during the same comparison. Exclude expired-data
+background refresh from this potential task. The design must account for independently expiring metadata,
+prices, best offers and exchange rates, plus requested row order. No cache-first
+publication implementation has been approved; this is a potential future TODO.
+
+Other unselected investigations: new countries, opt-in best-offer retrieval and
+regular bundle/package price enrichment. Concurrency remains unselected.
+
+## TODO: deferred comparison experience improvements
+
+These requests are recorded for later work and are outside the backend branch.
+
+### Load the example automatically
+
+- On a fresh visit, load the seven-game example automatically. Restore an existing
+  comparison first when available, without overwriting a user's loaded wishlist.
+- Consider removing the redundant "Try an example comparison" button and update
+  empty-state wording. Coordinate automatic work with existing cross-tab jobs.
+
+### Change currencies without reloading the game list
+
+- Allow baseline and comparison selections to update an already loaded list,
+  preserving games, search, filters, sort choices, and catalog positions.
+- Retain observations independently of the baseline, including partial regional
+  results. Recalculate immediately when the needed prices are available; fetch
+  only missing/stale data when necessary, with clear progress and provenance.
+- Evaluate preloading all five storefronts after backend batching is measured;
+  prioritize selected storefronts and avoid making large lists wait unnecessarily.
+- Consider fetching the latest NBP Table A in one request and retaining the four
+  supported foreign rates plus PLN identity. Preserve publication/retrieval dates,
+  cache rules, and cross-rate calculation through PLN.
+- Keep statistics, discount badges, availability, saved state, and CSV exports
+  consistent with the active currency selection across visible tabs.
+
+### Align the loading-order dropdown
+
+- Align the "Loading order" label and selected value's left text edges, verify
+  vertical centering, and inset the down arrow consistently from the right border.
+- Retain native keyboard/accessibility behavior and verify desktop/narrow layouts,
+  including shared control styling and header/row typographic alignment.
 
 ## Completed stage: consistent exports and wishlist credits
 

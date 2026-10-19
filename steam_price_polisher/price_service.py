@@ -79,7 +79,8 @@ class CachedPriceService:
             metadata_missing |= self._require_credits and cached.result.status is not PriceStatus.APP_UNAVAILABLE and (
                 cached.result.developers is None or cached.result.publishers is None
             )
-            if price is not None and price.discount_percent and price.discount_percent > 0:
+            if price is not None and ((price.discount_percent or 0) > 0 or
+                                      price.base_amount is not None and price.amount < price.base_amount):
                 ttl = min(ttl, self._sale_ttl)
             if not metadata_missing and self._clock() - cached.fetched_at <= ttl:
                 emit("cache_access", cache_kind="price", source="cache")
