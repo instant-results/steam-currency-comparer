@@ -1216,3 +1216,20 @@ for (const kind of ["developer","publisher"]) test(`${kind} best-offer toggle re
   assert.equal(row.children.length,5);
   assert.match(contentText(row.children[2]),/Complete Edition/);
 });
+
+test("calculated discounts display whole percentages and approximation without changing Steam badges", () => {
+  const ctx=setup();
+  assert.equal(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33,discount_calculated:true},"PLN").children[0].textContent'),"≈−33%");
+  assert.equal(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33},"PLN").children[0].textContent'),"−33%");
+  assert.equal(ctx.run('saleNote({amount:99.5,base_amount:100,discount_percent:0,discount_calculated:true},"PLN").children[0].textContent'),"≈0%");
+  assert.equal(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33.34},"PLN").children[0].textContent'),"≈−33%");
+  assert.match(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33,discount_calculated:true},"PLN").children[0].title'), /Calculated by this app.*rounded down/);
+  assert.equal(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33,discount_calculated:false},"PLN").children[0].title'), "Discount percentage provided by Steam.");
+  assert.match(ctx.run('saleNote({amount:99.5,base_amount:100,discount_percent:0,discount_calculated:true},"PLN").children[0].title'), /Calculated by this app/);
+  assert.match(ctx.run('saleNote({amount:66.66,base_amount:100,discount_percent:33.34},"PLN").children[0].title'), /Calculated by this app/);
+  const item=offerFixture(); item.comparison.home_price.discount_calculated=true;
+  item.best_offers.pl.price.discount_calculated=true;
+  const csv=parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])},"pl",[])`));
+  assert.equal(csv.rows[0].discount_calculated,"true");
+  assert.equal(csv.rows[0].best_offer_discount_calculated,"true");
+});
