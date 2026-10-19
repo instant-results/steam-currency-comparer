@@ -13,6 +13,7 @@ env/
 htmlcov/
 
 # Local configuration and secrets
+/AGENTS.md
 .env
 .env.*
 !.env.example

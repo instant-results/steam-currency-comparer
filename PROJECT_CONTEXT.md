@@ -4,15 +4,17 @@ Updated: 2026-10-20. Current state, not a change log.
 
 ## Start here
 
-Read AGENTS.md, README.md and docs/USAGE.md, then inspect code and Git status.
+Read README.md and docs/USAGE.md, then inspect code and Git status.
 Integration target: `main`. Version: **0.6.2-beta** in
 steam_price_polisher/version.py. Current branch: `main`.
 Substantial features increment MINOR; refinements increment PATCH; first stable
 version is 1.0.0. Automatic example loading and shared frontend coordination are
 integrated into main from `codex/automatic-example-loading`. Feature/documentation
 and regression tests are committed separately. No feature work remains in this
-scope. Remote publication, tags, releases and deployment have not been requested
-for this work.
+scope. Main, including the merge, has been pushed to GitHub. Tags, releases and
+deployment have not been requested. For future features, push the branch,
+open/review/test a pull request, merge it on
+GitHub, synchronize main, then delete the confirmed merged branch remotely/locally.
 Repository: https://github.com/instant-results/steam-currency-comparer.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin

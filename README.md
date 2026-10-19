@@ -274,6 +274,6 @@ node --check web/library.js
 - [Development roadmap](docs/ROADMAP.md): next targets and the subsequent owned-library stage.
 - [Text and localization decisions](docs/TEXT_AND_LOCALIZATION.md): wording,
   credit alignment, and boundaries for future translations.
-- [Current project context](PROJECT_CONTEXT.md) and [collaboration guidance](AGENTS.md).
+- [Current project context](PROJECT_CONTEXT.md).
 - [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
   integration, not an implemented feature.

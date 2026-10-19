@@ -566,7 +566,7 @@ The owned-library prototype is retained but hidden behind an internal flag in
 developer, and publisher features retain the shared CSV and product credits.
 
 Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
-handoff and [AGENTS.md](../AGENTS.md) for collaboration and Git preferences.
+handoff.
 Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is
 the detailed change history. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
