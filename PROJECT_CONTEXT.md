@@ -5,22 +5,27 @@ Updated: 2026-10-20. Current state, not a change log.
 ## Start here
 
 Read AGENTS.md, README.md and docs/USAGE.md, then inspect code and Git status.
-Integration target: `main`. Version: **0.6.1-beta** in
-steam_price_polisher/version.py. Substantial features increment MINOR; refinements
-increment PATCH; first stable version is 1.0.0. The user authorized full merging
-of `codex/steam-price-batching`, including committing documentation and pushing.
-No tag, release or deployment is authorized.
+Integration target: `main`. Version: **0.6.2-beta** in
+steam_price_polisher/version.py. Current branch: `codex/automatic-example-loading`.
+Substantial features increment MINOR; refinements increment PATCH; first stable
+version is 1.0.0. Automatic example loading and shared frontend coordination are
+complete and verified. The user authorized separate feature/documentation and test
+commits, merging into main and deleting this feature branch. Remote publication,
+tags, releases and deployment have not been requested for this work.
 Repository: https://github.com/instant-results/steam-currency-comparer.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
-tooltips are complete. Feature and test changes were committed separately. Keep
-future feature and added test changes in separate coherent commits. Do not commit
-local QA, caches, profile identifiers, wishlists, secrets or runtime data.
-Automatic examples, dynamic currencies and loading-order dropdown improvements
-remain deferred; see docs/ROADMAP.md.
+tooltips are complete on main. Keep future feature and added test changes in
+separate coherent commits. Do not commit local QA, caches, profile identifiers,
+wishlists, secrets or runtime data. Dynamic currencies during/after loading and
+loading-order dropdown improvements remain deferred; see docs/ROADMAP.md.
 
 ## Current product behavior
 
+- Fresh visits automatically compare the seven-game example, with no example
+  button. Restore saved wishlist jobs first, including expired-job retry context.
+  Typing a profile dismisses a queued example; failures/cancellation require retry.
+  Examples wait until the wishlist is visible and the shared coordinator is idle.
 - Three visible tabs: Your wishlist, Developers, Publishers. Owned library remains
   hidden/disabled behind OWNED_LIBRARY_ENABLED=False pending authenticated live
   API-key QA. A key alone does not enable it. Its saved state remains dormant and
@@ -62,8 +67,14 @@ remain deferred; see docs/ROADMAP.md.
 Python WSGI/SQLite, vanilla JS/CSS, no build step. serve_web.py is a loopback preview
 with exclusive listener and lifecycle cleanup. Check listener/health before restarting;
 keep its launching session alive. Do not expose it publicly.
-Preview was restarted after the interruption: http://127.0.0.1:8765/, health
-confirmed 0.6.1-beta with one listener. Temporary QA fixture server was stopped.
+Frontend comparisonCoordinator in web/app.js owns job reservations, initialization
+holds, shared busy state and keyed idle tasks. All tabs register/release their jobs;
+catalog auto-loading has priority over the example and no longer polls busy flags.
+Saved catalog jobs on hidden tabs initialize/reconnect before new automatic work.
+Per-tab state still handles rendering/results; the backend worker is unchanged.
+Branch preview: http://127.0.0.1:8766/, health confirmed 0.6.2-beta, with outbound
+access for live QA. The earlier preview on 8765 still reports 0.6.1-beta. Keep the
+branch preview's launching session alive; check health again before relying on it.
 
 web_app.py retains same-origin POST checks, capability-token job access, one paced
 worker, one active job per owner, three starts per minute and one-hour job expiry.
@@ -104,12 +115,24 @@ source lines, locals and private paths. Aggregate batch logs are privacy-filtere
 
 ## Verification and measurement
 
-165 Python tests and 69 frontend tests pass; final JS syntax and Git diff checks pass.
+Merge verification: all 165 Python tests and 84 frontend tests pass;
+JavaScript syntax and Git diff checks pass. New coverage exercises fresh startup,
+restoration/expiry, hidden catalog reconnect, initialization races, user priority,
+cancellation/retry, unavailable storage and enabled/disabled library coordination.
+Live browser QA confirms seven example results load automatically, survive reload
+and remain intact after catalog work; shared controls lock during catalog startup.
+The button is removed and the form remains aligned at desktop/medium widths.
+Screenshot: ignored .steam-price-polisher/qa/automatic-example.png.
+Additional live profile QA covered the full wishlist, reload during/after loading,
+cancellation/partial restoration/retry, catalog waiting and refresh, display
+controls and CSV. No functional defects or browser console warnings/errors found.
+Detailed report: ignored .steam-price-polisher/qa/public-wishlist-behavior.md;
+profile-linked screenshots, snapshots and exports remain local and uncommitted.
 Tests cover batching limits/recovery/cache/cancellation, five/six storefronts, offer
 semantics, shared physical-attempt accounting, rate-limit backoff, all existing job
 contracts, checkbox rendering without requests, credit columns and CSV separation.
-Browser QA uses labeled isolated fixture prices; it confirms both offers, aligned
-columns and refresh persistence. Fixtures/screenshots are ignored local QA artifacts.
+Earlier batching browser QA used labeled isolated fixture prices to confirm both
+offers, aligned columns and refresh persistence. QA artifacts remain ignored.
 
 One live cold run per version with the supplied wishlist capped at the same 200 IDs,
 PL vs US/DE, normal pacing. Before: 815.194 s, first row 4.897 s, 534 price attempts,
