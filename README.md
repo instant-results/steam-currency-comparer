@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.5.0-beta** · Beta for local use.
+**Version: 0.6.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -30,6 +30,12 @@ change over time. No personal Steam profile is used.
   against USD and EUR.
 - Shows regional final prices, discounts, converted prices, and absolute and
   percentage differences.
+- Optionally shows Steam's best purchase offers alongside default game prices,
+  identifying packages and bundles separately. Toggling the checkbox uses already
+  loaded data; filters and totals continue to describe default game offers.
+- Retrieves prices in batches. A single 200-game cold-cache measurement took
+  20.7 seconds versus 13 minutes 35 seconds previously; first results arrived in
+  10.9 seconds versus 4.9 seconds. See the [test protocol and limitations](docs/STEAM_PRICE_PERFORMANCE.md).
 - Loads games by Your Rank, Date Added, or Name, with search, filters, and
   result sorting once results arrive.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
