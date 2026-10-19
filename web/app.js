@@ -4,8 +4,42 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
 const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
+// Shared scheduling for every comparison tab. Restoring jobs may register while
+// initialization is held; new jobs claim the idle worker before changing results.
+const comparisonCoordinator = (() => {
+  const owners = new Set(), holds = new Set(), pending = new Map(), listeners = new Set();
+  let scheduled = false;
+  const busy = () => owners.size > 0 || holds.size > 0;
+  function wake() {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      if (busy()) return;
+      for (const [key, task] of [...pending].sort((a, b) => a[1].priority - b[1].priority)) {
+        if (busy()) break;
+        if (!task.eligible()) continue;
+        pending.delete(key);
+        task.run();
+      }
+    });
+  }
+  function changed() { for (const listener of listeners) listener(); wake(); }
+  return {
+    get busy() { return busy(); },
+    get active() { return owners.size > 0; },
+    claim(owner) { if (busy()) return false; owners.add(owner); changed(); return true; },
+    setBusy(owner, value) { if (value) owners.add(owner); else owners.delete(owner); changed(); },
+    hold(key) { holds.add(key); changed(); return () => { holds.delete(key); changed(); }; },
+    whenIdle(key, run, eligible = () => true, priority = 0) { pending.set(key, {run, eligible, priority}); wake(); },
+    cancel(key) { pending.delete(key); },
+    subscribe(listener) { listeners.add(listener); },
+    wake
+  };
+})();
 const wishlistOrders = new Set(["priority", "date_added", "name"]);
 let resultHome = "pl", preferredComparisons = null;
+let automaticExampleDismissed = false;
 const baseline = () => storefronts[resultHome];
 const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
 const formatProvenance = (source) => {
@@ -31,15 +65,14 @@ function updateSelections(event) {
     for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
   }
   for (const el of options) {
-    el.disabled = running || window.libraryPane?.busy || window.creatorPane?.busy || el.value === home || (!el.checked && count >= 2);
+    el.disabled = comparisonCoordinator.busy || el.value === home || (!el.checked && count >= 2);
     el.closest('label').hidden = el.value === home;
   }
-  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy);
+  document.querySelectorAll('[name="home"]').forEach(el => el.disabled = comparisonCoordinator.busy);
   window.creatorPane?.refreshControls();
   window.libraryPane?.refreshControls();
-  $("analyze").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
-  $("demo").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
-  $("retry").disabled = running || !!window.libraryPane?.busy || !!window.creatorPane?.busy;
+  $("analyze").disabled = comparisonCoordinator.busy;
+  $("retry").disabled = comparisonCoordinator.busy;
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
   $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
 }
@@ -125,7 +158,7 @@ function percentageLabel(value) {
 }
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
-function setBusy(value) { running = value; $("analyze").disabled = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("demo").disabled = value; $("identifier").disabled = value; $("wishlist-order").disabled = value; updateSelections(); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
+function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
@@ -264,7 +297,7 @@ function render() {
     position++;
   }
   $("empty").hidden = visible.length > 0;
-  if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
+  if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
   $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
   $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
@@ -307,8 +340,9 @@ function renderRates(rates, target) {
 }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
 async function start(body) {
-  if (window.libraryPane?.busy) { notice("An owned-library comparison is running. Cancel it on the Owned library tab or wait for it to finish.", true); return; }
-  if (window.creatorPane?.busy) { notice("A catalog comparison is running. Wait for it or cancel it on the Developers or Publishers tab.", true); return; }
+  automaticExampleDismissed = true;
+  comparisonCoordinator.cancel("wishlist-example");
+  if (!comparisonCoordinator.claim("wishlist")) { notice("A comparison is running. Wait for it or cancel it on its tab.", true); return; }
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
@@ -320,11 +354,12 @@ async function poll() {
       saveJob({...job, request: lastRequest});
     }
     demoMode = data.profile === "example" || lastRequest?.identifier === "example";
+    $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison";
     showBaseline(data.home || "pl"); items = data.items; showRates(data.rates); render();
     const complete = ["complete", "partial", "cancelled", "failed"].includes(data.state);
     status(data.state.toUpperCase(), !complete); if (data.state === "cancelling") { $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; } $("progress-label").textContent = data.message; $("progress").max = Math.max(data.total, 1); $("progress").value = data.items.length;
     if(data.error) notice(data.error, true); else if(data.state === "partial") notice("Some games could not be compared because a request failed. Retry to reuse completed prices and check the remaining games."); else if(data.warnings.length) notice(data.warnings.join(" ")); else if(data.state === "cancelled") notice("Comparison cancelled. Completed regional prices are cached for your next attempt."); else if(demoMode && complete) notice("Example comparison: showing live Steam prices and official NBP exchange rates for a curated sample of games. Run your own wishlist for personal data."); else notice("");
-    if(complete) { setBusy(false); if(!items.length) { $("empty").querySelector("h3").textContent = data.state === "cancelled" ? "Comparison cancelled." : "No results this time."; $("empty").querySelector("p").textContent = "Check your profile and make sure your wishlist is public, then try again."; } } else timer = setTimeout(poll, 1200);
+    if(complete) { setBusy(false); if(!items.length) { $("empty").querySelector("h3").textContent = data.state === "cancelled" ? "Comparison cancelled." : "No results this time."; $("empty").querySelector("p").textContent = demoMode ? "Use Retry comparison to check the example again, or enter your public Steam profile above." : "Check your profile and make sure your wishlist is public, then try again."; } } else timer = setTimeout(poll, 1200);
   } catch(error) { if(error.status === 404) { saveJob(null); setBusy(false); status("COMPARISON EXPIRED"); notice(error.message, true); return; } status("CONNECTION INTERRUPTED"); notice("Connection interrupted. Reconnecting to your comparison…", true); timer = setTimeout(poll, 4000); }
 }
 // Quote every field and neutralize spreadsheet formulas in untrusted text.
@@ -421,6 +456,7 @@ $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-o
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();
+comparisonCoordinator.subscribe(updateSelections);
 $("cancel").addEventListener("click", async () => { if(!job) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${job.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${job.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest); });
 $("search").addEventListener("input", render);
@@ -434,12 +470,23 @@ $("show-best-offers").addEventListener("change", () => {
 $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
 document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
-$("demo").addEventListener("click", () => {
-  const selected = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
-  const home = selectedHome();
-  const regions = selected.length ? selected : Object.keys(storefronts).filter(region => region !== home).slice(0, 2);
-  start({identifier: "example", regions, home, order: $("wishlist-order").value});
-});
+$("identifier").addEventListener("input", () => { automaticExampleDismissed = true; comparisonCoordinator.cancel("wishlist-example"); });
+
+// Deferred scripts restore their tabs before DOMContentLoaded. Catalog restoration
+// can continue asynchronously under a coordinator hold. The example has lower
+// priority than catalog work and only starts while the wishlist is visible.
+document.addEventListener("DOMContentLoaded", () => {
+  if (job || lastRequest || automaticExampleDismissed) return;
+  $("empty").querySelector("h3").textContent = "An example comparison loads automatically.";
+  $("empty").querySelector("p").textContent = "Enter your public Steam profile above to compare your own wishlist.";
+  comparisonCoordinator.whenIdle("wishlist-example", () => {
+    const home = selectedHome();
+    const selected = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
+    const regions = selected.length ? selected : Object.keys(storefronts).filter(region => region !== home).slice(0, 2);
+    start({identifier: "example", regions, home, order: $("wishlist-order").value});
+  }, () => !job && !lastRequest && !items.length && !$("identifier").value.trim()
+    && !window.creatorPane?.active && !window.libraryPane?.active, 10);
+}, {once: true});
 
 // Optional agent controls share the same visible result filters.
 if (document.modelContext?.registerTool) {

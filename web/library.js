@@ -22,7 +22,7 @@
       showUnavailable:$("show-unavailable").checked, includeOwner:$("export-owner").checked})); } catch (_) {}
   }
   function refreshControls() {
-    const locked = busy || running || !!window.creatorPane?.busy;
+    const locked = comparisonCoordinator.busy;
     $("analyze").disabled = locked; $("analyze").hidden = busy;
     $("identifier").disabled = busy; $("wishlist-order").disabled = busy;
     $("cancel").hidden = !busy; $("cancel").disabled = !job || state === "cancelling";
@@ -31,7 +31,7 @@
     $("export-csv").disabled = !items.length;
     $("progress").hidden = !busy; $("progress-label").hidden = !busy;
   }
-  function setBusy(value) { busy = value; updateSelections(); }
+  function setBusy(value) { busy = value; comparisonCoordinator.setBusy("library", value); }
   function showLibraryRates() {
     if (!active) return;
     const target = document.getElementById("rates");
@@ -117,7 +117,7 @@
     }
   }
   async function start(body) {
-    if (busy || running || window.creatorPane?.busy) { notice("A comparison is running. Wait for it or cancel it on its tab.", true); return; }
+    if (!comparisonCoordinator.claim("library")) { notice("A comparison is running. Wait for it or cancel it on its tab.", true); return; }
     clearTimeout(timer); job = null; items = []; rates = []; home = body.home; lastRequest = body;
     sort = "arrival"; direction = 1; state = "connecting"; message = "Loading owned library…";
     $("search").value = ""; $("identifier").value = body.identifier; $("wishlist-order").value = body.order;
@@ -164,7 +164,7 @@
       $("show-unavailable").checked = saved.showUnavailable === true; $("export-owner").checked = saved.includeOwner === true;
       $("identifier").value = body.identifier; $("wishlist-order").value = body.order;
       $("status-badge").textContent = state.toUpperCase(); render();
-      if (sessionStorage.getItem("polisher-active-tab") === "library" && !running) {
+      if (sessionStorage.getItem("polisher-active-tab") === "library" && !comparisonCoordinator.active) {
         preferredComparisons = [...body.regions];
         document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === body.home);
         document.querySelectorAll('[name="region"]').forEach(el => el.checked = body.regions.includes(el.value));

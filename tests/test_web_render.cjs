@@ -13,15 +13,15 @@ class Element {
   addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
-  querySelector() { return new Element("p"); }
+  querySelector(selector) { return (this.queries ||= {})[selector] ||= new Element("p"); }
   focus() { this.focused = true; }
 }
 function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
-  const elements = new Map();
+  const elements = new Map(), documentEvents = new Map();
   const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, document: {documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled)}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled)}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
-  return {get, run: source => vm.runInContext(source, context)};
+  return {get, ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
 const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
@@ -47,7 +47,7 @@ const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setIm
 const librarySnapshot = (items, state = "complete", extra = {}) => ({items, state, total:items.length, home:"pl", rates:[], warnings:[], message:"Checked owned games.", ...extra});
 const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"76561198000000000",home:"pl",regions:["us"],order:"name"},
   rates:[],home:"pl",state:"complete", ...extra});
-function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary) {
+function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
   const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], timers = new Map();
@@ -64,13 +64,16 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
     fetch:async (path, options = {}) => {
       calls.push({path,body:options.body ? JSON.parse(options.body) : null});
       let data;
-      if (path === "/api/creators") data = {developers:registry.map(c => ({...c,selector:{kind:"developer",name:c.name}})),
-        publishers:registry.map(c => ({...c,selector:{kind:"publisher",name:c.name}}))};
+      if (path === "/api/creators") {
+        if (registryWait) await registryWait;
+        data = {developers:registry.map(c => ({...c,selector:{kind:"developer",name:c.name}})),
+          publishers:registry.map(c => ({...c,selector:{kind:"publisher",name:c.name}}))};
+      }
       else if (path === "/api/creators/search") {
         data = searches.shift() || {creators: [], exact_matches: []};
         if (data.error) return {ok:false, json:async () => data};
       }
-      else if (path === "/api/creator-jobs" || path === "/api/library-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
       return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
@@ -86,6 +89,189 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
   const body = () => group().children[1].children[0].children[0].children[2];
   return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body,libraryFilters,librarySorts};
 }
+
+const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
+const savedWishlist = (identifier = "76561198000000000") => JSON.stringify({id:"w".repeat(32),token:"t".repeat(43),
+  request:{identifier,home:"gb",regions:["us"],order:"date_added"}});
+
+test("a fresh page automatically compares the example once using current selections", async () => {
+  const ctx = creatorSetup();
+  ctx.radios.forEach(el => el.checked = el.value === "gb");
+  ctx.regions.forEach(el => el.checked = el.value === "no");
+  ctx.get("wishlist-order").value = "name";
+  ctx.snapshots.push(wishlistSnapshot());
+  assert.equal(ctx.calls.length, 0);
+  ctx.ready(); ctx.ready(); await settle();
+  const starts = ctx.calls.filter(call => call.path === "/api/jobs");
+  assert.equal(starts.length, 1);
+  assert.deepEqual(starts[0].body, {identifier:"example",home:"gb",regions:["no"],order:"name"});
+  assert.equal(ctx.get("identifier").value, "");
+  assert.equal(ctx.get("results-title").textContent, "Example price comparison");
+  assert.match(ctx.get("profile-attribution").textContent, /Curated example wishlist/);
+  assert.equal(ctx.run("comparisonCoordinator.busy"), false);
+  assert.doesNotMatch(fs.readFileSync("web/index.html", "utf8"), /id="demo"|Try an example comparison|or run an example/);
+});
+
+test("restored personal and example jobs take priority over automatic loading", async () => {
+  for (const identifier of ["76561198000000000", "example"]) {
+    const ctx = creatorSetup({"polisher-job":savedWishlist(identifier)}, "developer", false,
+      [wishlistSnapshot("complete", {profile:identifier,home:"gb"})]);
+    ctx.ready(); await settle();
+    assert.equal(ctx.calls.filter(call => call.path.startsWith("/api/jobs/")).length, 1);
+    assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+    assert.equal(ctx.run("lastRequest.home"), "gb");
+    assert.equal(ctx.run("items[0].name"), "Example game");
+    assert.equal(ctx.get("identifier").value, identifier === "example" ? "" : identifier);
+  }
+});
+
+test("an expired saved wishlist retains its retry context without starting an example", async () => {
+  const ctx = creatorSetup({"polisher-job":savedWishlist()}, "developer", false,
+    [{httpStatus:404,error:"Comparison expired"}]);
+  ctx.ready(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+  assert.equal(ctx.get("status-badge").textContent, "COMPARISON EXPIRED");
+  assert.equal(ctx.run("lastRequest.identifier"), "76561198000000000");
+  assert.equal(ctx.run("comparisonCoordinator.busy"), false);
+});
+
+test("malformed saved wishlist state does not prevent the fresh example", async () => {
+  for (const saved of ["{", JSON.stringify({id:"bad",token:"bad"})]) {
+    const ctx = creatorSetup({"polisher-job":saved});
+    ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+    assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+  }
+});
+
+test("typing a profile dismisses a queued example even if the input is later cleared", async () => {
+  const ctx = creatorSetup();
+  ctx.run('comparisonCoordinator.setBusy("developer", true)');
+  ctx.ready(); await settle();
+  ctx.get("identifier").value = "76561198000000000";
+  ctx.get("identifier").listeners.input(); ctx.get("identifier").value = "";
+  ctx.run('comparisonCoordinator.setBusy("developer", false)'); await settle();
+  assert.equal(ctx.calls.length, 0);
+});
+
+test("a user comparison submitted before startup finishes cannot be replaced by the example", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot("complete", {profile:"76561198000000000"}));
+  ctx.get("identifier").value = "76561198000000000";
+  ctx.get("wishlist-order").value = "priority";
+  ctx.get("compare-form").listeners.submit({preventDefault(){}});
+  ctx.ready(); await settle();
+  assert.deepEqual(ctx.calls.filter(call => call.path === "/api/jobs").map(call => call.body.identifier), ["76561198000000000"]);
+});
+
+test("hidden saved catalog work reconnects before the example and releases it on completion", async () => {
+  let release;
+  const registryWait = new Promise(resolve => { release = resolve; });
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},
+    job:{id:"c".repeat(32),token:"d".repeat(43)},catalogs:[],results:[]};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)}, "developer", false, [], false, registryWait);
+  ctx.ready(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+  assert.equal(ctx.get("analyze").disabled, true);
+  ctx.snapshots.push({state:"running",message:"Checking catalog",items:[],rates:[],warnings:[]});
+  release(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path.startsWith("/api/jobs/")).length, 1);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+  ctx.snapshots.push({state:"complete",message:"Done",items:[],rates:[],warnings:[]}, wishlistSnapshot());
+  [...ctx.timers.values()][0](); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+  assert.equal(ctx.run("comparisonCoordinator.busy"), false);
+});
+
+test("a restored active catalog keeps the example pending until the wishlist is opened", async () => {
+  const ctx = creatorSetup({"polisher-active-tab":"publisher"});
+  ctx.ready(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length, 1);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+  ctx.snapshots.push(wishlistSnapshot());
+  ctx.get("wishlist-tab").listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+});
+
+test("queued catalog auto-loading is cancelled when leaving the catalog tab", async () => {
+  const ctx = creatorSetup();
+  ctx.run("setBusy(true)");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("wishlist-tab").listeners.click();
+  ctx.run("setBusy(false)"); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length, 0);
+});
+
+test("failed example startup releases controls and requires an explicit retry", async () => {
+  const ctx = creatorSetup();
+  ctx.run('let exampleAttempts = 0; request = async () => { exampleAttempts++; throw new Error("Steam unavailable"); }');
+  ctx.ready(); await settle();
+  assert.equal(ctx.get("status-badge").textContent, "COULD NOT START");
+  assert.equal(ctx.get("retry").hidden, false);
+  assert.equal(ctx.get("analyze").disabled, false);
+  ctx.run('comparisonCoordinator.wake()'); await settle();
+  assert.equal(ctx.get("status-badge").textContent, "COULD NOT START");
+  assert.equal(ctx.run("exampleAttempts"), 1);
+  ctx.run('request = async path => path === "/api/jobs" ? {id:"a".repeat(32),token:"b".repeat(43)} : '+JSON.stringify(wishlistSnapshot()));
+  ctx.get("retry").listeners.click(); await settle();
+  assert.equal(ctx.get("status-badge").textContent, "COMPLETE");
+});
+
+test("duplicate starts cannot clear results or replace an active wishlist", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot("running")); ctx.ready(); await settle();
+  await ctx.run('start({identifier:"76561198000000000",home:"pl",regions:["us"]})');
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+  assert.equal(ctx.run("lastRequest.identifier"), "example");
+  assert.equal(ctx.run("items[0].name"), "Example game");
+});
+
+test("cancelling an automatic example releases the worker without restarting it", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot("running")); ctx.ready(); await settle();
+  await ctx.get("cancel").listeners.click();
+  ctx.snapshots.push(wishlistSnapshot("cancelled", {items:[]}));
+  [...ctx.timers.values()][0](); await settle();
+  assert.equal(ctx.run("comparisonCoordinator.busy"), false);
+  assert.equal(ctx.get("status-badge").textContent, "CANCELLED");
+  assert.equal(ctx.get("retry").hidden, false);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+  assert.equal(ctx.calls.filter(call => call.path.endsWith("/cancel")).length, 1);
+  ctx.snapshots.push(wishlistSnapshot("complete", {profile:"76561198000000000"}));
+  await ctx.run('start({identifier:"76561198000000000",home:"pl",regions:["us"]})'); await settle();
+  assert.equal(ctx.run("lastRequest.identifier"), "76561198000000000");
+});
+
+test("automatic examples wait for an enabled restored library but ignore disabled library state", async () => {
+  const saved = savedLibrary([], {state:"running",job:{id:"a".repeat(32),token:"b".repeat(43)}});
+  for (const enabled of [true, false]) {
+    const ctx = creatorSetup({"polisher-library-job":JSON.stringify(saved)}, "developer", true,
+      enabled ? [librarySnapshot([], "running")] : [wishlistSnapshot()], enabled);
+    ctx.ready(); await settle();
+    assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, enabled ? 0 : 1);
+    if (enabled) {
+      ctx.snapshots.push(librarySnapshot([]), wishlistSnapshot());
+      [...ctx.timers.values()][0](); await settle();
+      assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 1);
+    } else assert.equal(ctx.storage.get("polisher-library-job"), JSON.stringify(saved));
+  }
+});
+
+test("malformed hidden catalog storage does not block restoration of the active tab", async () => {
+  const ctx = creatorSetup({"polisher-developer-job":"{", "polisher-active-tab":"publisher"});
+  ctx.ready(); await settle();
+  assert.equal(ctx.get("publishers-tab").attributes["aria-selected"], "true");
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length, 1);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/jobs").length, 0);
+});
+
+test("unavailable session storage still permits automatic loading", async () => {
+  const calls = [];
+  const ctx = setup({}, {sessionStorage:{getItem(){throw new Error("Unavailable")},setItem(){throw new Error("Unavailable")},removeItem(){throw new Error("Unavailable")}},
+    fetch:async path => { calls.push(path); return {ok:true,json:async () => path === "/api/jobs" ? {id:"a".repeat(32),token:"b".repeat(43)} : wishlistSnapshot()}; }});
+  ctx.ready(); await settle();
+  assert.equal(calls.filter(path => path === "/api/jobs").length, 1);
+  assert.equal(ctx.get("status-badge").textContent, "COMPLETE");
+});
 
 test("developer search adds a dynamic catalog while retaining featured rows and restores its catalog", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
@@ -122,9 +308,9 @@ test("creator search distinguishes empty matches, failures, and exact-name roles
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   assert.match(ctx.get("creator-search-status").textContent,/Choose a developer/);
   assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"A & B");
-  ctx.run("running = true; window.creatorPane.refreshControls();");
+  ctx.run("setBusy(true); window.creatorPane.refreshControls();");
   assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].disabled,true);
-  ctx.run("running = false;");
+  ctx.run("setBusy(false);");
   ctx.searches.push({error:"Steam is unavailable"});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   assert.equal(ctx.get("creator-search-status").textContent,"Steam is unavailable");
@@ -327,13 +513,13 @@ test("restored creator results keep expanded products and running jobs reconnect
 });
 
 test("creator comparisons wait behind a wishlist and lock shared controls while running", async () => {
-  const ctx = creatorSetup(); ctx.run("running = true;");
+  const ctx = creatorSetup(); ctx.run("setBusy(true);");
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.ok(!ctx.calls.some(call => call.path === "/api/creator-jobs"));
   assert.match(ctx.get("creators-progress").textContent, /Waiting for the current comparison/);
-  ctx.run("running = false;");
+  ctx.run("setBusy(false);");
   ctx.snapshots.push({state:"running",message:"Checking",catalogs:{},items:[],rates:[],warnings:[]});
-  [...ctx.timers.values()][0](); await settle();
+  await settle();
   assert.equal(ctx.run("window.creatorPane.busy"), true);
   assert.ok(ctx.radios.every(el => el.disabled));
   assert.equal(ctx.get("analyze").disabled, true);
