@@ -82,7 +82,11 @@ class SQLiteCache:
             for name, kind in (("base_amount", "REAL"), ("discount_percent", "INTEGER"), ("is_free", "INTEGER"), ("developers", "TEXT"), ("publishers", "TEXT")):
                 if name not in price_columns:
                     connection.execute(f"ALTER TABLE regional_prices ADD COLUMN {name} {kind}")
-            connection.execute("PRAGMA user_version = 6")
+            connection.execute("""CREATE TABLE IF NOT EXISTS batch_observations (
+                kind TEXT NOT NULL, app_id TEXT NOT NULL, region TEXT NOT NULL,
+                payload TEXT NOT NULL, fetched_at REAL NOT NULL,
+                PRIMARY KEY(kind, app_id, region))""")
+            connection.execute("PRAGMA user_version = 7")
 
     @staticmethod
     def _create_price_table(connection: sqlite3.Connection) -> None:
@@ -254,3 +258,18 @@ class SQLiteCache:
                 """,
                 (currency.upper(), rate, self._clock(), effective_date),
             )
+
+    def get_observation(self, kind, app_id, region):
+        """Metadata (English, regional context) and offers have independent ages."""
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT payload, fetched_at FROM batch_observations WHERE kind=? AND app_id=? AND region=?",
+                (kind, str(app_id), region.lower())).fetchone()
+        return (json.loads(row["payload"]), row["fetched_at"]) if row else None
+
+    def put_observation(self, kind, app_id, region, payload):
+        with self._connection() as connection:
+            connection.execute("""INSERT INTO batch_observations VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(kind, app_id, region) DO UPDATE SET
+                payload=excluded.payload, fetched_at=excluded.fetched_at""",
+                (kind, str(app_id), region.lower(), json.dumps(payload, allow_nan=False), self._clock()))

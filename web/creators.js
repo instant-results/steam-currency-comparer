@@ -192,7 +192,7 @@
           const product = group.products[index];
           const item = results.get(product.app_id) || {...product, pending: true};
           const showCredits = $("creator-show-credits").checked;
-          const signature = creatorHome + showCredits + JSON.stringify(item);
+          const signature = creatorHome + showCredits + showBestOffers + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
             const row = comparisonRow(item, creatorHome);
@@ -458,7 +458,7 @@
       try { await request(`/api/jobs/${creatorJob.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${creatorJob.token}`}}); }
       catch (error) { cancelRequested = false; refreshControls(); message(error.message, true); }
     });
-    return {kind, get busy() { return busy; }, activate, refreshControls};
+    return {kind, get busy() { return busy; }, activate, refreshControls, render: renderGroups};
   }
 
   for (const kind of ["developer", "publisher"]) panes.set(kind, createPane(kind));
@@ -484,7 +484,8 @@
     try { sessionStorage.setItem("polisher-active-tab", tab); } catch (_) {}
   }
   window.creatorPane = {get active() { return selectedTab === "developer" || selectedTab === "publisher"; }, get busy() { return anyBusy(); },
-    refreshControls() { for (const pane of panes.values()) pane.refreshControls(); }};
+    refreshControls() { for (const pane of panes.values()) pane.refreshControls(); },
+    render() { for (const pane of panes.values()) pane.render(); }};
   const tabId = name => ["wishlist", "library"].includes(name) ? name + "-tab" : name + "s-tab";
   const libraryEnabled = document.documentElement?.dataset.ownedLibraryEnabled === "true";
   document.getElementById("library-tab").hidden = !libraryEnabled;
