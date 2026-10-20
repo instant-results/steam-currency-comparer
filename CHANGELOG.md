@@ -10,8 +10,15 @@
   existing caches to schema 9 without changing Steam price data.
 - Keep successful table retrievals when the other table fails, and allow comparisons
   whose required rates are available to proceed. Reject
-  malformed tables and stop on local network denial. Steam fetching, selectable
-  storefronts and frontend currency switching are unchanged in this stage.
+  malformed tables and stop on local network denial.
+- Add a backend currency-change endpoint for completed comparisons. Reuse the
+  loaded games, their order and catalog membership without repeating discovery;
+  retrieve only missing or expired selected-country observations using the existing
+  default-price and best-offer caches. Keep the original result available while
+  a separate, cancellable job computes the new comparison.
+- Keep capability-token access, shared worker limits and per-comparison currency
+  change locking. Frontend switching and additional selectable storefronts remain
+  pending.
 
 ## 0.6.2-beta — 2026-10-20
 

@@ -10,7 +10,7 @@ steam_price_polisher/version.py. Current branch: `feature/post-load-currency-swi
 Substantial features increment MINOR; refinements increment PATCH; first stable
 version is 1.0.0. Automatic example loading and shared frontend coordination are
 integrated into main from `codex/automatic-example-loading`. The active branch adds
-NBP backend preparation only; no release version bump yet. Commit implementation
+NBP preparation and the Steam backend currency-change path; no release version bump yet. Commit implementation
 and regression tests separately when authorized. Tags, releases and deployment
 have not been requested. For integration, push the branch,
 open/review/test a pull request, merge it on
@@ -23,8 +23,9 @@ separate coherent commits. Do not commit local QA, caches, profile identifiers,
 wishlists, secrets or runtime data. Currency switching is scoped to after loading:
 fetch selected Steam storefronts initially, then fetch additional data on demand
 without reloading the wishlist. Retain completed observations for immediate reuse.
-Steam/frontend implementation is pending; mid-load switching and loading-order
-dropdown improvements remain deferred. See docs/ROADMAP.md.
+Steam backend support is implemented and live-validated. The next implementation
+stage is frontend currency switching; see the concrete frontend integration checklist
+in docs/ROADMAP.md. Mid-load switching and loading-order improvements remain deferred.
 
 ## Current product behavior
 
@@ -88,6 +89,25 @@ Wishlist/example/catalog/internal library jobs now use CachedBatchPriceService a
 SteamBatchProvider in batching.py. CLI's existing provider remains compatible;
 web jobs have no special single-game retrieval path.
 
+POST `/api/jobs/{id}/currencies` accepts home/regions with the source job's bearer
+token after complete/partial completion. It creates a separately tokenized job on
+the same worker, reusing the loaded game order and catalog membership/cursors;
+discovery is not repeated. Original results stay intact for polling or retry after
+failure/cancellation. Active jobs lock currency changes across their comparison
+chain as well as retaining existing owner/capacity/start-rate limits.
+Successful regional prices, metadata and best offers (including observations from
+uncompared games) reuse the existing shared cache with independent freshness rules.
+Only missing/expired selected-country data is retrieved. Selection/order remain
+private expiring memory; no profile mappings enter SQLite. Frontend wiring, merged
+catalog-page selection, display/saved state and CSV switching remain pending.
+The existing backend is sufficient for that stage: use the currency endpoint for
+completed wishlist/example jobs, and existing `/api/creator-jobs` product mode for
+the union of loaded catalog IDs. Keep catalog groups/cursors in frontend state;
+offsets must retain their discovery storefront context. Keep completed and pending
+job credentials separately; existing start/refresh handlers clear display state
+and must not be reused unchanged. No new storefronts or backend features are planned
+before frontend integration.
+
 BatchPolicy defaults: metadata/price sizes 100, encoded URL budget 6,000 bytes,
 7 logical recovery calls and 21 physical attempts per planned batch, shared across
 children. Configurable via JobManager(batch_policy=...). One country per request.
@@ -129,11 +149,22 @@ source lines, locals and private paths. Aggregate batch logs are privacy-filtere
 
 ## Verification and measurement
 
-NBP backend stage: 83 focused Python tests pass (rates, table cache, legacy migration,
-web integration, configuration, conversion, presentation and diagnostic logging).
-Steam fetching and frontend files are unchanged. Currency-switching UI is pending.
-The production-client NBP live smoke check was blocked by local network permissions;
-no live success is claimed for this stage. It used an isolated temporary cache.
+Current backend stage: 158 distinct focused Python tests passed across runs covering
+currency changes, web jobs, batching, analysis, rates/cache, configuration,
+conversion, logging, catalogs and the hidden library. Sixteen new switching tests
+cover selective fetching, both offer sets, fixed order, partial observations,
+cache expiry, cancellation/retry, network denial, tokens, limits and source reuse.
+An older library test fixture now returns complete NBP tables. Git diff checks pass.
+Frontend files are unchanged; currency-switching UI is pending.
+Live Steam/NBP backend validation passed on 2026-10-20 using an isolated temporary
+cache and normal pacing/retries. The sandbox blocked the initial wishlist request;
+approved elevated execution succeeded. The full wishlist loaded once. A baseline
+swap and switch back made zero network requests; adding GBP fetched only UK price
+and metadata/offer batches. Game order and original results remained unchanged.
+Both NBP tables loaded once; previously unselected Table A/B currencies reused the
+cache without HTTP. No HTTP errors occurred in the elevated run. This checks the
+production worker through in-process WSGI routes, not browser integration.
+Local aggregate report: ignored `.steam-price-polisher/qa/live_currency_check_result.json`.
 
 Merge verification: all 165 Python tests and 84 frontend tests pass;
 JavaScript syntax and Git diff checks pass. New coverage exercises fresh startup,

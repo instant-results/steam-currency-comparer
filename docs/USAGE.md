@@ -580,6 +580,51 @@ Restoring a saved comparison replaces the preferences with that run's selections
 Regression tests exercise actual change handlers, repeated switches, explicit
 replacement/deselection, welcome captions, busy state, and saved restoration.
 
+## Backend currency changes after loading
+
+The backend supports this operation; the browser controls are not connected to it
+yet. Submit a same-origin JSON POST to `/api/jobs/{id}/currencies` with the source
+job's bearer token and a body such as `{"home":"us","regions":["pl","gb"]}`.
+The existing five storefronts and one-or-two alternatives limit apply; omitted
+`home` defaults to Poland, as for initial comparisons. Additional fields, including
+new product IDs or loading orders, are rejected.
+
+Only unexpired jobs in `complete` or `partial` state can be used. The response is
+202 with a new `id`, new `token`, and `previous_job_id`. Poll and cancel the new job
+through the existing job routes using its new token. The source result is unchanged
+and remains available until its normal expiry. Clients should keep it displayed
+while the new job runs, then adopt the new result and currencies together. A failed
+or cancelled attempt can be retried by submitting against the original completed
+job. Concurrent currency changes for the same chain of comparisons are rejected,
+even from another connection; existing owner, capacity and start-rate limits apply.
+
+The operation reuses the exact loaded selection and emitted game order. It does
+not reload a wishlist, owned library, catalog page or creator search. Catalog
+membership and page cursors are retained for that job. To combine multiple loaded
+catalog pages, the frontend can submit their unique app IDs through the existing
+`/api/creator-jobs` endpoint with `mode: "products"`, home and regions; it must keep
+group membership and pagination state locally. That path also skips discovery and
+reuses the shared caches. Page offsets must retain their discovery storefront context;
+later pagination in another storefront restarts discovery and deduplicates loaded
+products. See the frontend integration checklist in [ROADMAP.md](ROADMAP.md).
+Owned-library
+currency changes remain behind the same internal feature flag.
+
+Initial loading fetches only selected Steam countries. Successful regional default
+prices, metadata and best offers are retained in the shared cache even when another
+region prevented a game comparison. Currency-change jobs reuse fresh observations
+and fetch missing or expired observations only for their selected countries.
+Switching back to fresh cached countries makes no Steam requests. A stale best offer
+can refresh independently of a fresh default price. Exchange rates use their normal
+cache rules; a fresh Steam cache alone does not imply zero NBP requests.
+Cancellation retains completed cache writes. Normal pacing, retries, stale fallback,
+provenance and local-network-denial handling remain in effect.
+
+Loaded selection/order and profile attribution are private, expiring server memory;
+the shared cache stores no profile-to-game mapping. Server restart or job expiry
+requires a new initial comparison. UI filters, sorting, browser restoration and CSV
+selection will be handled in the later frontend stage.
+
 ## Continuing development
 
 The owned-library prototype is retained but hidden behind an internal flag in
