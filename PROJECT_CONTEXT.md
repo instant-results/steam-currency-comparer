@@ -10,7 +10,7 @@ steam_price_polisher/version.py. Current branch: `feature/post-load-currency-swi
 Substantial features increment MINOR; refinements increment PATCH; first stable
 version is 1.0.0. Automatic example loading and shared frontend coordination are
 integrated into main from `codex/automatic-example-loading`. The active branch adds
-NBP preparation and the Steam backend currency-change path; no release version bump yet. Commit implementation
+NBP preparation, the Steam currency-change backend and frontend switching; no release version bump yet. Commit implementation
 and regression tests separately when authorized. Tags, releases and deployment
 have not been requested. For integration, push the branch,
 open/review/test a pull request, merge it on
@@ -23,9 +23,8 @@ separate coherent commits. Do not commit local QA, caches, profile identifiers,
 wishlists, secrets or runtime data. Currency switching is scoped to after loading:
 fetch selected Steam storefronts initially, then fetch additional data on demand
 without reloading the wishlist. Retain completed observations for immediate reuse.
-Steam backend support is implemented and live-validated. The next implementation
-stage is frontend currency switching; see the concrete frontend integration checklist
-in docs/ROADMAP.md. Mid-load switching and loading-order improvements remain deferred.
+Steam backend support is implemented and live-validated. Frontend currency switching
+is implemented for wishlist/example, Developers and Publishers; see docs/ROADMAP.md. Mid-load switching and loading-order improvements remain deferred.
 
 ## Current product behavior
 
@@ -79,9 +78,9 @@ holds, shared busy state and keyed idle tasks. All tabs register/release their j
 catalog auto-loading has priority over the example and no longer polls busy flags.
 Saved catalog jobs on hidden tabs initialize/reconnect before new automatic work.
 Per-tab state still handles rendering/results; the backend worker is unchanged.
-Branch preview: http://127.0.0.1:8766/, health confirmed 0.6.2-beta, with outbound
-access for live QA. The earlier preview on 8765 still reports 0.6.1-beta. Keep the
-branch preview's launching session alive; check health again before relying on it.
+Check listeners and `/api/health` before relying on an existing preview; previous
+8765/8766 processes may no longer be running. Currency-switching browser QA uses
+an isolated fixture server and temporary cache, separate from live Steam/NBP QA.
 
 web_app.py retains same-origin POST checks, capability-token job access, one paced
 worker, one active job per owner, three starts per minute and one-hour job expiry.
@@ -98,15 +97,19 @@ chain as well as retaining existing owner/capacity/start-rate limits.
 Successful regional prices, metadata and best offers (including observations from
 uncompared games) reuse the existing shared cache with independent freshness rules.
 Only missing/expired selected-country data is retrieved. Selection/order remain
-private expiring memory; no profile mappings enter SQLite. Frontend wiring, merged
-catalog-page selection, display/saved state and CSV switching remain pending.
-The existing backend is sufficient for that stage: use the currency endpoint for
-completed wishlist/example jobs, and existing `/api/creator-jobs` product mode for
-the union of loaded catalog IDs. Keep catalog groups/cursors in frontend state;
-offsets must retain their discovery storefront context. Keep completed and pending
-job credentials separately; existing start/refresh handlers clear display state
-and must not be reused unchanged. No new storefronts or backend features are planned
-before frontend integration.
+private expiring memory; no profile mappings enter SQLite.
+Frontend **Update currencies** applies to the current tab after loading. Wishlist
+source credentials/displayed snapshots stay separate from pending job credentials;
+catalog updates submit the union of loaded IDs through product mode and preserve
+local groups/order/expansion. Rows, headings, rates, statistics and CSV switch
+together at complete/partial completion. Failures/cancellation preserve the old
+snapshot; retry repeats the failed selection. Search/filter/sort/scroll and offer/
+credit display settings survive. Reload restores displayed and pending state
+separately; hidden catalog jobs reconnect before automatic work. Catalog cursors
+retain discoveryHome: Load more uses zero when the displayed baseline differs,
+then deduplicates against loaded products. Expired wishlist sources need a new
+initial comparison; completed saved snapshots stay available. Owned library stays
+disabled, and no additional storefronts or mid-load switching are included.
 
 BatchPolicy defaults: metadata/price sizes 100, encoded URL budget 6,000 bytes,
 7 logical recovery calls and 21 physical attempts per planned batch, shared across
@@ -155,7 +158,15 @@ conversion, logging, catalogs and the hidden library. Sixteen new switching test
 cover selective fetching, both offer sets, fixed order, partial observations,
 cache expiry, cancellation/retry, network denial, tokens, limits and source reuse.
 An older library test fixture now returns complete NBP tables. Git diff checks pass.
-Frontend files are unchanged; currency-switching UI is pending.
+Frontend switching validation: all 103 frontend tests pass (19 new cases), plus
+63 focused Python currency/backend/catalog tests and JavaScript syntax checks.
+Browser QA passed at 1440px/960px/390px CSS widths with synthetic upstream data
+and the production worker: snapshot retention, reload, both offer sets, catalog
+expansion, cancellation/retry, aligned columns and no narrow-screen page overflow.
+A downloaded 30-row catalog CSV retained the displayed PLN snapshot after a
+cancelled GBP update. Browser console checks were clean. Local report/screenshot:
+ignored .steam-price-polisher/qa/frontend-currency-switching.md and
+currency-switching-desktop.png. These are not new live Steam/NBP measurements.
 Live Steam/NBP backend validation passed on 2026-10-20 using an isolated temporary
 cache and normal pacing/retries. The sandbox blocked the initial wishlist request;
 approved elevated execution succeeded. The full wishlist loaded once. A baseline

@@ -358,6 +358,10 @@ legend {
   color: #486581;
 }
 .setup-foot p { margin: 0; }
+.currency-update-action { margin: 0 0 22px; }
+.currency-update-action .hint { margin: 10px 0 0; overflow-wrap: anywhere; }
+.currency-update-action button:disabled { cursor: default; opacity: .55; }
+.displayed-currencies { color: var(--muted); }
 .results-panel {
   padding: 27px 26px 0;
   min-width: 0;

@@ -82,7 +82,7 @@ Completed in `0.6.2-beta` and merged from `codex/automatic-example-loading` into
   until the wishlist is visible; active catalog work takes priority.
 - Failures and cancellations retain the existing explicit retry behavior.
 
-### In progress: change currencies after loading without reloading the game list
+### Implemented: change currencies after loading without reloading the game list
 
 Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
 
@@ -117,45 +117,33 @@ games; default prices, metadata and best offers keep independent freshness rules
 Only missing/expired selected-country observations need Steam retrieval. Original
 results stay accessible, including after failure/cancellation of the new job.
 Token access, shared worker limits and a lock across related jobs apply.
-Frontend integration (including combining loaded catalog pages, display state,
-saved state and CSV selection) remains pending. No additional countries or
+Frontend integration is implemented, including combining loaded catalog pages,
+separate displayed/pending state, reload restoration and CSV selection. No additional countries or
 mid-load switching are included in this stage.
 
-#### Next stage: frontend integration
+#### Frontend integration
 
-The existing backend contracts are sufficient for the agreed five-storefront UI.
-No additional backend feature is planned before wiring the frontend. The remaining
-work is in `web/app.js`, `web/creators.js`, shared rendering/state, and frontend tests:
+Implemented in `web/app.js`, `web/creators.js`, shared controls and rendering:
 
-- Keep completed wishlist/example job IDs and tokens separately from a pending
-  currency-change job. Submit home/regions to `/api/jobs/{id}/currencies`; do not
-  call the initial `start()` path, which clears results, search and sort settings.
-- Use `comparisonCoordinator` to reserve work before submission and lock shared
-  currency controls until it finishes. Preserve per-tab results, filters, sorting,
-  scroll position and the best-offer visibility setting. Do not switch mid-load.
-- Keep displayed currencies, rates and rows together as one completed snapshot.
-  Show progress separately while polling the new job; replace the snapshot together
-  at complete/partial completion. Recompute statistics, badges and CSV from the new
-  snapshot. On failure/cancellation keep the old snapshot and retry from its job.
-- Catalog panes currently discard finished job tokens and combine several jobs in
-  their local groups. For the full loaded selection, deduplicate loaded product IDs
-  and submit one `/api/creator-jobs` request with `mode: "products"`, home, regions
-  and app_ids. This existing path avoids discovery and reuses both offer caches.
-  Keep group membership, display order, expansion and page state in the browser;
-  do not run the current destructive `refreshFeatured()` reset during a switch.
-- Preserve loaded catalog positions during switching. Page offsets belong to their
-  discovery storefront: retain that context, and when Load more later uses a different
-  storefront, restart discovery from its first page and deduplicate against loaded
-  products. Never silently apply an old storefront's offset to a new one.
-- Save the displayed snapshot and pending job credentials separately for reload,
-  reconnect and tab changes. Handle 429 without discarding results. For expired
-  wishlist jobs, explain that a new initial comparison is required; catalog product
-  jobs can use the locally retained IDs. Keep the owned-library feature disabled.
-- Cover successful cached/new-country switches, partial results, failed submission,
-  cancellation, retry, expiry, reload and cross-tab locking in frontend tests.
-  Verify desktop/narrow layouts, header/cell alignment, both offer sets and CSV in
-  browser QA. Cached backend recomputation is still asynchronous (about eight seconds
-  for the live 758-game check), so progress must not assume an instant response.
+- Explicit **Update currencies** applies a valid changed selection to the current
+  tab after loading. Other tabs retain their displayed comparison. The coordinator
+  reserves submissions and locks shared controls and competing job starts.
+- Wishlist/example source credentials and displayed rows/rates are retained
+  separately from a pending currency job. Catalog updates compare the deduplicated
+  loaded IDs through product mode, retaining groups, order and expansion.
+- Displayed rows, headings, rates, statistics and CSV switch together at complete
+  or partial completion. Search, filters, sort, scroll and display settings survive.
+  Failed submissions/jobs and cancellation preserve the displayed snapshot and
+  offer a retry of the failed selection. Expired wishlist sources require reloading
+  the wishlist; catalogs can use retained product IDs.
+- Reload restores the displayed snapshot and pending credentials independently.
+  Hidden catalog work reconnects before new automatic jobs. Catalog discovery
+  cursors retain their storefront; Load more restarts at zero for another
+  storefront and deduplicates against already loaded products.
+- Frontend regression coverage exercises pending/completed/partial snapshots,
+  submission failures, cancellation/retry, expiry, reload, CSV and cross-tab locks.
+  Browser QA uses the production worker with labeled synthetic upstream data;
+  previous backend live Steam/NBP checks remain separate evidence.
 
 Additional countries, mid-load changes and the loading-order dropdown adjustment
 remain separate work. Retain the current version until a version change is requested.
