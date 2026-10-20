@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Prepare the exchange-rate backend for post-load currency switching: retrieve
+  complete NBP Tables A and B upfront, refreshing only missing or expired tables.
+  Cache every validated table rate, including unselected currencies.
+- Preserve table-specific source, publication date and retrieval age through
+  live/cache/stale results. Commit table observations atomically and migrate
+  existing caches to schema 9 without changing Steam price data.
+- Keep successful table retrievals when the other table fails, and allow comparisons
+  whose required rates are available to proceed. Reject
+  malformed tables and stop on local network denial. Steam fetching, selectable
+  storefronts and frontend currency switching are unchanged in this stage.
+
 ## 0.6.2-beta — 2026-10-20
 
 - Automatically compare the seven-game example on a fresh visit and remove the

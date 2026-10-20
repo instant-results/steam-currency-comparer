@@ -6,13 +6,13 @@ Updated: 2026-10-20. Current state, not a change log.
 
 Read README.md and docs/USAGE.md, then inspect code and Git status.
 Integration target: `main`. Version: **0.6.2-beta** in
-steam_price_polisher/version.py. Current branch: `main`.
+steam_price_polisher/version.py. Current branch: `feature/post-load-currency-switching`.
 Substantial features increment MINOR; refinements increment PATCH; first stable
 version is 1.0.0. Automatic example loading and shared frontend coordination are
-integrated into main from `codex/automatic-example-loading`. Feature/documentation
-and regression tests are committed separately. No feature work remains in this
-scope. Main, including the merge, has been pushed to GitHub. Tags, releases and
-deployment have not been requested. For future features, push the branch,
+integrated into main from `codex/automatic-example-loading`. The active branch adds
+NBP backend preparation only; no release version bump yet. Commit implementation
+and regression tests separately when authorized. Tags, releases and deployment
+have not been requested. For integration, push the branch,
 open/review/test a pull request, merge it on
 GitHub, synchronize main, then delete the confirmed merged branch remotely/locally.
 Repository: https://github.com/instant-results/steam-currency-comparer.
@@ -20,8 +20,11 @@ Repository: https://github.com/instant-results/steam-currency-comparer.
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in
 separate coherent commits. Do not commit local QA, caches, profile identifiers,
-wishlists, secrets or runtime data. Dynamic currencies during/after loading and
-loading-order dropdown improvements remain deferred; see docs/ROADMAP.md.
+wishlists, secrets or runtime data. Currency switching is scoped to after loading:
+fetch selected Steam storefronts initially, then fetch additional data on demand
+without reloading the wishlist. Retain completed observations for immediate reuse.
+Steam/frontend implementation is pending; mid-load switching and loading-order
+dropdown improvements remain deferred. See docs/ROADMAP.md.
 
 ## Current product behavior
 
@@ -99,7 +102,8 @@ Only incomplete/malformed/400/414 batches split. 429/transient/TLS/denial do not
 out. Retry-After defers later work even after final failure; pacing waits are cancellable.
 Normal Steam pacing remains 1.5 seconds. Local permission denial stops jobs.
 
-Cache schema 8 tracks calculated discounts and retains country-context English metadata (24 h) and best offers (15 min).
+Cache schema 9 adds NBP source/table-fetch metadata to schema 8's calculated discounts
+and country-context English metadata (24 h) and best offers (15 min).
 Default prices retain regular 1 h/sale 15 min/missing 1 h/unavailable 6 h. Existing
 price/rate cache rows remain compatible. Enrichment does not reset price age. Known
 empty credits do not refetch forever. Temporary failures may use labeled stale data.
@@ -113,10 +117,23 @@ and offer attempts; repeated regional CSV rows must not be summed naively.
 
 NBP supplies PLN per unit. Cross-rate A→B is rate[A]/rate[B]; retain dates/provenance
 for both legs, PLN=1. Germany is the EUR proxy. Rates stay cached 24 h.
+NBP retrieves both complete tables A and B upfront for foreign-currency requests,
+refreshing only missing or expired tables and caching all rates. Table failures are
+independent: available requested rates remain usable when the other table fails. No Steam country is
+enabled by adding NBP coverage. Each table is validated and cached atomically;
+source, publication date and retrieval age survive reopen and stale fallback.
+Successful tables survive failures of another required table. Local network denial
+stops retrieval. Existing per-currency caches migrate without losing price data.
 Diagnostic logs exclude profiles, credentials, URLs, bodies, raw exception text,
 source lines, locals and private paths. Aggregate batch logs are privacy-filtered.
 
 ## Verification and measurement
+
+NBP backend stage: 83 focused Python tests pass (rates, table cache, legacy migration,
+web integration, configuration, conversion, presentation and diagnostic logging).
+Steam fetching and frontend files are unchanged. Currency-switching UI is pending.
+The production-client NBP live smoke check was blocked by local network permissions;
+no live success is claimed for this stage. It used an isolated temporary cache.
 
 Merge verification: all 165 Python tests and 84 frontend tests pass;
 JavaScript syntax and Git diff checks pass. New coverage exercises fresh startup,
