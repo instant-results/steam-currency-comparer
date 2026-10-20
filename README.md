@@ -41,8 +41,10 @@ change over time. No personal Steam profile is used.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
 - Fetches both NBP exchange-rate tables (A and B) upfront and caches all rates for
-  reuse. Each fresh table is reused for 24 hours; failures are handled independently. Additional Steam storefronts and post-load currency switching
-  remain under development.
+  reuse. Each fresh table is reused for 24 hours; failures are handled independently.
+  The backend can recompare loaded games using cached Steam observations and fetch
+  missing or expired selected-country data. Post-load currency switching in the
+  interface and additional Steam storefronts remain under development.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.
@@ -236,7 +238,9 @@ does not publish the app.
 The three available tabs share a CSV schema. Owned-library code and automated
 coverage are retained behind an internal flag; successful authenticated live
 retrieval remains TODO. See the [roadmap](docs/ROADMAP.md) for the test checklist
-and criteria for making the feature available. No subsequent feature is selected.
+and criteria for making the feature available. The next implementation stage is
+frontend currency switching after loading; its backend is implemented and live-tested.
+The roadmap records the integration steps for preserving results and display state.
 
 ## For developers
 

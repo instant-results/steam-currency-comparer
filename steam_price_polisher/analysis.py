@@ -122,11 +122,15 @@ class AnalysisRunner:
         rates_to_home: Mapping[str, float],
         *,
         order: str = "priority",
+        preserve_order: bool = False,
     ) -> Iterator[AnalysisProgress]:
+        if order not in WISHLIST_ORDERS:
+            raise ValueError(f"Unsupported wishlist order: {order!r}")
         if hasattr(self._price_service, "prepare"):
-            yield from self._run_batched(wishlist, rates_to_home, order)
+            yield from self._run_batched(wishlist, rates_to_home, order, preserve_order)
             return
-        prepared = self._prepare_wishlist(wishlist, order)
+        prepared = (tuple((item, None, None) for item in wishlist) if preserve_order
+                    else self._prepare_wishlist(wishlist, order))
         total = len(prepared)
         for index, (item, home_lookup, home_error) in enumerate(prepared, start=1):
             yield self._analyze_game(
@@ -138,18 +142,18 @@ class AnalysisRunner:
                 home_error=home_error,
             )
 
-    def _run_batched(self, wishlist, rates, order):
+    def _run_batched(self, wishlist, rates, order, preserve_order=False):
         service = self._price_service
         regions = (self._home, *self._alternatives)
         prefix_requests = 0
         wishlist = deduplicate_wishlist(wishlist)
-        if order == "name":
+        if order == "name" and not preserve_order:
             started = service.provider.attempts
             service.prepare_metadata([item.app_id for item in wishlist], self._home)
             prefix_requests = service.provider.attempts - started
             wishlist = tuple(replace(item, name=service.metadata.get((item.app_id, self._home.region), {}).get("name") or item.name)
                              for item in wishlist)
-        ordered = order_wishlist_items(wishlist, order)
+        ordered = wishlist if preserve_order else order_wishlist_items(wishlist, order)
         for offset in range(0, len(ordered), service.window_size):
             window = ordered[offset:offset + service.window_size]
             service.prepare([item.app_id for item in window], regions)

@@ -92,8 +92,8 @@ Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
   observations immediately when possible. When another storefront is selected,
   fetch its missing/stale data without retrieving the wishlist again. Keep both
   default and best offers. Further selection changes wait for that fetch to finish.
-- Keep completed observations as a comparison snapshot; switching back reuses them.
-  Explicit refresh applies normal cache rules. Show progress and preserve the old
+- Keep completed observations in the shared cache; switching back reuses fresh data.
+  Currency-change jobs apply normal cache freshness rules. Show progress and preserve the old
   comparison while additional data loads, without relabeling old regional prices.
 - Retain observations independently of the baseline, including partial regional
   results and failures. Keep statistics, discount badges, availability, saved state,
@@ -101,7 +101,7 @@ Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
 - Separate supported storefronts from the set fetched for a comparison. Additional
   Steam countries require validation; worldwide preloading is not the default.
 
-Current backend stage: NBP preparation is implemented on the feature branch.
+Current backend stage: NBP preparation and Steam currency-change jobs are implemented on the feature branch.
 Complete tables A and B are fetched upfront for foreign-currency comparisons;
 fresh tables are reused independently for 24 hours. All rates are cached, including
 unselected currencies. A failed table does not block available requested rates.
@@ -109,8 +109,56 @@ Atomic cache schema 9
 preserves table-specific publication dates, sources and retrieval ages. Fresh tables
 and rates are reused, stale fallback remains labeled, and local network denial stops
 retrieval. The current UI and public storefront validation still support five pairs.
-Steam observation retention, additional-storefront fetching and frontend changes
-remain pending; no mid-load switching is included in this stage.
+The backend retains each job's loaded selection/order and catalog membership in
+expiring memory. POST `/api/jobs/{id}/currencies` queues a separate comparison of
+that selection after complete/partial completion, without repeating discovery.
+The existing cache retains successful regional observations even for uncompared
+games; default prices, metadata and best offers keep independent freshness rules.
+Only missing/expired selected-country observations need Steam retrieval. Original
+results stay accessible, including after failure/cancellation of the new job.
+Token access, shared worker limits and a lock across related jobs apply.
+Frontend integration (including combining loaded catalog pages, display state,
+saved state and CSV selection) remains pending. No additional countries or
+mid-load switching are included in this stage.
+
+#### Next stage: frontend integration
+
+The existing backend contracts are sufficient for the agreed five-storefront UI.
+No additional backend feature is planned before wiring the frontend. The remaining
+work is in `web/app.js`, `web/creators.js`, shared rendering/state, and frontend tests:
+
+- Keep completed wishlist/example job IDs and tokens separately from a pending
+  currency-change job. Submit home/regions to `/api/jobs/{id}/currencies`; do not
+  call the initial `start()` path, which clears results, search and sort settings.
+- Use `comparisonCoordinator` to reserve work before submission and lock shared
+  currency controls until it finishes. Preserve per-tab results, filters, sorting,
+  scroll position and the best-offer visibility setting. Do not switch mid-load.
+- Keep displayed currencies, rates and rows together as one completed snapshot.
+  Show progress separately while polling the new job; replace the snapshot together
+  at complete/partial completion. Recompute statistics, badges and CSV from the new
+  snapshot. On failure/cancellation keep the old snapshot and retry from its job.
+- Catalog panes currently discard finished job tokens and combine several jobs in
+  their local groups. For the full loaded selection, deduplicate loaded product IDs
+  and submit one `/api/creator-jobs` request with `mode: "products"`, home, regions
+  and app_ids. This existing path avoids discovery and reuses both offer caches.
+  Keep group membership, display order, expansion and page state in the browser;
+  do not run the current destructive `refreshFeatured()` reset during a switch.
+- Preserve loaded catalog positions during switching. Page offsets belong to their
+  discovery storefront: retain that context, and when Load more later uses a different
+  storefront, restart discovery from its first page and deduplicate against loaded
+  products. Never silently apply an old storefront's offset to a new one.
+- Save the displayed snapshot and pending job credentials separately for reload,
+  reconnect and tab changes. Handle 429 without discarding results. For expired
+  wishlist jobs, explain that a new initial comparison is required; catalog product
+  jobs can use the locally retained IDs. Keep the owned-library feature disabled.
+- Cover successful cached/new-country switches, partial results, failed submission,
+  cancellation, retry, expiry, reload and cross-tab locking in frontend tests.
+  Verify desktop/narrow layouts, header/cell alignment, both offer sets and CSV in
+  browser QA. Cached backend recomputation is still asynchronous (about eight seconds
+  for the live 758-game check), so progress must not assume an instant response.
+
+Additional countries, mid-load changes and the loading-order dropdown adjustment
+remain separate work. Retain the current version until a version change is requested.
 
 ### TODO: align the loading-order dropdown
 
