@@ -1,4 +1,5 @@
 from tests.batch_fixtures import mock_batch_prices
+from tests.test_exchange_rates import table_payload
 import io
 import json
 import tempfile
@@ -132,8 +133,8 @@ class LibraryJobTests(unittest.TestCase):
             calls.append(url)
             if "GetOwnedGames" in url:
                 return {"response": {"game_count": 3, "games": [{"appid": 20,"name": "Zebra"}, {"appid": 10,"name": "Alpha"}, {"appid": 10,"name": "Alpha"}]}}
-            currency = "USD" if "/usd/" in url else "EUR"
-            return {"code": currency, "table": "A", "rates": [{"mid": 4, "effectiveDate": "2026-09-08"}]}
+            return (table_payload("B", "2026-09-02", AED=1) if "/tables/b/" in url else
+                    table_payload("A", "2026-09-08", USD=4, EUR=4))
         def price(app_id, region, currency):
             return replace(RegionalPriceResult.available(StorePrice(region,currency,10,10,0), "Alpha" if app_id == "10" else "Zebra"), developers=("Studio",), publishers=("Publisher",))
         with patch("steam_price_polisher.web_app.UrllibJsonHttpClient") as factory, patch.object(SteamClient,"get_regional_price",side_effect=price) as prices, mock_batch_prices(prices):
