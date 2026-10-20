@@ -17,8 +17,13 @@
   default-price and best-offer caches. Keep the original result available while
   a separate, cancellable job computes the new comparison.
 - Keep capability-token access, shared worker limits and per-comparison currency
-  change locking. Frontend switching and additional selectable storefronts remain
-  pending.
+  change locking. Additional selectable storefronts remain deferred.
+- Add explicit post-load **Update currencies** for the current wishlist/example,
+  Developers or Publishers tab. Retain the displayed comparison during updates,
+  swap complete/partial snapshots together and preserve it on failure/cancellation.
+- Preserve view settings, catalog groups and storefront-specific pagination context.
+  Restore displayed and pending state separately on reload; keep CSV tied to the
+  displayed currencies and lock competing starts until updates finish.
 
 ## 0.6.2-beta — 2026-10-20
 

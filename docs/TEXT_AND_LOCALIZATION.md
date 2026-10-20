@@ -1,6 +1,6 @@
 # Text and localization decisions
 
-Updated: 2026-10-14. This is the current reference for user-facing wording,
+Updated: 2026-10-20. This is the current reference for user-facing wording,
 typography, and text alignment. Update the relevant decision when changing copy
 or its presentation. English is the current interface language; a translation
 system and language selector have not been implemented.
@@ -52,6 +52,19 @@ Wishlist and owned library show both roles together.
 
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
+
+## Currency-update wording
+
+Use **Update currencies** for the explicit action on a completed comparison in the
+current tab. **Displayed: PLN against USD and EUR** identifies the snapshot in use;
+sidebar choices can differ while the user prepares another selection. Pending
+progress names the requested currencies without changing displayed price labels.
+**Retry currency update** repeats a failed or cancelled selection. **Reload wishlist**
+is used when an expired source job requires a new initial comparison.
+
+Keep these captions in the existing hint typography. The sidebar action uses the
+existing primary-button styling and a wrapping caption. Preserve column-header/cell
+alignment, horizontal table scrolling and both compact and separate credit layouts.
 
 ## Owned-library wording
 

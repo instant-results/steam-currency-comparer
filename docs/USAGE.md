@@ -58,6 +58,46 @@ locking and automatic work that waits for idle. User-started work reserves the
 worker immediately; catalog auto-loading has priority over a queued example.
 The server's shared worker, request pacing and job limits still apply.
 
+## Change currencies after loading
+
+After a wishlist/example or catalog comparison finishes, select a baseline and
+one or two other storefronts, then click **Update currencies** in the sidebar.
+The button is available when the valid selection differs from the displayed
+comparison. It updates the current tab. Other tabs keep their own comparisons;
+the displayed-currency captions identify the selection used by their results.
+Currency changes during loading are disabled across all tabs.
+
+The previous comparison remains visible while a separate job prepares the update.
+Its rows, headings, exchange rates, statistics and CSV remain together until the
+update reaches complete or partial completion, when the new snapshot replaces them.
+Search, filters, sorting, scroll position, expanded catalogs, credit-column mode
+and the best-offer checkbox are preserved. Search/filter/sort and CSV remain usable
+while an update runs; exported data always describes the displayed comparison.
+
+Wishlist/example updates use the retained game list and loading order without
+fetching the wishlist again. Catalog updates deduplicate all loaded product IDs
+for retrieval, then keep their original groups and display order. Both default
+prices and best offers reuse the existing cache and independent freshness rules;
+only missing or expired selected-country observations need retrieval. Even fully
+cached updates are asynchronous and show progress.
+
+Cancel returns to the previous snapshot. A failed submission, failed job or expired
+pending job also leaves it available. **Retry currency update** repeats the failed
+selection using the original source. A partial update becomes the new comparison,
+with missing prices and technical failures represented as uncompared products.
+Reload in the same browser tab restores the displayed snapshot, wishlist view
+settings and pending job credentials separately, reconnecting active updates even
+on hidden catalog tabs. If the source wishlist job has expired or the server has
+restarted, start a new wishlist comparison to change currencies; saved displayed
+results remain usable. Catalog updates can still use their locally saved IDs.
+
+Catalog page cursors retain their discovery storefront. After changing the baseline,
+**Load more** starts at the first page for the new storefront and deduplicates
+against loaded products. It resumes an existing cursor only when its storefront
+matches. The current tab's **Refresh comparisons** also preserves displayed results
+until its loaded-product update finishes; after a failed update it retries that
+selection. Adding or expanding catalogs continues using their displayed currencies.
+
 ## Owned library
 
 **Deferred / hidden by default.** This prototype is retained for internal testing;
@@ -159,7 +199,7 @@ catalogs and their pagination remain. New defaults are compared automatically.
 Older combined-tab selections migrate only when they carry an explicit developer
 or publisher selector; old homepage catalogs are not assigned a role.
 New entries use the Steam-logo fallback. Existing results retain their comparison
-currencies until **Refresh comparisons** applies the sidebar choices.
+currencies until **Update currencies** or **Refresh comparisons** applies the sidebar choices.
 
 Search remains available during comparisons, while adding, refreshing, and
 expanding catalogs wait for the active comparison to finish or be cancelled.
@@ -204,7 +244,8 @@ this tab and **02 / CURRENCIES** in the wishlist tab.
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current sidebar
 choices to all displayed creator products, including expanded pages. Changing the
-baseline restarts catalog pagination to avoid skipping region-specific entries. Use it to
+baseline preserves existing cursor context and starts new-storefront discovery from
+the first page on the next Load more. Use it to
 retry incomplete prices after cancellation or a request failure. It reuses fresh
 cached prices, so refreshing does not force a new Steam request for every price.
 Only one comparison can run per connection; creator examples wait for an active
@@ -582,8 +623,8 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 
 ## Backend currency changes after loading
 
-The backend supports this operation; the browser controls are not connected to it
-yet. Submit a same-origin JSON POST to `/api/jobs/{id}/currencies` with the source
+The browser uses this endpoint for wishlist/example updates. Programmatic clients
+can submit a same-origin JSON POST to `/api/jobs/{id}/currencies` with the source
 job's bearer token and a body such as `{"home":"us","regions":["pl","gb"]}`.
 The existing five storefronts and one-or-two alternatives limit apply; omitted
 `home` defaults to Poland, as for initial comparisons. Additional fields, including
@@ -601,12 +642,12 @@ even from another connection; existing owner, capacity and start-rate limits app
 The operation reuses the exact loaded selection and emitted game order. It does
 not reload a wishlist, owned library, catalog page or creator search. Catalog
 membership and page cursors are retained for that job. To combine multiple loaded
-catalog pages, the frontend can submit their unique app IDs through the existing
-`/api/creator-jobs` endpoint with `mode: "products"`, home and regions; it must keep
+catalog pages, the frontend submits their unique app IDs through the existing
+`/api/creator-jobs` endpoint with `mode: "products"`, home and regions; it keeps
 group membership and pagination state locally. That path also skips discovery and
 reuses the shared caches. Page offsets must retain their discovery storefront context;
 later pagination in another storefront restarts discovery and deduplicates loaded
-products. See the frontend integration checklist in [ROADMAP.md](ROADMAP.md).
+products. See the implemented frontend behavior in [ROADMAP.md](ROADMAP.md).
 Owned-library
 currency changes remain behind the same internal feature flag.
 
@@ -621,9 +662,10 @@ Cancellation retains completed cache writes. Normal pacing, retries, stale fallb
 provenance and local-network-denial handling remain in effect.
 
 Loaded selection/order and profile attribution are private, expiring server memory;
-the shared cache stores no profile-to-game mapping. Server restart or job expiry
-requires a new initial comparison. UI filters, sorting, browser restoration and CSV
-selection will be handled in the later frontend stage.
+the shared cache stores no profile-to-game mapping. Server restart or source-job
+expiry requires a new initial wishlist comparison for currency changes; saved
+displayed results remain available. Catalog updates use saved loaded IDs. The
+frontend preserves view settings and restores displayed/pending state separately.
 
 ## Continuing development
 
@@ -731,7 +773,8 @@ These settings are operational bounds, not published Valve guarantees.
 
 See [measured performance](STEAM_PRICE_PERFORMANCE.md) and
 [implemented design](STEAM_PRICE_BATCHING_PLAN.md). Changing loaded-result currencies
-and the loading-order dropdown adjustment remain deferred in [ROADMAP.md](ROADMAP.md).
+is implemented for completed wishlist/example and catalog comparisons; the
+loading-order dropdown adjustment remains deferred in [ROADMAP.md](ROADMAP.md).
 
 
 Discount percentage preference: retain Steam's reported percentage when it agrees
