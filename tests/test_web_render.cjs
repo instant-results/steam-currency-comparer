@@ -50,7 +50,7 @@ const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"765611
 function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
-  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], timers = new Map();
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], submissions = [], timers = new Map();
   let timerId = 0;
   const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
@@ -62,7 +62,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
     sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
     setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
     fetch:async (path, options = {}) => {
-      calls.push({path,body:options.body ? JSON.parse(options.body) : null});
+      calls.push({path,body:options.body ? JSON.parse(options.body) : null, authorization:options.headers?.Authorization});
       let data;
       if (path === "/api/creators") {
         if (registryWait) await registryWait;
@@ -73,7 +73,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
         data = searches.shift() || {creators: [], exact_matches: []};
         if (data.error) return {ok:false, json:async () => data};
       }
-      else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs" || path.endsWith("/currencies")) data = submissions.shift() || {id:(path.endsWith("/currencies") ? "u" : "a").repeat(32),token:(path.endsWith("/currencies") ? "v" : "b").repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
       return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
@@ -87,7 +87,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
   const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
   const group = () => get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body,libraryFilters,librarySorts};
+  return {...testContext,get,calls,storage,snapshots,searches,submissions,radios,regions,timers,group,body,libraryFilters,librarySorts};
 }
 
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
@@ -394,7 +394,8 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
   assert.equal(refreshed.mode, "products"); assert.deepEqual(refreshed.app_ids, ["1","2","3","4"]);
   assert.equal(refreshed.home, "gb");
-  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 0);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 12);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].discoveryHome, "pl");
   assert.equal(ctx.body().children.length, 4);
   assert.equal(count(), "4 products shown");
   const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
@@ -1418,4 +1419,244 @@ test("calculated discounts display whole percentages and approximation without c
   const csv=parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])},"pl",[])`));
   assert.equal(csv.rows[0].discount_calculated,"true");
   assert.equal(csv.rows[0].best_offer_discount_calculated,"true");
+});
+
+function chooseCurrencies(ctx, home, regions) {
+  ctx.radios.forEach(el => el.checked = el.value === home);
+  ctx.regions.forEach(el => el.checked = regions.includes(el.value));
+  ctx.run("preferredComparisons = null; updateSelections();");
+}
+async function loadedWishlist(snapshot = wishlistSnapshot()) {
+  const ctx = creatorSetup(); ctx.get("wishlist-order").value = "priority";
+  ctx.snapshots.push(snapshot); ctx.ready(); await settle(); return ctx;
+}
+const switchedWishlist = (state = "complete", extra = {}) => wishlistSnapshot(state, {
+  home:"gb", regions:["us"], items:[game("1", "Updated game")], rates:[{currency:"GBP",rate_to_pln:5,cache_status:"cache"}], ...extra});
+
+test("currency action is explicit, follows the active tab, and requires a valid changed selection", async () => {
+  const ctx = await loadedWishlist();
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, true);
+  chooseCurrencies(ctx,"gb",["us"]);
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  assert.equal(ctx.calls.filter(c => c.path.endsWith("/currencies")).length,0);
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+  chooseCurrencies(ctx,"gb",[]);
+  assert.equal(ctx.get("update-currencies").disabled,true);
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: GBP/);
+  ctx.get("wishlist-tab").listeners.click();
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+});
+
+test("wishlist switch preserves rows, rates, view and CSV while pending, then publishes one snapshot", async () => {
+  const ctx = await loadedWishlist();
+  ctx.get("search").value = "game"; ctx.get("show-unavailable").checked = true;
+  ctx.run('sort = "name"; direction = -1; render();');
+  const row = ctx.get("rows").children[0], csv = ctx.run('buildCsv(false,"fixed")');
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.get("rows").children[0],row);
+  assert.equal(ctx.run('buildCsv(false,"fixed")'),csv);
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("currentRates.length"),0);
+  assert.equal(ctx.radios.every(el => el.disabled),true);
+  const submission = ctx.calls.find(c => c.path.endsWith("/currencies"));
+  assert.deepEqual(submission.body,{home:"gb",regions:["us"]});
+  assert.equal(submission.authorization,"Bearer " + "b".repeat(43));
+  assert.match(ctx.get("progress-label").textContent,/GBP against USD/);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"gb");
+  assert.equal(ctx.run("currentRates[0].currency"),"GBP");
+  assert.equal(ctx.get("search").value,"game");
+  assert.equal(ctx.get("show-unavailable").checked,true);
+  assert.equal(ctx.run("sort + direction"),"name-1");
+  assert.equal(ctx.run("job.id"),"u".repeat(32));
+  assert.equal(parseCsv(ctx.run("buildCsv(false)")).rows[0].baseline_currency,"GBP");
+  assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
+});
+
+for (const state of ["failed","cancelled"]) test(`wishlist ${state} update retains source credentials and retries the currency endpoint`, async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist(state));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("job.id"),"a".repeat(32));
+  assert.match(ctx.get("notice").textContent,/unchanged/);
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  chooseCurrencies(ctx,"no",["de"]); // Retry uses the failed request, not later sidebar edits.
+  ctx.snapshots.push(switchedWishlist());
+  ctx.get("retry").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(c => c.path.endsWith("/currencies")).at(-1).body,{home:"gb",regions:["us"]});
+  assert.equal(ctx.run("resultHome"),"gb");
+});
+
+for (const status of [429,404]) test(`wishlist submission ${status} preserves results and explains the next action`, async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.submissions.push({httpStatus:status,error:"Could not update"});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("items[0].name"),"Example game");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  assert.match(ctx.get("notice").textContent,status === 404 ? /expired.*new comparison/ : /unchanged.*Retry/);
+  assert.equal(ctx.get("update-currencies").disabled,status === 404);
+});
+
+test("wishlist cancellation targets the pending job and expired pending work can retry the source", async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  await ctx.get("cancel").listeners.click();
+  const cancel = ctx.calls.find(c => c.path.endsWith("/cancel"));
+  assert.equal(cancel.path,`/api/jobs/${"u".repeat(32)}/cancel`);
+  assert.equal(cancel.authorization,"Bearer " + "v".repeat(43));
+  ctx.snapshots.push({httpStatus:404,error:"Expired"}); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.match(ctx.get("notice").textContent,/update expired/);
+  ctx.snapshots.push(switchedWishlist()); ctx.get("retry").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"gb");
+});
+
+test("wishlist reload restores displayed view and reconnects pending currencies independently", async () => {
+  const ctx = await loadedWishlist();
+  ctx.get("search").value = "game"; ctx.run('filter = "fair"; sort = "home"; direction = -1; render();');
+  chooseCurrencies(ctx,"gb",["us"]); ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),"developer",false,[switchedWishlist("running",{items:[]})]);
+  await settle();
+  assert.equal(restored.run("resultHome"),"pl");
+  assert.equal(restored.get("search").value,"game");
+  assert.equal(restored.run("filter + sort + direction"),"fairhome-1");
+  assert.equal(restored.run("selectedHome()"),"gb");
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  assert.equal(restored.calls.some(c => c.path === "/api/jobs" || c.path.endsWith("/currencies")),false);
+  restored.snapshots.push(switchedWishlist("partial",{items:[skipped("1","request_failed")]}));
+  await restored.run("pollWishlistCurrencies()");
+  assert.equal(restored.run("resultHome"),"gb");
+  assert.equal(restored.run("items[0].skipped.category"),"request_failed");
+  assert.match(restored.get("notice").textContent,/Some games/);
+  const completed = creatorSetup(Object.fromEntries(restored.storage)); await settle();
+  assert.equal(completed.run("resultHome"),"gb");
+  assert.equal(completed.calls.length,0);
+});
+
+test("wishlist currency update locks other tabs and survives unavailable session storage", async () => {
+  const ctx = await loadedWishlist();
+  ctx.run('sessionStorage.setItem = () => {throw new Error("Full");}');
+  chooseCurrencies(ctx,"gb",["us"]); ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").disabled,true);
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").length,0);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()"); await settle();
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").length,1);
+});
+
+for (const kind of ["developer","publisher"]) test(`${kind} switch preserves groups, CSV, credit mode and cursor context`, async () => {
+  const ctx = creatorSetup({},kind); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"Expanded",items:[game("4","Soundtrack")],rates:[],warnings:[],catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Soundtrack"}],next_start:25,has_more:false,total:25}}});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  ctx.run('downloadCsv = value => {window.csv = value;}'); ctx.get("creators-export").listeners.click();
+  const csv = ctx.run("window.csv"), row = ctx.body().children[0];
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push({state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(submitted,{home:"gb",regions:["us"],mode:"products",app_ids:["1","2","3","4"]});
+  assert.equal(ctx.body().children[0],row);
+  ctx.get("creators-export").listeners.click();
+  const withoutTime = value => parseCsv(value).rows.map(({exported_at_utc, ...row}) => row);
+  assert.deepEqual(withoutTime(ctx.run("window.csv")),withoutTime(csv));
+  assert.equal(ctx.radios.every(el => el.disabled),true);
+  const pending = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.equal(pending.home,"pl"); assert.equal(pending.currencyUpdating,true);
+  ctx.snapshots.push({state:"complete",message:"Done",items:[1,2,3,4].map(id => game(String(id),"Updated")),rates:[],warnings:[],catalogs:{}});
+  await [...ctx.timers.values()].at(-1)(); await settle();
+  const saved = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.equal(saved.home,"gb"); assert.equal(saved.catalogs[0].nextStart,25);
+  assert.equal(saved.catalogs[0].discoveryHome,"pl");
+  assert.equal(ctx.get("creator-show-credits").checked,true);
+  assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
+  assert.equal(ctx.group().children[1].children[1].children[1].hidden,false);
+  ctx.get("creators-export").listeners.click(); assert.equal(parseCsv(ctx.run("window.csv")).rows[0].baseline_currency,"GBP");
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.start,0);
+  assert.equal(ctx.body().children.length,4);
+});
+
+for (const outcome of ["failed","cancelled",429,404,"partial"]) test(`catalog update outcome ${outcome} keeps snapshots and retry coherent`, async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  chooseCurrencies(ctx,"gb",["us"]);
+  if (outcome === 429) ctx.submissions.push({httpStatus:429,error:"Slow down"});
+  else ctx.snapshots.push(outcome === 404 ? {httpStatus:404,error:"Expired"} : {state:outcome,message:"Done",items:[skipped("1","request_failed")],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.equal(saved.home,outcome === "partial" ? "gb" : "pl");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  if (outcome !== "partial") {
+    assert.equal(saved.results.length,3);
+    assert.match(ctx.get("creators-refresh").textContent,/Retry currency/);
+    chooseCurrencies(ctx,"no",["de"]);
+    ctx.get("creators-refresh").listeners.click(); await settle();
+    assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.home,"gb");
+  } else assert.equal(saved.results[0].skipped.category,"request_failed");
+});
+
+test("a hidden catalog reconnects a pending currency update while preserving its display and locking the wishlist", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push({state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  ctx.get("wishlist-tab").listeners.click();
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),"developer",false,[{state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}}]);
+  restored.ready(); await settle();
+  assert.equal(JSON.parse(restored.storage.get("polisher-developer-job")).home,"pl");
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  assert.equal(restored.get("analyze").disabled,true);
+  assert.equal(restored.calls.some(c => c.path === "/api/jobs" || c.path === "/api/creator-jobs"),false);
+  restored.snapshots.push({state:"complete",message:"Done",items:[game("1","Switched")],rates:[],warnings:[],catalogs:{}});
+  await [...restored.timers.values()].at(-1)(); await settle();
+  assert.equal(JSON.parse(restored.storage.get("polisher-developer-job")).home,"gb");
+});
+
+test("currency update reconnects after a transport failure without unlocking or replacing displayed data", async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.run('const connectedRequest = request; let interruptPoll = true; request = async (path, options) => { if (path.endsWith("u".repeat(32)) && interruptPoll) {interruptPoll = false; throw new Error("Disconnected");} return connectedRequest(path, options); };');
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),true);
+  assert.match(ctx.get("notice").textContent,/Reconnecting/);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"gb");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+});
+
+test("currency switches retain both offer sets and reuse the newly completed source on the next switch", async () => {
+  const original = offerFixture();
+  const ctx = await loadedWishlist(wishlistSnapshot("complete",{items:[original]}));
+  ctx.get("show-best-offers").checked = true; ctx.get("show-best-offers").listeners.change();
+  const changed = offerFixture(); changed.best_offers.pl.name = "Updated edition";
+  changed.best_offers.gb = {...changed.best_offers.us, price:{...changed.best_offers.us.price,region:"gb",currency:"GBP"}};
+  delete changed.best_offers.us;
+  for (const comparison of [changed.comparison,changed.best_offer_comparison]) {
+    comparison.alternatives[0].region = "gb"; comparison.alternatives[0].currency = "GBP";
+  }
+  chooseCurrencies(ctx,"pl",["gb"]);
+  ctx.snapshots.push(wishlistSnapshot("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.match(contentText(ctx.get("rows").children[0]),/Complete Edition/);
+  ctx.snapshots.push(wishlistSnapshot("complete",{items:[changed]})); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.get("show-best-offers").checked,true);
+  assert.match(contentText(ctx.get("rows").children[0]),/Updated edition/);
+  const csv = parseCsv(ctx.run("buildCsv(false)"));
+  assert.equal(csv.rows[0].best_offer_name,"Updated edition");
+  assert.equal(csv.rows[1].storefront,"gb");
+  chooseCurrencies(ctx,"pl",["us"]); ctx.snapshots.push(wishlistSnapshot("complete",{items:[original]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const submission = ctx.calls.filter(c => c.path.endsWith("/currencies")).at(-1);
+  assert.equal(submission.path,`/api/jobs/${"u".repeat(32)}/currencies`);
+  assert.equal(submission.authorization,"Bearer " + "v".repeat(43));
+  assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
 });
