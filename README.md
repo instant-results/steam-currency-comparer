@@ -40,6 +40,9 @@ change over time. No personal Steam profile is used.
   result sorting once results arrive.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
+- Fetches both NBP exchange-rate tables (A and B) upfront and caches all rates for
+  reuse. Each fresh table is reused for 24 hours; failures are handled independently. Additional Steam storefronts and post-load currency switching
+  remain under development.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.

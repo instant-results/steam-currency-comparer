@@ -82,20 +82,35 @@ Completed in `0.6.2-beta` and merged from `codex/automatic-example-loading` into
   until the wishlist is visible; active catalog work takes priority.
 - Failures and cancellations retain the existing explicit retry behavior.
 
-### TODO: change currencies without reloading the game list
+### In progress: change currencies after loading without reloading the game list
 
-- Allow baseline and comparison selections to update a list during loading and
-  after completion, preserving games, search, filters, sort choices, and catalog positions.
+Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
+
+- Enable currency changes after loading finishes; changes during loading remain
+  deferred. Preserve games, search, filters, sorting and catalog positions.
+- Keep initial Steam retrieval limited to the selected storefronts. Reuse retained
+  observations immediately when possible. When another storefront is selected,
+  fetch its missing/stale data without retrieving the wishlist again. Keep both
+  default and best offers. Further selection changes wait for that fetch to finish.
+- Keep completed observations as a comparison snapshot; switching back reuses them.
+  Explicit refresh applies normal cache rules. Show progress and preserve the old
+  comparison while additional data loads, without relabeling old regional prices.
 - Retain observations independently of the baseline, including partial regional
-  results. Recalculate immediately when the needed prices are available; fetch
-  only missing/stale data when necessary, with clear progress and provenance.
-- Evaluate preloading all five storefronts after backend batching is measured;
-  prioritize selected storefronts and avoid making large lists wait unnecessarily.
-- Consider fetching the latest NBP Table A in one request and retaining the four
-  supported foreign rates plus PLN identity. Preserve publication/retrieval dates,
-  cache rules, and cross-rate calculation through PLN.
-- Keep statistics, discount badges, availability, saved state, and CSV exports
-  consistent with the active currency selection across visible tabs.
+  results and failures. Keep statistics, discount badges, availability, saved state,
+  and CSV consistent with the active selection.
+- Separate supported storefronts from the set fetched for a comparison. Additional
+  Steam countries require validation; worldwide preloading is not the default.
+
+Current backend stage: NBP preparation is implemented on the feature branch.
+Complete tables A and B are fetched upfront for foreign-currency comparisons;
+fresh tables are reused independently for 24 hours. All rates are cached, including
+unselected currencies. A failed table does not block available requested rates.
+Atomic cache schema 9
+preserves table-specific publication dates, sources and retrieval ages. Fresh tables
+and rates are reused, stale fallback remains labeled, and local network denial stops
+retrieval. The current UI and public storefront validation still support five pairs.
+Steam observation retention, additional-storefront fetching and frontend changes
+remain pending; no mid-load switching is included in this stage.
 
 ### TODO: align the loading-order dropdown
 

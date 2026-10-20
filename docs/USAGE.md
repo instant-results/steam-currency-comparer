@@ -277,16 +277,38 @@ Do not commit a populated `.env` file. The project does not automatically load
 
 ## Rates and comparison methodology
 
-The results include each currency's NBP table A mid rate, its publication
+The results include each currency's NBP mid rate and source table, its publication
 (`effectiveDate`) date, and whether it came from a live request, cache, or stale
 cache. See the [NBP API documentation](https://api.nbp.pl/en.html). The publication
 date is separate from the time the application fetched the rate; currencies can
 have different publication dates.
 
+The backend loads both latest complete tables A and B upfront for the first
+foreign-currency comparison, using one request per table before retries. All rates
+are cached, including currencies outside the active comparison. Each table has
+its own 24-hour cache age; subsequent comparisons refresh only missing or expired
+tables, even when the currently selected rates belong to the other table. Empty
+or PLN-only requests need no NBP data and do not preload tables.
+
+Only the active comparison's requested rates are returned in its results. Later
+currency selections reuse the cached observations from either table. A table
+failure does not block a comparison whose requested rates remain available from
+live data or cache. Currency codes absent from both tables fail explicitly; this
+does not add Steam storefronts to the interface. Sources distinguish `NBP table A (mid)` and `NBP table B (mid)`.
+Use each table's actual publication date rather than assuming it was published
+today. API `mid` values already express PLN per one currency unit; do not apply
+the multiples used in some printed NBP tables.
+
 Rates are cached for 24 hours. If refresh fails and all needed rates have cached
 values, the tool can use them with a visible stale-cache warning. Existing cache
 entries migrate automatically; rates without dates are refreshed, or explicitly
 shown with an unknown date when refresh fails. Fallback does not reset cache age.
+
+Table writes are atomic: malformed responses cannot partially replace cached
+rates. A successful table remains cached even if another required table fails.
+Local network permission denial stops retrieval rather than using stale rates.
+Cache schema 9 retains each rate's source and records complete-table fetch times;
+legacy Table A rows and Steam price observations are preserved on migration.
 
 `FAIR` means the baseline price is no higher than **every** selected foreign price
 converted to the baseline currency. This is a currency-conversion indicator, not a complete

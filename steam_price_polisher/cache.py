@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterator
 
-from .models import PriceStatus, RegionalPriceResult, StorePrice
+from .models import ExchangeRate, PriceStatus, RegionalPriceResult, StorePrice
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,7 @@ class ExchangeRateCacheEntry:
     rate: float
     fetched_at: float
     effective_date: str | None = None
+    source: str = "NBP table A (mid)"
 
 
 class SQLiteCache:
@@ -78,6 +79,11 @@ class SQLiteCache:
             columns = {row["name"] for row in connection.execute("PRAGMA table_info(exchange_rates)")}
             if "effective_date" not in columns:
                 connection.execute("ALTER TABLE exchange_rates ADD COLUMN effective_date TEXT")
+            if "source" not in columns:
+                connection.execute("ALTER TABLE exchange_rates ADD COLUMN source TEXT NOT NULL DEFAULT 'NBP table A (mid)'")
+            connection.execute("""CREATE TABLE IF NOT EXISTS exchange_rate_tables (
+                table_name TEXT PRIMARY KEY CHECK(table_name IN ('A', 'B')),
+                fetched_at REAL NOT NULL)""")
             price_columns = {row["name"] for row in connection.execute("PRAGMA table_info(regional_prices)")}
             for name, kind in (("base_amount", "REAL"), ("discount_percent", "INTEGER"), ("is_free", "INTEGER"), ("developers", "TEXT"), ("publishers", "TEXT"), ("discount_calculated", "INTEGER")):
                 if name not in price_columns:
@@ -86,7 +92,7 @@ class SQLiteCache:
                 kind TEXT NOT NULL, app_id TEXT NOT NULL, region TEXT NOT NULL,
                 payload TEXT NOT NULL, fetched_at REAL NOT NULL,
                 PRIMARY KEY(kind, app_id, region))""")
-            connection.execute("PRAGMA user_version = 8")
+            connection.execute("PRAGMA user_version = 9")
 
     @staticmethod
     def _create_price_table(connection: sqlite3.Connection) -> None:
@@ -233,7 +239,7 @@ class SQLiteCache:
         with self._connection() as connection:
             row = connection.execute(
                 """
-                SELECT rate_to_pln, fetched_at, effective_date
+                SELECT rate_to_pln, fetched_at, effective_date, source
                 FROM exchange_rates
                 WHERE currency = ?
                 """,
@@ -246,21 +252,50 @@ class SQLiteCache:
             float(row["rate_to_pln"]),
             float(row["fetched_at"]),
             row["effective_date"],
+            row["source"],
         )
 
-    def put_exchange_rate(self, currency: str, rate: float, effective_date: str | None = None) -> None:
+    def put_exchange_rate(self, currency: str, rate: float, effective_date: str | None = None,
+                          *, source: str = "NBP table A (mid)") -> None:
         with self._connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO exchange_rates (currency, rate_to_pln, fetched_at, effective_date)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(currency) DO UPDATE SET
-                    rate_to_pln = excluded.rate_to_pln,
-                    effective_date = excluded.effective_date,
-                    fetched_at = excluded.fetched_at
-                """,
-                (currency.upper(), rate, self._clock(), effective_date),
-            )
+            self._put_exchange_rate(connection, currency, rate, effective_date, source, self._clock())
+
+    @staticmethod
+    def _put_exchange_rate(connection, currency, rate, effective_date, source, fetched_at):
+        connection.execute("""
+            INSERT INTO exchange_rates (currency, rate_to_pln, fetched_at, effective_date, source)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(currency) DO UPDATE SET
+                rate_to_pln = excluded.rate_to_pln,
+                effective_date = excluded.effective_date,
+                fetched_at = excluded.fetched_at,
+                source = excluded.source
+            """, (currency.upper(), rate, fetched_at, effective_date, source))
+
+    def get_exchange_rate_table_fetched_at(self, table: str) -> float | None:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT fetched_at FROM exchange_rate_tables WHERE table_name = ?", (table,)
+            ).fetchone()
+        return float(row["fetched_at"]) if row else None
+
+    def put_exchange_rate_table(self, table: str, rates: dict[str, ExchangeRate]) -> None:
+        """Commit a validated complete table and its freshness marker atomically."""
+        if table not in {"A", "B"} or not rates or any(
+            key != rate.currency or rate.source != f"NBP table {table} (mid)"
+            or rate.effective_date is None or rate.cache_status != "live"
+            for key, rate in rates.items()
+        ):
+            raise ValueError("Expected a complete live NBP table")
+        fetched_at = self._clock()
+        with self._connection() as connection:
+            for rate in rates.values():
+                self._put_exchange_rate(connection, rate.currency, rate.rate_to_pln,
+                                        rate.effective_date, rate.source, fetched_at)
+            connection.execute("""
+                INSERT INTO exchange_rate_tables (table_name, fetched_at) VALUES (?, ?)
+                ON CONFLICT(table_name) DO UPDATE SET fetched_at = excluded.fetched_at
+                """, (table, fetched_at))
 
     def get_observation(self, kind, app_id, region):
         """Metadata (English, regional context) and offers have independent ages."""
