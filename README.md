@@ -238,9 +238,7 @@ does not publish the app.
 The three available tabs share a CSV schema. Owned-library code and automated
 coverage are retained behind an internal flag; successful authenticated live
 retrieval remains TODO. See the [roadmap](docs/ROADMAP.md) for the test checklist
-and criteria for making the feature available. The next implementation stage is
-frontend currency switching after loading; its backend is implemented and live-tested.
-The roadmap records the integration steps for preserving results and display state.
+and criteria for making the feature available.
 
 ## For developers
 
