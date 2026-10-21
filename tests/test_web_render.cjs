@@ -7,6 +7,7 @@ const {test} = require("node:test");
 class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
   get parentElement() { return this.parent; }
+  get firstElementChild() { return this.children[0] || null; }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
@@ -1361,6 +1362,36 @@ const offerFixture = () => {
 };
 const contentText = el => [el.textContent || "", ...el.children.map(contentText)].join(" ");
 
+test("regional headings identify the country while rows retain converted and original prices separately", () => {
+  const ctx = setup();
+  const headings = ctx.run('regionalHeadings(["us", "de"])');
+  assert.equal(headings[0].textContent, "USD");
+  assert.equal(headings[0].children[0].textContent, "United States " + String.fromCharCode(183) + " US");
+  const item = game("1", "Original prices");
+  item.comparison.alternatives[0].original_amount = 12345.67;
+  ctx.run(`items = ${JSON.stringify([item])}; render();`);
+  const slot = ctx.get("rows").children[0].children[2].children[0].children[0];
+  const line = slot.children[0];
+  assert.equal(line.className, "regional-price-line");
+  assert.equal(line.children[0].textContent, "20.00 zł");
+  assert.equal(line.children[1].children[0].textContent, "12,345.67");
+  assert.equal(line.children[1].children[1].textContent, "USD");
+  assert.equal(line.children[1].children[1].className, "original-price-currency");
+  item.comparison.alternatives[0].original_amount = 0;
+  ctx.run(`items = ${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.get("rows").children[0].children[2].children[0].children[0].children[0].children[1].children[0].textContent, "0.00");
+});
+
+test("best offers show their own original price and omit country-code prefixes", () => {
+  const ctx = setup(), item = offerFixture();
+  ctx.run(`showBestOffers = true; items = ${JSON.stringify([item])}; render();`);
+  const offer = ctx.get("rows").children[0].children[2].children[1].children[0];
+  assert.equal(offer.children[0].textContent, "Steam best offer");
+  assert.equal(offer.children[1].children[0].textContent, "20.00 zł");
+  assert.equal(offer.children[1].children[1].children[0].textContent, "5.00");
+  assert.equal(offer.children[1].children[1].children[1].textContent, "USD");
+});
+
 test("best-offer checkbox reveals separate offers without replacing default prices or changing counts", () => {
   const ctx=setup();const item=offerFixture();
   ctx.run(`items=${JSON.stringify([item])}; render();`);
@@ -1721,7 +1752,7 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
   assert.equal(foreign.children[0].children.length,36);
   assert.equal(foreign.children[1].children.length,36);
-  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].textContent),regions.map(id=>id.toUpperCase()));
+  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].children[1].children[1].textContent),regions.map(id=>storefrontRegistry[id].currency));
   assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Offer unavailable/);
   assert.match(rendered.children[0].className,/pinned-game/);
   assert.match(rendered.children[1].className,/pinned-home/);
@@ -1731,6 +1762,44 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(csv.rows.length,37);
   assert.equal(csv.rows[0].comparison_storefronts,regions.join("; "));
   assert.equal(csv.rows.find(value=>value.storefront==="jp").best_offer_name,"");
+});
+
+test("sticky currency titles follow scrolling, refresh their labels, and stop at the comparison boundary", () => {
+  const listeners = [];
+  const ctx = setup({}, {window:{addEventListener:(name, handler) => { if (name === "scroll") listeners.push(handler); }}});
+  const wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar"), shell = new Element("div");
+  shell.append(rail);
+  const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
+  let sourceTop = 200, areaBottom = 1000, clones = 0;
+  source.innerHTML = "USD EUR";
+  source.cloneNode = () => { clones++; const copy = new Element("div"); copy.setAttribute("id", "wishlist-storefront-headings"); return copy; };
+  table.classList.contains = () => false;
+  table.style.setProperty("--region-count", "2");
+  source.getBoundingClientRect = () => ({top:sourceTop,height:60});
+  wrap.getBoundingClientRect = () => ({top:0});
+  wrap.closest = () => ({getBoundingClientRect:() => ({bottom:areaBottom})});
+  shell.getBoundingClientRect = () => ({bottom:29});
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  const titles = shell.children[1];
+  assert.equal(titles.hidden, true);
+  assert.equal(titles.attributes["aria-hidden"], "true");
+  assert.equal(titles.firstElementChild.attributes.id, undefined);
+  sourceTop = 20; listeners[0]();
+  assert.equal(titles.hidden, false);
+  rail.scrollLeft = 340; rail.listeners.scroll();
+  assert.equal(titles.firstElementChild.style.transform, "translateX(-340px)");
+  assert.equal(clones, 1);
+  source.innerHTML = "GBP JPY"; wrap.refreshScrollControls();
+  assert.equal(clones, 2);
+  assert.equal(titles.style.getPropertyValue("--region-count"), "2");
+  areaBottom = 80; listeners[0]();
+  assert.equal(titles.hidden, true);
+  // Currency context remains sticky even when all selected columns fit.
+  areaBottom = 1000; wrap.scrollWidth = wrap.clientWidth; wrap.scrollLeft = 0;
+  wrap.refreshScrollControls();
+  assert.equal(rail.hidden, true);
+  assert.equal(titles.hidden, false);
 });
 
 test("top regional scrollbar preserves the table range and synchronizes dragging, table scrolling and layout changes", () => {
@@ -1753,7 +1822,8 @@ test("top regional scrollbar preserves the table range and synchronizes dragging
   // Resizing/selection changes recompute the proxy range from actual overflow.
   wrap.scrollLeft = 0; wrap.scrollWidth = wrap.clientWidth;
   wrap.refreshScrollControls();
-  assert.equal(shell.hidden, true);
+  assert.equal(shell.hidden, false);
+  assert.equal(rail.hidden, true);
   assert.equal(ctx.get("wishlist-scrollbar-extent").style.width, "380px");
   assert.equal(rail.scrollLeft, 0);
 });
