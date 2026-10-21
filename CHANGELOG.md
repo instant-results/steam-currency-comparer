@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep currency/country column titles visible beneath the sticky scrollbar while
+  scrolling through results, synchronized with regional prices and catalog tables.
+  Move country codes to the country labels with a middle-dot separator. Show
+  converted prices on the left and muted original prices on the right, with
+  original-currency codes aligned across rows.
+
 - Move horizontal comparison scrollbars above results, limit their tracks to the
   visible regional columns, and keep them sticky within each comparison section.
   Keep synchronized developer/publisher catalog scrolling. Remove the redundant

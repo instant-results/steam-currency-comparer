@@ -87,6 +87,21 @@ heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTH
 STOREFRONTS and its conversion caption fixed horizontally within the visible
 regional area. Put individual currency/country labels in a separate row below,
 scrolling with the corresponding prices. Keep each country below its currency.
+When this label row reaches the sticky scrollbar, retain its currency/country
+titles immediately below the scrollbar until the comparison ends. Match its
+column widths, typography and horizontal offset to the original labels and prices;
+use the same behavior when no horizontal scrollbar is needed. Retain original
+accessible table labels and keep any visual copy hidden from assistive technology.
+Use 5px vertical padding in the sticky title copy (rather than the normal 10px)
+to reduce its height without shrinking either text line.
+Country codes now follow country names in both normal and sticky titles,
+separated by a middle dot with a space on either side (United States · US).
+Remove the country-code prefix from default and best-offer price rows. Keep the
+converted price at the start and show the original price in the existing muted
+12px country-code styling at the end. Keep the original currency code at the
+same right edge across rows. Original amount and code form one unit that can
+wrap together below the converted price when space is limited. Do not change
+comparison arithmetic, sale-note currencies, or CSV values.
 On narrow screens retain the identity/credit rows above the price headings and
 reserve enough space below wrapped group labels for their conversion caption.
 

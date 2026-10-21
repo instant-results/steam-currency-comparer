@@ -1417,3 +1417,32 @@ td:first-child { min-width: 0; }
   .comparison-matrix .foreign > span, .comparison-matrix .foreign > span > span,
   .comparison-matrix .offer-price { font-size: 12px; }
 }
+
+/* Keep regional context below the sticky scrollbar without moving the table head. */
+.regional-scrollbar-shell.without-scrollbar { padding-top: 0; padding-bottom: 0; }
+.sticky-storefront-titles.comparison-matrix {
+  position: absolute; top: 100%;
+  left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
+  right: var(--difference-width); width: auto;
+  overflow: hidden; background: var(--panel); border-bottom: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.sticky-storefront-titles .foreign > .storefront-heading { padding-top: 5px; padding-bottom: 5px; }
+
+/* Keep converted prices at the start and original-currency codes at the end. */
+.comparison-matrix .foreign .regional-price-line {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+  gap: 2px 8px; font-size: 14px; line-height: 1.5;
+}
+.regional-price-line .converted-price { white-space: nowrap; }
+.comparison-matrix .regional-price-line .original-price {
+  display: inline-flex; gap: 4px; margin: 0 0 0 auto;
+  font-size: 12px; font-weight: 400; line-height: 1.5;
+  color: #64748b; white-space: nowrap;
+}
+.original-price-currency { min-width: 3ch; text-align: right; }
+
+@media (max-width: 700px) {
+  .comparison-matrix .foreign .regional-price-line { font-size: 12px; }
+}

@@ -38,7 +38,22 @@ scrollbar geometry, sticky bounds and default-price alignment/typography.
 Approved implementation/docs and earlier documentation closeout are committed as
 `57e0861`; regression tests are committed separately as `57a384e`.
 Scrolling-arrow removal is committed as `77496ec`, with test updates `851222c`.
-The two-level heading change is implemented on this branch.
+The two-level heading implementation/docs are committed as `dcf9c9b`, with
+regression tests `04f07d8`.
+
+The implemented follow-up keeps regional currency/country titles visible
+beneath the sticky scrollbar once their normal row reaches it. A visual copy
+tracks horizontal offsets and selected currencies; original table labels remain
+for layout/accessibility, with no duplicate IDs. Titles stop at the comparison
+boundary and also work when all columns fit without a scrollbar. Country codes
+are now shown beside country names in normal/sticky titles, separated by a middle
+dot. Regional default/best-offer cells show converted prices on the left and
+muted original prices on the right, keeping currency codes aligned across rows.
+Long native prices wrap as a unit when needed on narrow screens. Sticky title
+padding is reduced from 10px to 5px vertically. Validation: 118 frontend tests and
+desktop/mobile browser QA passed, including catalog synchronization, optional
+credits, currency updates, no-overflow comparisons, section boundaries, original
+price/code alignment and large VND values.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in

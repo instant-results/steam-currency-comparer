@@ -142,7 +142,7 @@ function comparisonRegions(values, fallbackItems = []) {
 function regionalHeadings(regions) {
   return regions.map(region => {
     const label = node("span", storefronts[region].currency, "storefront-heading");
-    label.append(node("small", storefronts[region].name)); return label;
+    label.append(node("small", `${storefronts[region].name} · ${region.toUpperCase()}`)); return label;
   });
 }
 function setComparisonLayout(table, regions, credits = false) {
@@ -154,11 +154,37 @@ function setComparisonLayout(table, regions, credits = false) {
 }
 function bindComparisonScroll(prefix, wrap) {
   const rail = $(prefix + "-scrollbar"), extent = $(prefix + "-scrollbar-extent");
-  let synchronizedLeft;
+  let synchronizedLeft, stickyTitles, headingSignature;
+  const refreshStickyTitles = () => {
+    // The original headings stay in the table for layout and accessibility.
+    // Show a visual copy beneath the sticky scrollbar only after reaching it.
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
+    const area = wrap.closest(".comparison-area"), shell = rail.parentElement;
+    if (!source || !area) return;
+    if (!stickyTitles) {
+      stickyTitles = node("div", undefined, "sticky-storefront-titles comparison-matrix");
+      stickyTitles.setAttribute("aria-hidden", "true");
+      shell.append(stickyTitles);
+    }
+    if (headingSignature !== source.innerHTML) {
+      const copy = source.cloneNode(true);
+      copy.removeAttribute("id");
+      stickyTitles.replaceChildren(copy);
+      headingSignature = source.innerHTML;
+    }
+    stickyTitles.classList.toggle("matrix-with-credits", table.classList.contains("matrix-with-credits"));
+    stickyTitles.style.setProperty("--region-count", table.style.getPropertyValue("--region-count"));
+    stickyTitles.firstElementChild.style.transform = `translateX(${-wrap.scrollLeft}px)`;
+    const sourceBox = source.getBoundingClientRect(), top = shell.getBoundingClientRect().bottom;
+    stickyTitles.hidden = wrap.clientWidth === 0 || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
+  };
   const refresh = () => {
     const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
     if (!Number.isFinite(overflow)) return;
-    rail.parentElement.hidden = overflow < 1;
+    rail.hidden = overflow < 1;
+    rail.parentElement.hidden = false;
+    rail.parentElement.classList.toggle("without-scrollbar", overflow < 1);
     // The proxy covers only the visible regional columns, but has exactly the
     // same scroll range as the table with its pinned columns at either edge.
     extent.style.width = `${rail.clientWidth + overflow}px`;
@@ -166,6 +192,7 @@ function bindComparisonScroll(prefix, wrap) {
       synchronizedLeft = wrap.scrollLeft;
       rail.scrollLeft = wrap.scrollLeft;
     }
+    refreshStickyTitles();
   };
   rail.addEventListener("scroll", () => {
     // A delayed event from a programmatic update must not rewind a newer drag.
@@ -176,6 +203,7 @@ function bindComparisonScroll(prefix, wrap) {
   });
   wrap.addEventListener("scroll", refresh);
   window.addEventListener?.("resize", refresh);
+  window.addEventListener?.("scroll", refreshStickyTitles, {passive: true});
   if (typeof ResizeObserver !== "undefined") {
     const observer = new ResizeObserver(refresh);
     observer.observe(wrap);
@@ -324,14 +352,23 @@ let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 let showBestOffers = false;
 try { showBestOffers = sessionStorage.getItem("polisher-best-offers") === "true"; } catch (_) {}
-function offerPriceBlock(offer, converted, currency) {
+function regionalPriceLine(converted, currency, original, originalCurrency) {
+  const line = node("span", undefined, "regional-price-line");
+  line.append(node("span", `${money(converted)} ${currency}`, "converted-price"));
+  const native = node("small", undefined, "original-price");
+  native.append(node("span", money(original), "original-price-amount"), node("span", originalCurrency, "original-price-currency"));
+  line.append(native);
+  return line;
+}
+function offerPriceBlock(offer, converted, currency, originalPrice = null) {
   const block = node("div", undefined, "best-offer");
   block.append(node("small", "Steam best offer", "offer-label"));
   if (!offer?.price) {
     block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable"));
     return block;
   }
-  block.append(node("span", `${money(converted)} ${currency}`, "offer-price"));
+  block.append(originalPrice ? regionalPriceLine(converted, currency, originalPrice.amount, originalPrice.currency)
+    : node("span", `${money(converted)} ${currency}`, "offer-price"));
   const link = node("a", `${offer.name} (${offer.kind})`, "offer-name");
   if (["bundle", "package"].includes(offer.kind) && Number.isSafeInteger(offer.id) && offer.id > 0) {
     link.href = `https://store.steampowered.com/${offer.kind === "bundle" ? "bundle" : "sub"}/${offer.id}/`;
@@ -353,8 +390,9 @@ function appendBestOffers(tr, item, home, regions) {
   for (const region of regions) {
     const offer = offers[region];
     const converted = best?.alternatives.find(p => p.region === region);
-    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount, (offer?.amount_in_home != null || converted) ? currency : offer?.price?.currency);
-    block.insertBefore(node("small", region.toUpperCase()), block.children[0]);
+    const hasConversion = offer?.amount_in_home != null || converted != null;
+    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount,
+      hasConversion ? currency : offer?.price?.currency, hasConversion ? offer?.price : null);
     alternatives.append(block);
   }
   tr.children[2].append(alternatives);
@@ -406,7 +444,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
       const p = c.alternatives.find(value => value.region === region);
       if (!p) { alternatives.append(node("span", "Price unavailable")); continue; }
       const price = node("span");
-      price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
+      price.append(regionalPriceLine(p.amount_in_home, unit(), p.original_amount, p.currency));
       const altProvenance = formatProvenance(p.source);
       price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}${altProvenance ? ` · ${altProvenance}` : ""}`;
       price.append(saleNote(p, p.currency));
