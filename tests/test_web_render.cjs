@@ -1438,6 +1438,39 @@ test("best-offer layout coalesces renders and responds only to width changes", (
   assert.equal(table.alignments, 3);
 });
 
+test("best-offer display controls restore, synchronize and persist one shared setting", () => {
+  const values = new Map([["polisher-best-offers", "true"]]);
+  const storage = {getItem:key => values.get(key) || null, setItem:(key,value) => values.set(key,value)};
+  const ctx = setup({}, {sessionStorage:storage});
+  const ids = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"];
+  for (const id of ids) assert.equal(ctx.get(id).checked, true);
+  ctx.get("publishers-show-best-offers").checked = false;
+  ctx.get("publishers-show-best-offers").listeners.change();
+  for (const id of ids) assert.equal(ctx.get(id).checked, false);
+  assert.equal(ctx.run("showBestOffers"), false);
+  assert.equal(values.get("polisher-best-offers"), "false");
+  const restored = setup({}, {sessionStorage:storage});
+  for (const id of ids) assert.equal(restored.get(id).checked, false);
+});
+
+test("the catalog-local best-offer control rerenders loaded offers without new requests", async () => {
+  const item = offerFixture();
+  const ctx = creatorSetup({}, "developer", false, [{state:"complete",message:"Done",items:[item],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:item.app_id,name:item.name}],next_start:1,has_more:false,total:1}}}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const before = ctx.calls.length;
+  ctx.get("developers-show-best-offers").checked = true;
+  ctx.get("developers-show-best-offers").listeners.change();
+  assert.match(contentText(ctx.body()), /Complete Edition/);
+  assert.equal(ctx.get("show-best-offers").checked, true);
+  assert.equal(ctx.get("publishers-show-best-offers").checked, true);
+  assert.equal(ctx.calls.length, before);
+  ctx.get("developers-show-best-offers").checked = false;
+  ctx.get("developers-show-best-offers").listeners.change();
+  assert.doesNotMatch(contentText(ctx.body()), /Complete Edition/);
+  assert.equal(ctx.calls.length, before);
+});
+
 test("best-offer checkbox reveals separate offers without replacing default prices or changing counts", () => {
   const ctx=setup();const item=offerFixture();
   ctx.run(`items=${JSON.stringify([item])}; render();`);
