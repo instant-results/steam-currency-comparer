@@ -312,7 +312,7 @@ class WebAppTests(unittest.TestCase):
                 self.assertIsNotNone(rate["retrieved_at_utc"])
         self.assertEqual({rate["effective_date"] for rate in result["rates"]}, {None,"2026-09-08","2026-09-09"})
 
-    def test_all_five_baselines_and_selection_limit(self):
+    def test_existing_baselines_accept_more_alternatives_and_reject_home(self):
         from itertools import combinations
         regions = ["pl", "us", "de", "no", "gb"]
         for home in regions:
@@ -321,8 +321,8 @@ class WebAppTests(unittest.TestCase):
                 self.assertEqual(config.home.region, home)
             with self.assertRaises(ValueError):
                 validate_request({"identifier": PROFILE, "home": home, "regions": [home]})
-            with self.assertRaises(ValueError):
-                validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home][:3]})
+            _, config = validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home]})
+            self.assertEqual(len(config.alternatives), 4)
 
     def test_example_mode_loads_curated_wishlist_including_witcher_3(self):
         from steam_price_polisher.web_app import EXAMPLE_WISHLIST

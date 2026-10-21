@@ -5,12 +5,14 @@ const {test} = require("node:test");
 
 // Minimal DOM contract for rendering tests; no browser or network required.
 class Element {
-  constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; }
+  constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
+  get parentElement() { return this.parent; }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
   replaceChildren(...children) { for (const child of [...this.children]) child.remove(); this.append(...children); }
-  addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }
+  addEventListener(name, handler) { const previous = this.listeners?.[name]; (this.listeners ||= {})[name] = previous ? (...args) => {previous(...args); return handler(...args);} : handler; }
+  scrollBy({left}) { this.scrollLeft += left; this.listeners?.scroll?.(); }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector(selector) { return (this.queries ||= {})[selector] ||= new Element("p"); }
@@ -18,8 +20,8 @@ class Element {
 }
 function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const elements = new Map(), documentEvents = new Map();
-  const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled)}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
+  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
@@ -47,12 +49,12 @@ const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setIm
 const librarySnapshot = (items, state = "complete", extra = {}) => ({items, state, total:items.length, home:"pl", rates:[], warnings:[], message:"Checked owned games.", ...extra});
 const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"76561198000000000",home:"pl",regions:["us"],order:"name"},
   rates:[],home:"pl",state:"complete", ...extra});
-function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null) {
+function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null, allStorefronts = false) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
   const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], submissions = [], timers = new Map();
   let timerId = 0;
-  const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
+  const radios = Object.keys(allStorefronts ? JSON.parse(fs.readFileSync("steam_price_polisher/storefronts.json","utf8")) : {pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
   const selectors = {'[name="home"]':radios,'[name="region"]':regions,'[name="region"]:checked':regions.filter(el => el.checked)};
   const libraryFilters = ["all","fair","expensive","discounts","skipped"].map(value => { const el = new Element("button"); el.dataset.filter = value; return el; });
@@ -79,6 +81,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
       return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
     }
   }, ownedLibraryEnabled);
+  selectors['[data-storefront]'] = [...testContext.get("baseline-options").children,...testContext.get("comparison-options").children];
   if (loadLibrary) {
     testContext.get("library-wishlist-order").value = "name";
     testContext.run(fs.readFileSync("web/library.js", "utf8"));
@@ -980,8 +983,8 @@ test("wishlist rows show both compact credit lists beneath artwork without chang
     ["credit-label", "Publisher: "], ["credit-names", "<script>unsafe text</script>, Co-publisher"]
   ]);
   assert.equal(credits.children[3].children.length, 0); // Untrusted credits stay text.
-  assert.equal(row.children[1].className, "price");
-  assert.equal(row.children[3].className, "difference fair");
+  assert.match(row.children[1].className, /\bprice\b/);
+  assert.match(row.children[3].className, /difference fair/);
   const csvBefore = run('buildCsv(false, "2026-10-13T11:00:00Z")');
   run('render(); sort = "name"; render(); sort = "arrival"; render();');
   assert.equal(get("rows").children[0], row);
@@ -1001,7 +1004,8 @@ test("wishlist credits handle older, missing, skipped, and pending metadata and 
     ["Developer: Unavailable", "Publisher: Known publisher"],
     ["Developer: Loading…", "Publisher: Loading…"]
   ]);
-  assert.equal(get("rows").children[1].children[1].colSpan, 3);
+  assert.equal(get("rows").children[1].children.length, 4);
+  assert.match(get("rows").children[1].children[1].className, /pinned-home/);
   run('items[0].developers = ["Learned developer"]; items[0].publishers = ["Learned publisher"]; render();');
   assert.deepEqual(credits(get("rows").children[0]), ["Developer: Learned developer", "Publisher: Learned publisher"]);
   get("search").value = "old"; run("render();");
@@ -1027,13 +1031,13 @@ test("percentage sorting differs from absolute sorting and keeps undefined perce
 });
 
 
-test("baseline selection excludes itself and caps alternatives at two", () => {
+test("baseline selection excludes itself without blocking additional alternatives", () => {
   const inputs = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; const label = new Element("label"); el.closest = () => label; return el; });
   const homes = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; el.checked = value === "pl"; return el; });
   inputs[1].checked = inputs[2].checked = true;
   const {get,run} = setup({'[name="region"]':inputs,'[name="home"]':homes});
   assert.equal(inputs[0].closest().hidden, true);
-  assert.equal(inputs[3].disabled, true);
+  assert.equal(inputs[3].disabled, false);
   inputs[2].checked = false; run('updateSelections({target:{name:"region"}})');
   assert.equal(inputs[3].disabled, false);
   homes[0].checked = false; homes[1].checked = true; run("updateSelections()");
@@ -1053,7 +1057,7 @@ test("GBP results and CSV keep their baseline while form selection changes", () 
   run("updateSelections(); render()");
   assert.equal(get("difference-currency").textContent, "GBP");
   assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["gb"]}})'), false);
-  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), false);
+  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), true);
 });
 
 
@@ -1081,12 +1085,12 @@ test("baseline conflicts restore original choices across repeated switches", () 
   assert.equal(ui.caption(), "PLN ↔ USD ↔ EUR");
 });
 
-test("explicit replacement takes precedence over hidden preferences and retains the limit", () => {
+test("explicit replacement takes precedence over hidden preferences without a two-currency cap", () => {
   const ui = selectionSetup();
   ui.chooseHome("us"); ui.chooseRegion("gb", true);
   assert.deepEqual(ui.selected(), ["de","gb"]);
   ui.chooseHome("pl"); assert.deepEqual(ui.selected(), ["de","gb"]);
-  assert.equal(ui.inputs.find(el => el.value === "us").disabled, true);
+  assert.equal(ui.inputs.find(el => el.value === "us").disabled, false);
   ui.chooseRegion("de", false); ui.chooseHome("no");
   assert.deepEqual(ui.selected(), ["gb"]);
   ui.chooseRegion("gb", false); ui.chooseHome("pl");
@@ -1157,7 +1161,7 @@ for (const kind of ["developer", "publisher"]) test(`${kind} credits switch betw
   assert.equal(table().children[1].children[0].children[1].children[0].children[0].textContent,label.toUpperCase());
   assert.equal(get("creator-columns-colgroup").children.length,5);
   assert.equal(get("creator-columns-head").children[0].children.length,5);
-  assert.equal(row().children[3].className,"catalog-foreign-price");
+  assert.match(row().children[3].className,/catalog-foreign-price/);
   assert.equal(ctx.calls.length,calls);
   const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
   restored.get("creators-tab").listeners.click(); await settle();
@@ -1170,7 +1174,7 @@ for (const kind of ["developer", "publisher"]) test(`${kind} credits switch betw
   assert.equal(get("creator-columns-head").children[0].children.length,4);
 });
 
-test("credit columns preserve pending and uncompared price spans", async () => {
+test("credit columns retain separate pinned cells for pending and uncompared prices", async () => {
   const ctx = creatorSetup();
   ctx.snapshots.push({state:"running",message:"Checking…",catalogs:{},items:[skipped("1","app_unavailable")],rates:[],warnings:[]});
   ctx.get("creators-tab").listeners.click(); await settle();
@@ -1178,8 +1182,10 @@ test("credit columns preserve pending and uncompared price spans", async () => {
   const rows = ctx.body().children;
   assert.equal(rows[0].children[1].textContent,"Unavailable");
   assert.equal(rows[1].children[1].textContent,"Loading…");
-  assert.equal(rows[0].children[2].colSpan,3);
-  assert.equal(rows[1].children[2].colSpan,3);
+  assert.equal(rows[0].children.length,5);
+  assert.equal(rows[1].children.length,5);
+  assert.match(rows[0].children[2].className,/pinned-home/);
+  assert.match(rows[1].children[4].className,/pinned-difference/);
   assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
 });
 
@@ -1659,4 +1665,139 @@ test("currency switches retain both offer sets and reuse the newly completed sou
   assert.equal(submission.path,`/api/jobs/${"u".repeat(32)}/currencies`);
   assert.equal(submission.authorization,"Bearer " + "v".repeat(43));
   assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
+});
+
+const storefrontRegistry = JSON.parse(fs.readFileSync("steam_price_polisher/storefronts.json", "utf8"));
+const allAlternatives = home => Object.keys(storefrontRegistry).filter(region => region !== home);
+function manyCurrencyGame(home = "pl", regions = allAlternatives(home), id = "1") {
+  const row = game(id, "Many-currency example");
+  row.comparison.home_price = {region:home,currency:storefrontRegistry[home].currency,amount:100,base_amount:200,discount_percent:50};
+  row.comparison.alternatives = regions.map((region,index) => ({region,currency:storefrontRegistry[region].currency,original_amount:index+1,amount_in_home:index+1,rate_to_home:1,base_amount:2*(index+1),discount_percent:50}));
+  row.comparison.is_fair = false;
+  row.best_offers = Object.fromEntries([home,...regions].map(region => [region,{status:"available",kind:"package",id:101,name:`Offer ${region.toUpperCase()}`,source:"cache",price:{region,currency:storefrontRegistry[region].currency,amount:1,base_amount:2,discount_percent:50},amount_in_home:1}]));
+  row.best_offer_comparison = JSON.parse(JSON.stringify(row.comparison));
+  return row;
+}
+const fullSetup = (storage = {}, kind = "developer", snapshots = []) => creatorSetup(storage,kind,false,snapshots,false,null,true);
+
+test("the full picker selects all 36 alternatives, searches without deselecting, and clears explicitly", () => {
+  const ctx = fullSetup();
+  assert.equal(ctx.get("baseline-options").children.length,37);
+  assert.equal(ctx.get("comparison-options").children.length,37);
+  ctx.get("select-all-currencies").listeners.click();
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  assert.equal(ctx.regions.find(el=>el.value==="pl").checked,false);
+  assert.match(ctx.get("selection-help").textContent,/36 of 36/);
+  ctx.get("currency-search").value = "Japan"; ctx.get("currency-search").listeners.input();
+  assert.deepEqual(ctx.get("baseline-options").children.filter(el=>!el.hidden).map(el=>el.dataset.storefront),["jp"]);
+  assert.deepEqual(ctx.get("comparison-options").children.filter(el=>!el.hidden).map(el=>el.dataset.storefront),["jp"]);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  ctx.get("clear-currencies").listeners.click();
+  assert.equal(ctx.regions.some(el=>el.checked),false);
+  ctx.get("currency-search").value = ""; ctx.get("currency-search").listeners.input();
+  assert.equal(ctx.get("comparison-options").children.filter(el=>!el.hidden).length,36);
+});
+
+test("many-currency restoration preserves order, hidden conflicts and the full selection limit", () => {
+  const ctx = fullSetup(), regions = allAlternatives("jp").reverse();
+  assert.equal(ctx.run(`restoreRequest({request:{identifier:"example",home:"jp",regions:${JSON.stringify(regions)}}})`),true);
+  assert.deepEqual(Array.from(ctx.run("lastRequest.regions")),regions);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  assert.equal(ctx.run(`validCurrencies(${JSON.stringify({home:"jp",regions:[...regions,regions[0]]})})`),false);
+  assert.equal(ctx.run(`restoreRequest({request:{identifier:"example",home:"jp",regions:${JSON.stringify([...regions,"jp"])}}})`),false);
+  chooseCurrencies(ctx,"us",["jp","de","gb","no"]);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,4);
+  ctx.run("setBusy(true)");
+  assert.equal(ctx.get("select-all-currencies").disabled,true);
+  assert.equal(ctx.get("clear-currencies").disabled,true);
+});
+
+test("regional slots and best-offer placeholders keep all headers aligned even when offers are absent", () => {
+  const ctx = setup(), regions = allAlternatives("pl"), row = manyCurrencyGame();
+  delete row.best_offers.jp;
+  ctx.run(`showBestOffers = true; lastRequest = {home:"pl",regions:${JSON.stringify(regions)}}; items = ${JSON.stringify([row])}; render();`);
+  const rendered = ctx.get("rows").children[0], foreign = rendered.children[2];
+  assert.equal(ctx.get("wishlist-storefront-headings").children.length,36);
+  assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
+  assert.equal(foreign.children[0].children.length,36);
+  assert.equal(foreign.children[1].children.length,36);
+  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].textContent),regions.map(id=>id.toUpperCase()));
+  assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Offer unavailable/);
+  assert.match(rendered.children[0].className,/pinned-game/);
+  assert.match(rendered.children[1].className,/pinned-home/);
+  assert.match(rendered.children[3].className,/pinned-difference/);
+  assert.match(contentText(rendered.children[3]),/Cheapest: USD/);
+  const csv = parseCsv(ctx.run("buildCsv(false)"));
+  assert.equal(csv.rows.length,37);
+  assert.equal(csv.rows[0].comparison_storefronts,regions.join("; "));
+  assert.equal(csv.rows.find(value=>value.storefront==="jp").best_offer_name,"");
+});
+
+test("uncompared default offers retain 36 separate best-offer slots and pinned difference", () => {
+  const ctx = setup(), row = manyCurrencyGame(); delete row.comparison; delete row.best_offer_comparison;
+  row.skipped = {category:"temporary_failure",reason:"One storefront failed"};
+  ctx.run(`showBestOffers = true; lastRequest = {home:"pl",regions:${JSON.stringify(allAlternatives("pl"))}}; items=${JSON.stringify([row])}; render();`);
+  const rendered = ctx.get("rows").children[0];
+  assert.equal(rendered.children.length,4);
+  assert.equal(rendered.children[2].children[0].children.length,36);
+  assert.equal(rendered.children[2].children[1].children.length,36);
+  assert.match(rendered.children[3].className,/pinned-difference/);
+  assert.equal(parseCsv(ctx.run("buildCsv(false)")).rows.length,37);
+});
+
+test("all-currency wishlist updates preserve the old matrix and restore pending credentials on reload", async () => {
+  const ctx = fullSetup(); ctx.get("wishlist-order").value = "priority";
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  chooseCurrencies(ctx,"jp",allAlternatives("jp"));
+  ctx.snapshots.push(wishlistSnapshot("running",{home:"jp",items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.get("wishlist-storefront-headings").children.length,2);
+  assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"2");
+  const restored = fullSetup(Object.fromEntries(ctx.storage),"developer",[wishlistSnapshot("running",{home:"jp",items:[]})]); await settle();
+  assert.equal(restored.run("resultHome"),"pl");
+  assert.equal(restored.regions.filter(el=>el.checked).length,36);
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  restored.snapshots.push(wishlistSnapshot("complete",{home:"jp",items:[manyCurrencyGame("jp")]}));
+  await restored.run("pollWishlistCurrencies()");
+  assert.equal(restored.run("resultHome"),"jp");
+  assert.equal(restored.get("wishlist-storefront-headings").children.length,36);
+  assert.equal(restored.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
+  const csv = parseCsv(restored.run("buildCsv(false)"));
+  assert.equal(csv.rows.length,37);
+  assert.equal(new Set(csv.rows.map(row=>row.baseline_currency)).size,1);
+  assert.equal(csv.rows[0].baseline_currency,"JPY");
+});
+
+for (const kind of ["developer","publisher"]) test(`${kind} full comparisons preserve statistics, credits, scroll synchronization and exports`, async () => {
+  const ctx = fullSetup({},kind); chooseCurrencies(ctx,"pl",allAlternatives("pl"));
+  ctx.snapshots.push({state:"complete",message:"Done",items:["1","2","3"].map(id=>manyCurrencyGame("pl",allAlternatives("pl"),id)),rates:[],warnings:[],catalogs:{}});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const header = ctx.get("creator-columns-head").children[0];
+  assert.equal(header.children[2].children[1].children.length,36);
+  assert.equal(ctx.body().children[0].children[2].children[0].children.length,36);
+  assert.equal(ctx.group().children[0].children[1].children[0].tagName,"details");
+  assert.match(ctx.group().children[0].children[1].children[0].children[0].textContent,/36 currencies/);
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  assert.equal(ctx.body().children[0].children.length,5);
+  assert.match(ctx.body().children[0].children[2].className,/pinned-home/);
+  ctx.get(kind+"s-scroll-next").listeners.click();
+  assert.equal(ctx.get("creator-columns-scroll").scrollLeft,170);
+  assert.equal(ctx.group().children[1].children[0].scrollLeft,170);
+  // A follower event can arrive after the next animation frame advances the master.
+  ctx.get("creator-columns-scroll").scrollLeft = 175;
+  ctx.group().children[1].children[0].listeners.scroll();
+  ctx.group().children[1].children[0].listeners.scroll();
+  assert.equal(ctx.get("creator-columns-scroll").scrollLeft,175);
+  ctx.get("creator-columns-scroll").listeners.scroll();
+  assert.equal(ctx.group().children[1].children[0].scrollLeft,175);
+  const overview = ctx.group().children[0].children[1].children[0];
+  overview.open = true; overview.listeners.toggle();
+  ctx.get("creator-show-credits").listeners.change();
+  assert.equal(ctx.group().children[0].children[1].children[0].open,true);
+  ctx.run('downloadCsv = value => {window.csv = value;}'); ctx.get("creators-export").listeners.click();
+  assert.equal(parseCsv(ctx.run("window.csv")).rows.length,111);
+  const restored = fullSetup(Object.fromEntries(ctx.storage),kind); restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-show-credits").checked,true);
+  assert.equal(restored.body().children[0].children[3].children[0].children.length,36);
+  assert.equal(restored.group().children[0].children[1].children[0].open,true);
 });

@@ -16,7 +16,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(RegionConfig(" PL ", " pln "), config.home)
 
     def test_invalid_selections(self):
-        for regions in ([], ["us", "US"], ["pl"], ["fr"], ["USD"], ["us", "de", "no"], "us"):
+        for regions in ([], ["us", "US"], ["pl"], ["fr"], ["USD"], ["us"] * 37, "us"):
             with self.subTest(regions=regions), self.assertRaises(ValueError):
                 ComparisonConfig.from_regions(regions)
         with self.assertRaises(ValueError):
