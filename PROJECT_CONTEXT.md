@@ -5,7 +5,11 @@ Updated: 2026-10-22. Current state, not a change log.
 ## Start here
 
 Read README.md and docs/USAGE.md, then inspect code and Git status.
-Current branch: `codex/sticky-regional-scrollbar`.
+Integration target: `main`. Completed comparison UI refinements are described in
+[PR #2](https://github.com/instant-results/steam-currency-comparer/pull/2).
+Merge validation: all 208 Python and 122 frontend tests passed, together with
+JavaScript syntax/diff checks and prior desktop/mobile browser QA.
+The title/artwork redesign is deferred to a separate task.
 Version remains **0.7.0-beta** in
 steam_price_polisher/version.py. NBP preparation, post-load currency switching and
 37-currency comparisons are complete and integrated through

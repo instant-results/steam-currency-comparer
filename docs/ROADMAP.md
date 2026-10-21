@@ -8,9 +8,9 @@ Version `0.7.0-beta` is integrated into `main` through
 [PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1), merge
 `c9e283d`. Post-load updates, NBP table preparation and 37-currency comparisons
 are complete. The feature branch was deleted remotely and locally after merge
-verification. Remaining items below are separate work; no next implementation
-task beyond the current scrollbar/alignment refinement has been selected.
-The refinement is implemented on `codex/sticky-regional-scrollbar`:
+verification. Remaining items below are separate work; no subsequent implementation
+task has been selected. The completed scrolling/alignment refinements are described
+in [PR #2](https://github.com/instant-results/steam-currency-comparer/pull/2):
 a blue top scrollbar limited to regional columns, sticky scrolling access, and
 matching baseline/regional game-price alignment and typography. Its follow-up
 two-level header is also implemented: OTHER STOREFRONTS stays fixed horizontally
