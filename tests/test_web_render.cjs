@@ -1814,12 +1814,42 @@ test("all-currency wishlist updates preserve the old matrix and restore pending 
   assert.equal(csv.rows[0].baseline_currency,"JPY");
 });
 
+for (const kind of ["developer", "publisher"]) test(`${kind} headers separate fixed group labels from scrolling currencies with either credit layout`, async () => {
+  const ctx = creatorSetup({}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  for (const credits of [false, true]) {
+    ctx.get("creator-show-credits").checked = credits;
+    ctx.get("creator-show-credits").listeners.change();
+    const foreignIndex = credits ? 3 : 2;
+    const head = ctx.get("creator-columns-head");
+    assert.equal(head.children.length, 2);
+    const group = head.children[0].children[foreignIndex];
+    assert.match(group.className, /storefront-group-heading/);
+    assert.equal(group.children.length, 1);
+    assert.equal(group.children[0].children[0].textContent, "OTHER STOREFRONTS");
+    assert.equal(group.children[0].children[1].textContent, "CONVERTED TO PLN");
+    const labels = head.children[1];
+    assert.equal(labels.className, "storefront-label-row");
+    assert.equal(labels.children.length, credits ? 5 : 4);
+    assert.deepEqual(labels.children[foreignIndex].children[0].children.map(el => el.textContent), ["USD", "EUR"]);
+    assert.equal(labels.children[0].attributes["aria-hidden"], "true");
+    // Each catalog keeps the same two-level accessible headings as the shared header.
+    const accessibleHead = ctx.group().children[1].children[0].children[0].children[1];
+    assert.equal(accessibleHead.children.length, 2);
+    assert.equal(accessibleHead.children[1].children.length, labels.children.length);
+    assert.equal(accessibleHead.children[1].children[foreignIndex].children[0].children.length, 2);
+  }
+});
+
 for (const kind of ["developer","publisher"]) test(`${kind} full comparisons preserve statistics, credits, scroll synchronization and exports`, async () => {
   const ctx = fullSetup({},kind); chooseCurrencies(ctx,"pl",allAlternatives("pl"));
   ctx.snapshots.push({state:"complete",message:"Done",items:["1","2","3"].map(id=>manyCurrencyGame("pl",allAlternatives("pl"),id)),rates:[],warnings:[],catalogs:{}});
   ctx.get("creators-tab").listeners.click(); await settle();
   const header = ctx.get("creator-columns-head").children[0];
-  assert.equal(header.children[2].children[1].children.length,36);
+  assert.equal(header.children[2].children.length,1);
+  assert.match(header.children[2].className,/storefront-group-heading/);
+  const currencyRow = ctx.get("creator-columns-head").children[1];
+  assert.equal(currencyRow.children[2].children[0].children.length,36);
   assert.equal(ctx.body().children[0].children[2].children[0].children.length,36);
   assert.equal(ctx.group().children[0].children[1].children[0].tagName,"details");
   assert.match(ctx.group().children[0].children[1].children[0].children[0].textContent,/36 currencies/);
