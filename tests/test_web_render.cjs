@@ -1733,6 +1733,55 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(csv.rows.find(value=>value.storefront==="jp").best_offer_name,"");
 });
 
+test("top regional scrollbar preserves the table range and synchronizes dragging, arrows and layout changes", () => {
+  const ctx = setup(), wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar");
+  const shell = new Element("div"); shell.append(rail);
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  assert.equal(shell.hidden, false);
+  assert.equal(ctx.get("wishlist-scrollbar-extent").style.width, "2180px");
+  assert.equal(ctx.get("wishlist-scroll-previous").disabled, true);
+  rail.scrollLeft = 650; rail.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 650);
+  ctx.get("wishlist-scroll-next").listeners.click();
+  assert.equal(wrap.scrollLeft, 820);
+  assert.equal(rail.scrollLeft, 820);
+  // A late event from that assignment must not rewind the table.
+  rail.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 820);
+  wrap.scrollLeft = 1800; wrap.listeners.scroll();
+  assert.equal(rail.scrollLeft, 1800);
+  assert.equal(ctx.get("wishlist-scroll-next").disabled, true);
+  // Resizing/selection changes recompute the proxy range from actual overflow.
+  wrap.scrollLeft = 0; wrap.scrollWidth = wrap.clientWidth;
+  wrap.refreshScrollControls();
+  assert.equal(shell.hidden, true);
+  assert.equal(ctx.get("wishlist-scrollbar-extent").style.width, "380px");
+  assert.equal(rail.scrollLeft, 0);
+  assert.equal(ctx.get("wishlist-scroll-next").disabled, true);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} top scrollbar follows catalog drags and optional credit layout`, async () => {
+  const ctx = creatorSetup({}, kind, false, [], false, null, true);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const wrap = ctx.get("creator-columns-scroll"), rail = ctx.get(kind + "s-scrollbar");
+  const shell = new Element("div"); shell.append(rail);
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  rail.scrollLeft = 340; rail.listeners.scroll(); wrap.listeners.scroll();
+  const catalog = ctx.group().children[1].children[0];
+  assert.equal(catalog.scrollLeft, 340);
+  catalog.scrollLeft = 680; catalog.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 680);
+  assert.equal(rail.scrollLeft, 680);
+  ctx.get("creator-show-credits").checked = true;
+  ctx.get("creator-show-credits").listeners.change();
+  assert.equal(rail.scrollLeft, 680);
+  // A delayed proxy event remains harmless after catalog synchronization.
+  rail.listeners.scroll();
+  assert.equal(catalog.scrollLeft, 680);
+});
+
 test("uncompared default offers retain 36 separate best-offer slots and pinned difference", () => {
   const ctx = setup(), row = manyCurrencyGame(); delete row.comparison; delete row.best_offer_comparison;
   row.skipped = {category:"temporary_failure",reason:"One storefront failed"};
