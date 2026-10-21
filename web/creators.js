@@ -69,7 +69,7 @@
       const labels = ["GAME NAME", `PRICE IN ${storefronts[home].name.toUpperCase()}`, "OTHER STOREFRONTS", "DIFFERENCE"];
       if ($("creator-show-credits").checked) labels.splice(1, 0, kind === "developer" ? "PUBLISHER" : "DEVELOPER");
       for (const label of labels) {
-        const th = node("th", undefined, label === "OTHER STOREFRONTS" ? "catalog-foreign-heading" : ""); th.scope = "col";
+        const th = node("th", undefined, label === "OTHER STOREFRONTS" ? "catalog-foreign-heading storefront-group-heading" : ""); th.scope = "col";
         const stack = node("span", undefined, "header-stack");
         stack.append(node("span", label));
         if (label === "OTHER STOREFRONTS") stack.append(node("small", `CONVERTED TO ${storefronts[home].currency}`));
@@ -78,11 +78,21 @@
           stack.append(node("small", `${storefronts[home].currency} / %`));
         }
         th.append(stack);
-        if (label === "OTHER STOREFRONTS") {
-          const headings = node("div", undefined, "foreign storefront-headings");
-          headings.append(...regionalHeadings(creatorRegions)); th.append(headings);
-        }
         row.append(th);
+      }
+      return row;
+    }
+
+    function storefrontLabelRow() {
+      const row = node("tr", undefined, "storefront-label-row");
+      for (const column of columnNames()) {
+        const cell = node("td", undefined, {game: "pinned-game", credit: "catalog-credit-cell", home: "pinned-home", difference: "pinned-difference"}[column]);
+        if (column === "foreign") {
+          cell.className = "storefront-label-cell";
+          const headings = node("div", undefined, "foreign storefront-headings");
+          headings.append(...regionalHeadings(creatorRegions)); cell.append(headings);
+        } else cell.setAttribute("aria-hidden", "true");
+        row.append(cell);
       }
       return row;
     }
@@ -111,7 +121,7 @@
         const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
         table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
         columns.append(...tableColumns());
-        head.append(tableHeading(creatorHome)); table.append(columns, head, body); wrap.append(table);
+        head.append(tableHeading(creatorHome), storefrontLabelRow()); table.append(columns, head, body); wrap.append(table);
         const footer = node("div", undefined, "creator-catalog-footer"), count = node("span", "Three featured games");
         const more = node("button", undefined, "creator-load-more"); more.type = "button";
         more.append(node("span", "Load more"));
@@ -203,7 +213,7 @@
       $("creators-currencies").textContent = `Displayed: ${currencyLabel({home: creatorHome, regions: creatorRegions})}`;
       $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
       $("creator-columns-colgroup").replaceChildren(...tableColumns());
-      $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
+      $("creator-columns-head").replaceChildren(tableHeading(creatorHome), storefrontLabelRow());
       setComparisonLayout($("creator-columns-table"), creatorRegions, $("creator-show-credits").checked);
       for (const group of groups.values()) {
         // Preserve unavailable paid products; missing prices alone do not mean free.
@@ -213,7 +223,7 @@
         });
         renderStatistics(group);
         group.columns.replaceChildren(...tableColumns());
-        group.head.replaceChildren(tableHeading(creatorHome));
+        group.head.replaceChildren(tableHeading(creatorHome), storefrontLabelRow());
         setComparisonLayout(group.table, creatorRegions, $("creator-show-credits").checked);
         const displayedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();

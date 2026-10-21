@@ -17,14 +17,17 @@ Update currencies applies the choices to the current tab.
 ## Table behavior
 
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
-the right. Regional headings, default prices and best offers use the same ordered,
+the right. The main column headings share a vertical centre on desktop. OTHER
+STOREFRONTS and its conversion caption remain fixed horizontally; the individual
+currency/country labels occupy a separate row below and scroll with the prices.
+Regional currency headings, default prices and best offers use the same ordered,
 fixed-width slots between them. The blue horizontal scrollbar sits above the list,
 spans only the visible regional columns, and stays at the viewport top while
 scrolling through the comparison. It stops following at the section's end.
 Currency-picker scrollbars use the same blue treatment. Scroll with the top
 scrollbar, a trackpad, or arrow keys after focusing the table or scrollbar.
-Catalog headings
-and all catalog tables synchronize their horizontal position. Filters, sorts,
+Catalog currency headings and all catalog tables synchronize their horizontal
+position. Filters, sorts,
 per-tab completed/pending snapshots and CSV keep their existing behavior.
 
 At narrow widths the pinned game/title occupies a full-width row above prices;

@@ -9,6 +9,9 @@
 - Apply a subtle blue treatment to comparison and currency-picker scrollbars.
 - Align baseline and converted regional game prices and sale details, using
   matching amount typography on desktop and narrow screens.
+- Align the main comparison headings on one level. Keep OTHER STOREFRONTS and
+  its conversion caption fixed horizontally, with currency/country labels on a
+  separate row below that scrolls together with regional prices.
 
 ## 0.7.0-beta — 2026-10-21
 

@@ -26,13 +26,19 @@ limited to the visible regional columns and sticky within its comparison section
 Currency-picker scrollbars use the same blue treatment. Default baseline/regional
 amounts and sale details align vertically, with matching font metrics, including
 narrow screens. Catalog synchronization remains; the redundant scrolling-arrow
-buttons and caption have been removed. The separate
-stationary-heading redesign has not been implemented. Frontend checks: 113 tests
-passed; isolated browser QA at 1440px/390px verified scrollbar geometry, sticky
-bounds, bidirectional synchronization and default-price alignment/typography.
+buttons and caption have been removed. The two-level header is now implemented:
+main headings share a vertical centre on desktop; OTHER STOREFRONTS and its
+conversion caption stay fixed horizontally, while currency/country labels scroll
+on a separate row below. Narrow layouts retain identity above the price headings
+and reserve space for wrapped captions. Frontend checks: 115 tests passed, plus
+two focused HTML/server tests. Isolated browser QA at 1440px/390px verified fixed
+group labels at both scroll extremes, separate currency labels, caption spacing,
+optional credit columns and synchronized developer/publisher tables, alongside
+scrollbar geometry, sticky bounds and default-price alignment/typography.
 Approved implementation/docs and earlier documentation closeout are committed as
 `57e0861`; regression tests are committed separately as `57a384e`.
-The subsequent scrolling-arrow removal is implemented on the same branch.
+Scrolling-arrow removal is committed as `77496ec`, with test updates `851222c`.
+The two-level heading change is implemented on this branch.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in
