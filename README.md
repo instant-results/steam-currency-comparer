@@ -38,7 +38,8 @@ change over time. No personal Steam profile is used.
   right-aligned currency codes, discounts, and absolute and
   percentage differences.
 - Optionally shows Steam's best purchase offers alongside default game prices,
-  identifying packages and bundles separately. Toggling the checkbox uses already
+  identifying packages and bundles separately. Find the checkbox directly above
+  the table in each tab. Toggling it uses already
   loaded data; filters and totals continue to describe default game offers.
 - Retrieves prices in batches. A single 200-game cold-cache measurement took
   20.7 seconds versus 13 minutes 35 seconds previously; first results arrived in

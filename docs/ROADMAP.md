@@ -1,6 +1,6 @@
 # Development roadmap
 
-Updated: 2026-10-21. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-22. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
@@ -35,6 +35,14 @@ Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
   [performance report](STEAM_PRICE_PERFORMANCE.md). No concurrency was introduced.
 - Research and observed optimization ceiling: [investigation](STEAM_PRICE_BATCHING.md).
   Implemented architecture and acceptance checks: [plan](STEAM_PRICE_BATCHING_PLAN.md).
+
+## Deferred: game-title and artwork layout
+
+Long desktop titles can wrap excessively beside artwork in the pinned game
+column. Evaluate smaller thumbnails with a modestly wider identity column,
+artwork above the title, or an adaptive arrangement as a separate task. No option
+has been selected or implemented. This work is outside the scope of
+`codex/sticky-regional-scrollbar`; it is not a prerequisite for that branch.
 
 ## TODO: loading performance research
 

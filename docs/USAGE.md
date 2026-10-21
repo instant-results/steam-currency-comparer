@@ -714,6 +714,10 @@ selected purchase option. Each request has one country context. The existing
 selection limit is now one to 36 alternatives, using one representative country
 for each of the 37 supported live currencies.
 
+The checkbox sits directly above the comparison table in each tab, beside the
+result-display controls. Its setting is shared across tabs and survives reload
+in the same browser tab.
+
 Enable **Show Steam's best purchase offers alongside game prices** to reveal a
 separate set of prices and regional differences. Both datasets are fetched during
 loading, so changing this checkbox requires no network request. The choice survives

@@ -1,6 +1,6 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-21. Current state, not a change log.
+Updated: 2026-10-22. Current state, not a change log.
 
 ## Start here
 
@@ -58,7 +58,18 @@ The previously measured 26px price offset is now 0px. Validation: 120 frontend
 tests, syntax/diff checks, and isolated browser QA at 1440px/900px/390px passed.
 QA covers long package names, wrapped defaults/native prices, missing baseline/
 regional offers, subscription placeholders, missing defaults, toggling, resizing,
-both catalog roles and optional credits. Title-wrapping improvements remain open.
+both catalog roles and optional credits. Title/artwork wrapping is deferred to a
+separate task and is outside the scope of this branch.
+Alignment implementation/docs are committed as `6ba7204`, with tests `76b84c6`.
+
+The best-offers display control has been relocated from above the
+workspace to directly above each comparison table, with its help text in the
+same outlined panel. Four uniquely labelled controls share one persisted setting;
+the disabled library copy stays hidden. Toggling from any visible tab updates the
+other controls and loaded rows without additional requests. Validation: 122
+frontend tests and the focused HTML/unique-ID server check passed; browser QA at
+1440px/390px verified all three visible tabs, proximity to the table, wrapping,
+shared state, no new retrieval, dormant library behavior and reload restoration.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in

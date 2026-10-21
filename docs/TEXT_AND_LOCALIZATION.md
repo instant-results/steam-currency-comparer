@@ -122,6 +122,16 @@ Baseline and converted regional game amounts share font family, size, weight,
 line height and vertical starting position; their sale notes start together too.
 Keep compact country labels inline with amounts on narrow screens.
 
+## Best-offer display control
+
+Place **Show Steam's best purchase offers alongside game prices** directly above
+the comparison table in every tab, after the local filters/display controls or
+catalog overview. Keep the explanatory paragraph in the same outlined panel.
+Use a labelled checkbox, a unique help-text association and the local table/list
+as its controlled region. All copies reflect the same saved display setting;
+changing one rerenders loaded results without fetching more prices. The internal
+library copy remains inside its disabled/hidden panel during normal use.
+
 ## Owned-library wording
 
 These decisions apply to the internal prototype. Its tab and profile form are
