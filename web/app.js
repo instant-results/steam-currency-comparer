@@ -145,12 +145,52 @@ function regionalHeadings(regions) {
     label.append(node("small", `${storefronts[region].name} · ${region.toUpperCase()}`)); return label;
   });
 }
+const offerAlignmentFrames = new WeakMap(), offerAlignmentObservers = new WeakMap();
+function alignBestOffers(table) {
+  if (!showBestOffers || !table.getBoundingClientRect().width) return;
+  const rows = [...table.querySelectorAll("tbody tr")].map(row => ({row,
+    blocks: [...row.querySelectorAll(".best-offer")].filter(block => block.querySelector(".offer-label"))
+  })).filter(entry => entry.blocks.length);
+  // Reset, measure, then write in batches so wrapping can shrink as well as grow.
+  for (const {row, blocks} of rows) {
+    for (const band of ["label", "value", "name"]) row.style.setProperty(`--offer-${band}-height`, "0px");
+    for (const block of blocks) block.style.setProperty("--offer-align-offset", "0px");
+  }
+  const measured = rows.map(({row, blocks}) => {
+    const labels = blocks.map(block => block.querySelector(".offer-label").getBoundingClientRect());
+    const height = selector => Math.max(0, ...blocks.map(block => block.querySelector(selector)?.getBoundingClientRect().height || 0));
+    return {row, blocks, labels, top: Math.max(...labels.map(label => label.top)),
+      label: Math.max(...labels.map(label => label.height)), value: height(".offer-value"), name: height(".offer-name")};
+  });
+  for (const entry of measured) {
+    for (const band of ["label", "value", "name"]) entry.row.style.setProperty(`--offer-${band}-height`, `${entry[band]}px`);
+    entry.blocks.forEach((block, index) => block.style.setProperty("--offer-align-offset", `${entry.top - entry.labels[index].top}px`));
+  }
+}
+function scheduleOfferAlignment(table) {
+  if (typeof requestAnimationFrame !== "function") return;
+  if (!offerAlignmentObservers.has(table) && typeof ResizeObserver !== "undefined") {
+    let previousWidth;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0].contentRect.width;
+      if (width !== previousWidth) { previousWidth = width; scheduleOfferAlignment(table); }
+    });
+    observer.observe(table);
+    offerAlignmentObservers.set(table, observer);
+  }
+  if (offerAlignmentFrames.has(table)) return;
+  offerAlignmentFrames.set(table, requestAnimationFrame(() => {
+    offerAlignmentFrames.delete(table);
+    alignBestOffers(table);
+  }));
+}
 function setComparisonLayout(table, regions, credits = false) {
   table.classList.toggle("comparison-matrix", true);
   table.classList.toggle("matrix-with-credits", credits);
   table.closest?.(".comparison-area")?.classList.toggle("matrix-with-credits", credits);
   table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
   table.parentElement?.refreshScrollControls?.();
+  scheduleOfferAlignment(table);
 }
 function bindComparisonScroll(prefix, wrap) {
   const rail = $(prefix + "-scrollbar"), extent = $(prefix + "-scrollbar-extent");
@@ -364,11 +404,13 @@ function offerPriceBlock(offer, converted, currency, originalPrice = null) {
   const block = node("div", undefined, "best-offer");
   block.append(node("small", "Steam best offer", "offer-label"));
   if (!offer?.price) {
-    block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable"));
+    block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable", "offer-value offer-unavailable"));
     return block;
   }
-  block.append(originalPrice ? regionalPriceLine(converted, currency, originalPrice.amount, originalPrice.currency)
-    : node("span", `${money(converted)} ${currency}`, "offer-price"));
+  const value = originalPrice ? regionalPriceLine(converted, currency, originalPrice.amount, originalPrice.currency)
+    : node("span", `${money(converted)} ${currency}`, "offer-price");
+  value.className += " offer-value";
+  block.append(value);
   const link = node("a", `${offer.name} (${offer.kind})`, "offer-name");
   if (["bundle", "package"].includes(offer.kind) && Number.isSafeInteger(offer.id) && offer.id > 0) {
     link.href = `https://store.steampowered.com/${offer.kind === "bundle" ? "bundle" : "sub"}/${offer.id}/`;
@@ -400,10 +442,10 @@ function appendBestOffers(tr, item, home, regions) {
   delta.append(node("small", "Steam best offers", "offer-label"));
   if (best) {
     const amount = best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home));
-    delta.append(node("span", `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${money(Math.abs(amount))} ${currency}`));
+    delta.append(node("span", `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${money(Math.abs(amount))} ${currency}`, "offer-value"));
     delta.append(node("small", percentageLabel(percentageDifference(best))));
     delta.append(node("small", "Offers may include different editions or bundles"));
-  } else delta.append(node("small", "Not all storefront offers could be compared"));
+  } else delta.append(node("small", "Not all storefront offers could be compared", "offer-value offer-unavailable"));
   tr.children[3].append(delta);
 }
 function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null) {

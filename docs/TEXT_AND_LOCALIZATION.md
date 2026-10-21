@@ -102,6 +102,13 @@ converted price at the start and show the original price in the existing muted
 same right edge across rows. Original amount and code form one unit that can
 wrap together below the converted price when space is limited. Do not change
 comparison arithmetic, sale-note currencies, or CSV values.
+
+Best-offer blocks share their label, value and name bands across a game's
+baseline, regional and difference cells. Compensate for wrapped default details
+before the best-offer label; align the best-offer amounts and the sale details
+following offer names. Missing or subscription offers retain their value slot.
+Measure actual wrapping after render/width changes so bands can shrink as well
+as grow, preserving original-price alignment and the existing default-offer view.
 On narrow screens retain the identity/credit rows above the price headings and
 reserve enough space below wrapped group labels for their conversion caption.
 

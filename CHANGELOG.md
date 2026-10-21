@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align best-offer labels, prices, names and following sale details across each
+  game's baseline, regional and difference columns, including wrapped default
+  details, original prices, unavailable offers and narrow-screen resizing.
+
 - Keep currency/country column titles visible beneath the sticky scrollbar while
   scrolling through results, synchronized with regional prices and catalog tables.
   Move country codes to the country labels with a middle-dot separator. Show

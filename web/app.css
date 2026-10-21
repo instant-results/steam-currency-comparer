@@ -1446,3 +1446,14 @@ td:first-child { min-width: 0; }
 @media (max-width: 700px) {
   .comparison-matrix .foreign .regional-price-line { font-size: 12px; }
 }
+
+/* Shared offer bands keep each game's best prices level across all storefronts. */
+.comparison-matrix .best-offer { margin-top: calc(1rem + var(--offer-align-offset, 0px)); }
+.comparison-matrix .best-offer .offer-label { min-height: var(--offer-label-height, 0px); }
+.comparison-matrix .best-offer .offer-value { min-height: var(--offer-value-height, 0px); }
+.comparison-matrix .best-offer .offer-name { min-height: var(--offer-name-height, 0px); }
+
+.comparison-matrix .offer-difference > span.offer-value { font-size: 14px; line-height: 1.5; }
+@media (max-width: 700px) {
+  .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
+}
