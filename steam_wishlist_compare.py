@@ -14,7 +14,7 @@ from steam_price_polisher.analysis import (
     deduplicate_wishlist,
 )
 from steam_price_polisher.cache import SQLiteCache
-from steam_price_polisher.configuration import ComparisonConfig
+from steam_price_polisher.configuration import ComparisonConfig, MAX_COMPARISONS
 from steam_price_polisher.exchange_rates import (
     CachedExchangeRateProvider,
     ExchangeRateError,
@@ -55,7 +55,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("identifier", nargs="?", help="SteamID64 or Steam profile URL")
     parser.add_argument(
         "--regions", nargs="+", metavar="REGION",
-        help="Choose up to two: us (USD), de (EUR), no (NOK), gb (GBP). Default: us de. Put the identifier first.",
+        help=f"Choose any supported storefronts (up to {MAX_COMPARISONS}), e.g. us de no gb jp. Default: us de. Put the identifier first.",
     )
     try:
         options = parser.parse_args(args)

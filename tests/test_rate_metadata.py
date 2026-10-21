@@ -10,6 +10,7 @@ from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.exchange_rates import CachedExchangeRateProvider, ExchangeRateError, NbpExchangeRateProvider
 from steam_price_polisher.models import AnalysisResult, ComparisonMethodology, ExchangeRate
 from steam_price_polisher.presentation import ConsolePresenter
+from tests.test_exchange_rates import table_payload
 
 
 class RateMetadataTests(unittest.TestCase):
@@ -29,12 +30,13 @@ class RateMetadataTests(unittest.TestCase):
     def test_nbp_retains_per_currency_dates_and_deduplicates(self):
         http = Mock()
         http.get_json.side_effect = [
-            {"code": code, "table": "A", "rates": [{"mid": 4.0, "effectiveDate": day}]}
-            for code, day in [("USD", "2026-09-08"), ("EUR", "2026-09-07")]
+            table_payload("A", "2026-09-08", USD=4),
+            table_payload("B", "2026-09-07", AED=1),
         ]
-        details = NbpExchangeRateProvider(http).get_rate_details(["usd", "USD", "EUR", "PLN"])
+        details = NbpExchangeRateProvider(http).get_rate_details(["usd", "USD", "AED", "PLN"])
         self.assertEqual(details["USD"].effective_date, "2026-09-08")
-        self.assertEqual(details["EUR"].effective_date, "2026-09-07")
+        self.assertEqual(details["AED"].effective_date, "2026-09-07")
+        self.assertEqual(details["AED"].source, "NBP table B (mid)")
         self.assertEqual(details["PLN"].source, "Identity conversion")
         self.assertEqual(http.get_json.call_count, 2)
 
@@ -45,12 +47,12 @@ class RateMetadataTests(unittest.TestCase):
         for value, day in cases:
             with self.subTest(value=value, day=day):
                 http = Mock()
-                http.get_json.return_value = {"code": "USD", "table": "A", "rates": [{"mid": value, "effectiveDate": day}]}
+                http.get_json.return_value = table_payload("A", day, USD=value)
                 with self.assertRaises(ExchangeRateError):
                     NbpExchangeRateProvider(http).get_rate_details(["USD"])
-        http.get_json.return_value = {"code": "EUR", "table": "A", "rates": [{"mid": 4, "effectiveDate": "2026-09-08"}]}
+        http.get_json.return_value = table_payload("B", USD=4)
         with self.assertRaises(ExchangeRateError):
-            NbpExchangeRateProvider(http).get_rate_details(["USD"])
+            NbpExchangeRateProvider(http).get_rate_table("A")
 
     def test_dates_survive_cache_reopen_and_stale_fallback(self):
         with tempfile.TemporaryDirectory() as directory:

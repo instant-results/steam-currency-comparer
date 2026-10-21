@@ -39,6 +39,9 @@
     else target.replaceChildren(node("p", "Rates appear when you run a comparison.", "rate-placeholder"));
   }
   function render() {
+    const regions = comparisonRegions(lastRequest?.regions, items);
+    setComparisonLayout($("table"), regions);
+    $("storefront-headings").replaceChildren(...regionalHeadings(regions));
     $("home-heading").textContent = `PRICE IN ${storefronts[home].name.toUpperCase()}`;
     $("converted-heading").textContent = `CONVERTED TO ${storefronts[home].currency}`;
     $("difference-currency").textContent = storefronts[home].currency;
@@ -72,7 +75,7 @@
       const signature = home + showBestOffers + JSON.stringify(item);
       let cached = rows.get(item.app_id);
       if (!cached || cached.signature !== signature) {
-        cached?.row.remove(); cached = {signature, row:comparisonRow(item, home, true)}; rows.set(item.app_id, cached);
+        cached?.row.remove(); cached = {signature, row:comparisonRow(item, home, true, regions)}; rows.set(item.app_id, cached);
       }
       if (body.children[index] !== cached.row) body.insertBefore(cached.row, body.children[index] || null);
     });
@@ -131,7 +134,7 @@
   $("compare-form").addEventListener("submit", event => {
     event.preventDefault();
     const regions = [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value);
-    if (!regions.length || regions.length > 2) { notice("Choose one or two comparison currencies.", true); return; }
+    if (!regions.length || regions.length > maxComparisons) { notice("Choose one or more comparison currencies.", true); return; }
     start({identifier:$("identifier").value.trim(), regions, home:selectedHome(), order:$("wishlist-order").value});
   });
   $("retry").addEventListener("click", () => { if (lastRequest) start(lastRequest); });
@@ -153,7 +156,7 @@
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null"), body = saved?.request;
     if (body && typeof body.identifier === "string" && body.identifier.length <= 200 && ["name","steam"].includes(body.order)
-        && Object.hasOwn(storefronts,body.home) && Array.isArray(body.regions) && body.regions.length >= 1 && body.regions.length <= 2
+        && Object.hasOwn(storefronts,body.home) && Array.isArray(body.regions) && body.regions.length >= 1 && body.regions.length <= maxComparisons
         && new Set(body.regions).size === body.regions.length && body.regions.every(region => Object.hasOwn(storefronts,region) && region !== body.home)
         && Array.isArray(saved.items) && saved.items.every(item => /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string")) {
       lastRequest = body; items = saved.items; rates = Array.isArray(saved.rates) ? saved.rates : []; home = body.home;

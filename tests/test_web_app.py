@@ -10,6 +10,7 @@ from unittest.mock import patch, Mock
 from steam_price_polisher.configuration import ComparisonConfig
 from steam_price_polisher.models import ExchangeRate, WishlistItem, WishlistResult, StorePrice, RegionalPriceResult, PriceStatus
 from steam_price_polisher.web_app import WebApplication, JobManager, validate_request, InputError, BusyError
+from tests.test_exchange_rates import table_payload
 
 PROFILE = "76561198000000000"
 
@@ -37,8 +38,8 @@ class WebAppTests(unittest.TestCase):
                     if "GetWishlist" in url:
                         payload = {"response": {"items": [{"appid": 10}, {"appid": 20}]}}
                     else:
-                        currency = "USD" if "/usd/" in url else "EUR"
-                        payload = {"code": currency, "table": "A", "rates": [{"mid": 4, "effectiveDate": "2026-09-08"}]}
+                        payload = (table_payload("B", "2026-09-02", AED=1) if "/tables/b/" in url
+                                   else table_payload("A", "2026-09-08", USD=4, EUR=4))
                     response = Mock()
                     response.__enter__ = Mock(return_value=response)
                     response.__exit__ = Mock(return_value=False)
@@ -311,7 +312,7 @@ class WebAppTests(unittest.TestCase):
                 self.assertIsNotNone(rate["retrieved_at_utc"])
         self.assertEqual({rate["effective_date"] for rate in result["rates"]}, {None,"2026-09-08","2026-09-09"})
 
-    def test_all_five_baselines_and_selection_limit(self):
+    def test_existing_baselines_accept_more_alternatives_and_reject_home(self):
         from itertools import combinations
         regions = ["pl", "us", "de", "no", "gb"]
         for home in regions:
@@ -320,8 +321,8 @@ class WebAppTests(unittest.TestCase):
                 self.assertEqual(config.home.region, home)
             with self.assertRaises(ValueError):
                 validate_request({"identifier": PROFILE, "home": home, "regions": [home]})
-            with self.assertRaises(ValueError):
-                validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home][:3]})
+            _, config = validate_request({"identifier": PROFILE, "home": home, "regions": [r for r in regions if r != home]})
+            self.assertEqual(len(config.alternatives), 4)
 
     def test_example_mode_loads_curated_wishlist_including_witcher_3(self):
         from steam_price_polisher.web_app import EXAMPLE_WISHLIST

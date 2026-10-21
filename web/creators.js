@@ -12,8 +12,10 @@
     let creators = [], creatorJob = null, pollTimer = null;
     let creatorHome = "pl", creatorRegions = ["us", "de"], creatorRates = [];
     let savedRequest = null, cancelRequested = false;
+    let currencyUpdating = false, currencyRetry = null, completedComparison = false;
     let searching = false, searchChoices = [];
     const groups = new Map(), results = new Map(), defaultIds = new Set();
+    const synchronizedScrolls = new WeakMap();
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
@@ -22,8 +24,8 @@
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
-            products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded})),
-          results: [...results.values()], rates: creatorRates}));
+            products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
+          results: [...results.values()], rates: creatorRates, currencyUpdating, currencyRetry, completedComparison}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
 
@@ -34,6 +36,7 @@
     }
 
     function refreshControls() {
+      $("creators-refresh").textContent = currencyRetry && !busy ? "Retry currency update ↻" : "Refresh comparisons ↻";
       $("creators-export").disabled = ![...groups.values()].some(group => group.products.some(product => results.has(product.app_id)));
       $("creators-refresh").disabled = comparisonCoordinator.busy || !initialized;
       $("creators-cancel").hidden = !busy;
@@ -74,7 +77,12 @@
           stack.className += " header-stack-right";
           stack.append(node("small", `${storefronts[home].currency} / %`));
         }
-        th.append(stack); row.append(th);
+        th.append(stack);
+        if (label === "OTHER STOREFRONTS") {
+          const headings = node("div", undefined, "foreign storefront-headings");
+          headings.append(...regionalHeadings(creatorRegions)); th.append(headings);
+        }
+        row.append(th);
       }
       return row;
     }
@@ -98,7 +106,8 @@
         const statistics = node("div", undefined, "creator-statistics");
         statistics.setAttribute("aria-label", `${creator.name} statistics for loaded products`);
         heading.append(identity, statistics);
-        const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap");
+        const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap comparison-scroll");
+        wrap.tabIndex = 0; wrap.setAttribute("aria-label", `Scroll ${creator.name} regional comparisons`);
         const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
         table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
         columns.append(...tableColumns());
@@ -112,7 +121,8 @@
         footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
-          expanded: !creator.examples.length, body, head, columns, wrap, statistics, count, more, rowCache: new Map()});
+          discoveryHome: creatorHome,
+          expanded: !creator.examples.length, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map()});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
       renderGroups();
@@ -126,9 +136,17 @@
     }
 
     function syncColumns(source) {
+      // Ignore events caused by our own assignments. A delayed follower event
+      // must not rewind a heading that has already advanced in a smooth scroll.
+      const expected = synchronizedScrolls.get(source);
+      if (expected !== undefined && Math.abs(source.scrollLeft - expected) < 1) return;
+      synchronizedScrolls.delete(source);
       // One shared heading follows every catalog when narrow screens require scrolling.
       for (const wrap of [$("creator-columns-scroll"), ...[...groups.values()].map(group => group.wrap)]) {
-        if (wrap.scrollLeft !== source.scrollLeft) wrap.scrollLeft = source.scrollLeft;
+        if (wrap !== source && wrap.scrollLeft !== source.scrollLeft) {
+          synchronizedScrolls.set(wrap, source.scrollLeft);
+          wrap.scrollLeft = source.scrollLeft;
+        }
       }
     }
 
@@ -138,6 +156,14 @@
       const uncompared = loaded.filter(item => item?.skipped).length;
       const pending = loaded.length - compared.length - uncompared;
       group.statistics.replaceChildren();
+      let target = group.statistics;
+      if (creatorRegions.length > 4) {
+        const overview = node("details", undefined, "regional-statistics-overview");
+        overview.open = group.statisticsExpanded === true;
+        overview.addEventListener("toggle", () => { group.statisticsExpanded = overview.open; save(); });
+        overview.append(node("summary", `Regional statistics · ${creatorRegions.length} currencies`));
+        target = node("div", undefined, "regional-statistics-grid"); overview.append(target); group.statistics.append(overview);
+      }
       for (const region of creatorRegions) {
         const differences = [];
         for (const item of compared) {
@@ -163,18 +189,21 @@
         medianRow.append(node("span", "Median"), node("strong", median == null ? "—" : percentageLabel(median),
           "creator-statistic-value" + (median == null ? "" : median > 0 ? " pricier" : " cheaper")));
         metric.append(medianRow);
-        group.statistics.append(metric);
+        target.append(metric);
       }
       const cheaper = compared.filter(item => item.comparison.is_fair).length;
       const coverage = node("p", `${compared.length} of ${loaded.length} compared · ${cheaper} cheaper/equal · ${compared.length - cheaper} pricier · ${uncompared} uncompared${pending ? ` · ${pending} pending` : ""}`, "creator-statistics-coverage");
       coverage.title = "Cheaper/equal means the baseline price is no higher than every selected converted foreign price. Pricier means it exceeds at least one. Counts cover only loaded non-free products.";
-      group.statistics.append(coverage);
+      target.append(coverage);
     }
 
     function renderGroups() {
+      $("creators-currencies").hidden = !results.size;
+      $("creators-currencies").textContent = `Displayed: ${currencyLabel({home: creatorHome, regions: creatorRegions})}`;
       $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
       $("creator-columns-colgroup").replaceChildren(...tableColumns());
       $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
+      setComparisonLayout($("creator-columns-table"), creatorRegions, $("creator-show-credits").checked);
       for (const group of groups.values()) {
         // Preserve unavailable paid products; missing prices alone do not mean free.
         group.products = group.products.filter(product => {
@@ -184,6 +213,7 @@
         renderStatistics(group);
         group.columns.replaceChildren(...tableColumns());
         group.head.replaceChildren(tableHeading(creatorHome));
+        setComparisonLayout(group.table, creatorRegions, $("creator-show-credits").checked);
         const displayedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
         for (const id of group.rowCache.keys()) if (!displayedIds.has(id)) group.rowCache.delete(id);
@@ -191,11 +221,11 @@
           const product = group.products[index];
           const item = results.get(product.app_id) || {...product, pending: true};
           const showCredits = $("creator-show-credits").checked;
-          const signature = creatorHome + showCredits + showBestOffers + JSON.stringify(item);
+          const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
-            const row = comparisonRow(item, creatorHome);
-            if (item.comparison) row.children[2].className = "catalog-foreign-price";
+            const row = comparisonRow(item, creatorHome, false, creatorRegions);
+            row.children[2].className += " catalog-foreign-price";
             const role = kind === "developer" ? "Publisher" : "Developer";
             const names = item[kind === "developer" ? "publishers" : "developers"];
             const credit = Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable";
@@ -206,11 +236,12 @@
           }
           if (group.body.children[index] !== cached.row) group.body.insertBefore(cached.row, group.body.children[index] || null);
         }
-        group.more.hidden = !group.hasMore;
-        group.count.textContent = `${group.products.length} products shown${group.total != null ? ` · ${group.total} in Steam catalog` : group.expanded ? "" : " · featured games"}`;
+        group.more.hidden = !group.hasMore && group.discoveryHome === creatorHome;
+        group.count.textContent = `${group.products.length} products shown${group.total != null && group.discoveryHome === creatorHome ? ` · ${group.total} in Steam catalog` : group.expanded ? "" : " · featured games"}`;
       }
       if (active && creatorRates.length) renderRates(creatorRates, $("rates"));
       refreshControls();
+      refreshCurrencyAction();
     }
 
     function mergeSnapshot(data) {
@@ -223,6 +254,7 @@
           group.products.push(product); known.add(product.app_id);
         }
         group.nextStart = page.next_start; group.hasMore = page.has_more; group.total = page.total;
+        group.discoveryHome = savedRequest.home;
       }
       for (const item of data.items) results.set(item.app_id, item);
       if (data.rates?.length) creatorRates = data.rates;
@@ -233,21 +265,38 @@
       if (!creatorJob) return;
       try {
         const data = await request(`/api/jobs/${creatorJob.id}`, {headers: {Authorization: `Bearer ${creatorJob.token}`}});
-        mergeSnapshot(data);
-        $("creators-progress").textContent = data.message;
-        message(data.error || (data.warnings || []).join(" "), !!data.error);
+        const updating = currencyUpdating;
+        if (!updating) mergeSnapshot(data);
+        $("creators-progress").textContent = updating ? `Updating to ${currencyLabel(savedRequest)}: ${data.message}` : data.message;
+        message(updating ? "Displayed results remain available until the currency update finishes." : data.error || (data.warnings || []).join(" "), !updating && !!data.error);
         if (data.state === "cancelling") { cancelRequested = true; refreshControls(); }
         if (terminal.has(data.state)) {
-          setCreatorBusy(false);
-          creatorJob = null; save();
-          if (defaultsChanged && active) scheduleFeatured();
-          if (data.state === "cancelled") message("Comparison cancelled. Use Refresh comparisons to finish checking displayed products.");
-          else if (data.state === "partial") message("Some products could not be compared. Refresh comparisons to retry using cached prices.");
+          preserveComparisonScroll(() => {
+            if (updating) $("creators-progress").textContent = ["complete", "partial"].includes(data.state)
+              ? `Updated to ${currencyLabel(savedRequest)}. ${data.message}` : `Currency update ${data.state}.`;
+            if (updating && ["complete", "partial"].includes(data.state)) {
+              creatorHome = savedRequest.home; creatorRegions = [...savedRequest.regions]; creatorRates = data.rates || [];
+              results.clear(); for (const item of data.items) results.set(item.app_id, item);
+              currencyRetry = null; completedComparison = true; defaultsChanged = false;
+              renderGroups();
+            } else if (!updating && ["complete", "partial"].includes(data.state)) completedComparison = true;
+            currencyUpdating = false;
+            setCreatorBusy(false);
+            creatorJob = null; save();
+            if (defaultsChanged && active && !updating) scheduleFeatured();
+            if (updating) message(["complete", "partial"].includes(data.state)
+              ? data.state === "partial" ? "Currencies updated. Some products could not be compared; refresh to retry using cached prices." : (data.warnings || []).join(" ")
+              : `${data.error || "Currency update " + data.state + "."} Displayed results are unchanged. Use Retry currency update.`, data.state === "failed");
+            else if (data.state === "cancelled") message("Comparison cancelled. Use Refresh comparisons to finish checking displayed products.");
+            else if (data.state === "partial") message("Some products could not be compared. Refresh comparisons to retry using cached prices.");
+            refreshCurrencyAction();
+          });
         } else pollTimer = setTimeout(pollCreators, 1200);
       } catch (error) {
         if (error.status === 404) {
+          const updating = currencyUpdating; currencyUpdating = false;
           creatorJob = null; setCreatorBusy(false); save();
-          message("This catalog comparison expired. Refresh comparisons to start again.", true);
+          message(updating ? "The currency update expired. Displayed results are unchanged. Retry currency update using the saved products." : "This catalog comparison expired. Refresh comparisons to start again.", true);
         } else {
           message("Connection interrupted. Reconnecting to catalog comparisons…", true);
           pollTimer = setTimeout(pollCreators, 4000);
@@ -256,29 +305,39 @@
     }
 
     function selections() {
-      return {home: selectedHome(), regions: [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value)};
+      return currencySelection();
     }
 
-    async function startCreators(body) {
-      if (!body.regions.length) { message("Choose one or two comparison currencies.", true); return; }
+    async function startCreators(body, preserve = false) {
+      if (!body.regions.length) { message("Choose one or more comparison currencies.", true); return; }
       if (!comparisonCoordinator.claim(kind)) return;
       comparisonCoordinator.cancel(`${kind}-featured`);
       clearTimeout(pollTimer); cancelRequested = false; creatorJob = null;
+      currencyUpdating = preserve; currencyRetry = preserve ? {home: body.home, regions: body.regions} : null;
       savedRequest = body; setCreatorBusy(true); message("");
-      $("creators-progress").textContent = "Connecting to Steam…";
+      $("creators-progress").textContent = preserve ? `Updating to ${currencyLabel(body)}… Displayed results remain available.` : "Connecting to Steam…";
+      save();
       try {
         creatorJob = await request("/api/creator-jobs", {method: "POST", body: JSON.stringify(body)});
         save(); refreshControls(); pollCreators();
       } catch (error) {
-        setCreatorBusy(false); message(error.message, true);
-        $("creators-progress").textContent = "Comparison could not start. Refresh comparisons to retry.";
+        currencyUpdating = false; setCreatorBusy(false); message(`${error.message}${preserve ? " Displayed results are unchanged. Retry the currency update." : ""}`, true); save();
+        $("creators-progress").textContent = preserve ? "Currency update could not start." : "Comparison could not start. Refresh comparisons to retry.";
       }
+    }
+
+    function updateCurrencies(selected = selections()) {
+      if (!initialized || comparisonCoordinator.busy || !validCurrencies(selected)) return;
+      const appIds = [...new Set([...groups.values()].flatMap(group => group.products.map(item => item.app_id)))];
+      if (!appIds.length || appIds.length > 1000) { message("Currency updates support 1 to 1,000 loaded products.", true); return; }
+      startCreators({...selected, mode: "products", app_ids: appIds}, true);
     }
 
     function refreshFeatured() {
       if (comparisonCoordinator.busy) return;
       const selected = selections();
-      if (!selected.regions.length) { message("Choose one or two comparison currencies.", true); return; }
+      if (results.size) { updateCurrencies(currencyRetry || selected); return; }
+      if (!selected.regions.length) { message("Choose one or more comparison currencies.", true); return; }
       const mode = "products";
       const appIds = [...new Set([...groups.values()].flatMap(group => group.products.map(item => item.app_id)))];
       if (!appIds.length) { message("No products loaded yet. Search for a catalog to compare."); return; }
@@ -296,7 +355,7 @@
       // Expanded pages retain the currency choices of their featured comparisons.
       const creator = creators.find(c => c.id === id);
       startCreators({home: creatorHome, regions: creatorRegions, mode: "catalog", creator_id: id,
-        ...(creator.selector ? {selector: creator.selector} : {}), start: groups.get(id).nextStart});
+        ...(creator.selector ? {selector: creator.selector} : {}), start: groups.get(id).discoveryHome === creatorHome ? groups.get(id).nextStart : 0});
     }
 
     function safeCreator(value) {
@@ -359,13 +418,16 @@
 
     function restore(saved) {
       if (!saved || !Object.hasOwn(storefronts, saved.home) || !Array.isArray(saved.regions) ||
-          saved.regions.length < 1 || saved.regions.length > 2 || new Set(saved.regions).size !== saved.regions.length ||
+          saved.regions.length < 1 || saved.regions.length > maxComparisons || new Set(saved.regions).size !== saved.regions.length ||
           saved.regions.some(id => !Object.hasOwn(storefronts, id) || id === saved.home)) return false;
       const oldDefaults = Array.isArray(saved.featuredIds) ? saved.featuredIds
         : (saved.creators || []).filter(value => value.examples?.length).map(value => value.id);
       defaultsChanged = oldDefaults.length > 0 && (oldDefaults.length !== defaultIds.size ||
         [...defaultIds].some(id => !oldDefaults.includes(id)));
       creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
+      completedComparison = saved.completedComparison ?? !!saved.results?.length;
+      currencyRetry = validCurrencies(saved.currencyRetry) ? saved.currencyRetry : null;
+      currencyUpdating = saved.currencyUpdating === true && validCurrencies(saved.request) && saved.request.mode === "products";
       for (const value of Array.isArray(saved.creators) ? saved.creators.slice(0, 20) : []) {
         if ((oldDefaults.includes(value.id) || value.examples?.length) && !defaultIds.has(value.id)) continue;
         const creator = safeCreator(value);
@@ -374,9 +436,10 @@
       buildGroups();
       savedRequest = saved.request;
       if (active && !comparisonCoordinator.active) {
-        preferredComparisons = [...creatorRegions];
-        document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === creatorHome);
-        document.querySelectorAll('[name="region"]').forEach(el => el.checked = creatorRegions.includes(el.value));
+        const selected = currencyUpdating ? savedRequest : {home: creatorHome, regions: creatorRegions};
+        preferredComparisons = [...selected.regions];
+        document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === selected.home);
+        document.querySelectorAll('[name="region"]').forEach(el => el.checked = selected.regions.includes(el.value));
         updateSelections();
       }
       $("creator-show-credits").checked = saved.showCredits === true;
@@ -386,13 +449,15 @@
         if (!group || !Array.isArray(catalog.products) || !Number.isInteger(catalog.nextStart) || catalog.nextStart < 0) continue;
         group.products = catalog.products.filter(item => /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string");
         group.nextStart = catalog.nextStart; group.hasMore = catalog.hasMore; group.total = catalog.total;
+        group.discoveryHome = Object.hasOwn(storefronts, catalog.discoveryHome) ? catalog.discoveryHome : saved.home;
+        group.statisticsExpanded = catalog.statisticsExpanded === true;
         const featuredIds = new Set(creators.find(creator => creator.id === catalog.id).examples.map(product => product.app_id));
         group.expanded = catalog.expanded === true || catalog.nextStart > 0 || catalog.total != null ||
           group.products.some(product => !featuredIds.has(product.app_id));
       }
       if (saved.job && /^[A-Za-z0-9_-]{32}$/.test(saved.job.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.job.token)) {
         creatorJob = saved.job; savedRequest = saved.request; setCreatorBusy(true); pollCreators();
-      } else $("creators-progress").textContent = "Restored catalog results. Refresh comparisons for a new price check.";
+      } else { currencyUpdating = false; $("creators-progress").textContent = "Restored catalog results. Refresh comparisons for a new price check."; }
       renderGroups(); return true;
     }
 
@@ -437,6 +502,7 @@
     function activate(value) {
       active = value;
       if (active) {
+        $("creator-columns-scroll").refreshScrollControls?.();
         renderRates(creatorRates, $("rates"));
         initialize();
         if (initialized && (!savedRequest || defaultsChanged) && !busy) scheduleFeatured();
@@ -444,6 +510,7 @@
     }
 
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
+    bindComparisonScroll(plural, $("creator-columns-scroll"));
     $("creators-export").addEventListener("click", () => downloadCsv(catalogCsv(), `steam-${plural}-comparison.csv`));
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
@@ -454,7 +521,8 @@
       try { await request(`/api/jobs/${creatorJob.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${creatorJob.token}`}}); }
       catch (error) { cancelRequested = false; refreshControls(); message(error.message, true); }
     });
-    return {kind, get busy() { return busy; }, activate, initialize, refreshControls, render: renderGroups};
+    return {kind, get busy() { return busy; }, activate, initialize, refreshControls, render: renderGroups, updateCurrencies,
+      currencyState: () => completedComparison && [...groups.values()].some(group => group.products.length) ? {home: creatorHome, regions: creatorRegions} : null};
   }
 
   for (const kind of ["developer", "publisher"]) panes.set(kind, createPane(kind));
@@ -472,15 +540,18 @@
       document.getElementById(kind + "s-panel").hidden = tab !== kind;
       pane.activate(tab === kind);
     }
-    if (tab === "wishlist") renderRates(currentRates, document.getElementById("rates"));
+    if (tab === "wishlist") { renderRates(currentRates, document.getElementById("rates")); document.getElementById("wishlist-scroll").refreshScrollControls?.(); }
     for (const name of ["wishlist", "library", "developer", "publisher"]) {
       const button = document.getElementById(tabId(name));
       button.setAttribute("aria-selected", String(tab === name)); button.tabIndex = tab === name ? 0 : -1;
     }
     try { sessionStorage.setItem("polisher-active-tab", tab); } catch (_) {}
     comparisonCoordinator.wake();
+    refreshCurrencyAction();
   }
   window.creatorPane = {get active() { return selectedTab === "developer" || selectedTab === "publisher"; }, get busy() { return anyBusy(); },
+    currencyState: () => panes.get(selectedTab)?.currencyState(),
+    updateCurrencies: () => panes.get(selectedTab)?.updateCurrencies(),
     refreshControls() { for (const pane of panes.values()) pane.refreshControls(); },
     render() { for (const pane of panes.values()) pane.render(); }};
   const tabId = name => ["wishlist", "library"].includes(name) ? name + "-tab" : name + "s-tab";
