@@ -4,6 +4,9 @@ Updated: 2026-10-21. The app supports 37 live Steam currencies, with one
 representative country per currency. Any can be the baseline; select one to 36
 others. The default remains PLN against USD/EUR.
 
+Available in `0.7.0-beta`, integrated into `main` through
+[PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1).
+
 Use the searchable sidebar picker to find a currency or country. Select all
 chooses every alternative to the current baseline; Clear removes alternatives.
 Searching hides choices without changing their selection. Changing the baseline
@@ -15,8 +18,12 @@ Update currencies applies the choices to the current tab.
 
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
 the right. Regional headings, default prices and best offers use the same ordered,
-fixed-width slots between them. Scroll with the visible scrollbar, the arrow
-controls, a trackpad, or arrow keys after focusing the table. Catalog headings
+fixed-width slots between them. The blue horizontal scrollbar sits above the list,
+spans only the visible regional columns, and stays at the viewport top while
+scrolling through the comparison. It stops following at the section's end.
+Currency-picker scrollbars use the same blue treatment. Scroll with the top
+scrollbar, the arrow controls, a trackpad, or arrow keys after focusing the table.
+Catalog headings
 and all catalog tables synchronize their horizontal position. Filters, sorts,
 per-tab completed/pending snapshots and CSV keep their existing behavior.
 

@@ -81,6 +81,15 @@ baseline and DIFFERENCE at its edges. Missing observations occupy their regional
 slot rather than shifting other prices. The overall difference identifies the
 cheapest selected storefront. Large catalog metrics use **Regional statistics**.
 
+The horizontal scrollbar sits above each comparison and spans only the visible
+regional columns, excluding pinned identity, optional credits, baseline and
+DIFFERENCE. Keep it sticky at the viewport top within that comparison section.
+Use a muted blue thumb and dark blue track for this scrollbar and the vertical
+currency pickers. Existing arrow controls retain their wording and styling.
+Baseline and converted regional game amounts share font family, size, weight,
+line height and vertical starting position; their sale notes start together too.
+Keep compact country labels inline with amounts on narrow screens.
+
 ## Owned-library wording
 
 These decisions apply to the internal prototype. Its tab and profile form are

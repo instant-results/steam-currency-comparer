@@ -146,6 +146,7 @@
         if (wrap !== source && wrap.scrollLeft !== source.scrollLeft) {
           synchronizedScrolls.set(wrap, source.scrollLeft);
           wrap.scrollLeft = source.scrollLeft;
+          wrap.refreshScrollControls?.();
         }
       }
     }
