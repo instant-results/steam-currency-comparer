@@ -5,16 +5,31 @@ Updated: 2026-10-21. Current state, not a change log.
 ## Start here
 
 Read README.md and docs/USAGE.md, then inspect code and Git status.
-Integration target: `main`. Version: **0.7.0-beta** in
-steam_price_polisher/version.py.
-Substantial features increment MINOR; refinements increment PATCH; first stable
-version is 1.0.0. NBP preparation, post-load currency switching and 37-currency
-comparisons are implemented in 0.7.0-beta. Commit implementation and regression
-tests separately. Tags, releases and deployment have not been requested.
-For integration, push the branch,
-open/review/test a pull request, merge it on
-GitHub, synchronize main, then delete the confirmed merged branch remotely/locally.
+Current branch: `codex/sticky-regional-scrollbar` (uncommitted frontend work).
+Version remains **0.7.0-beta** in
+steam_price_polisher/version.py. NBP preparation, post-load currency switching and
+37-currency comparisons are complete and integrated through
+[PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1), merge
+`c9e283d`. Local and remote main were synchronized, and
+`feature/post-load-currency-switching` was deleted locally and remotely after
+verifying its published commits were present on remote main. No feature work
+remains on that branch. No tag or GitHub release was created.
+
+Use a new feature branch for subsequent feature work. Commit implementation/docs
+and added regression tests separately, push before opening a PR, and verify the
+GitHub merge before branch cleanup. Substantial features increment MINOR;
+refinements increment PATCH; first stable version is 1.0.0.
 Repository: https://github.com/instant-results/steam-currency-comparer.
+
+Current frontend work adds a blue horizontal scrollbar above each comparison,
+limited to the visible regional columns and sticky within its comparison section.
+Currency-picker scrollbars use the same blue treatment. Default baseline/regional
+amounts and sale details align vertically, with matching font metrics, including
+narrow screens. Existing arrows and catalog synchronization remain. The separate
+stationary-heading redesign has not been implemented. Frontend checks: 113 tests
+passed; isolated browser QA at 1440px/390px verified scrollbar geometry, sticky
+bounds, bidirectional synchronization and default-price alignment/typography.
+Earlier documentation closeout edits remain uncommitted alongside this work.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in
@@ -122,7 +137,7 @@ BatchPolicy defaults: metadata/price sizes 100, encoded URL budget 6,000 bytes,
 children. Configurable via JobManager(batch_policy=...). One country per request.
 Default price batches use appdetails filters=price_overview. StoreBrowse requests
 basic info and best_purchase_option. Both datasets require two requests per country
-per window cold. Retrieval fixtures exercise more than three/five countries; all 37 configured
+per window cold. Retrieval fixtures cover all 37 countries; all configured
 representatives were live-validated with public sample games on 2026-10-20.
 
 Match IDs, not array positions. Validate currencies, prices, metadata, missing and
@@ -158,8 +173,9 @@ source lines, locals and private paths. Aggregate batch logs are privacy-filtere
 
 ## Verification and measurement
 
-Many-currency stage: all 208 Python tests and 110 frontend tests pass; JS syntax
-and diff checks pass. Added coverage exercises all 37 baselines/full selections,
+0.7.0-beta integration: all 208 Python tests and 110 frontend tests passed, along
+with JS syntax and diff checks. The merged tree matches the tested branch tree.
+GitHub had no configured CI checks. Added coverage exercises all 37 baselines/full selections,
 API/HTML registry consistency, Steam amount units, cached baseline swaps, missing
 offer slots, 37-region CSV, restoration and delayed catalog scroll events. Browser
 QA passed at 1440px and 390px with synthetic prices: all-currency baseline changes,
@@ -177,18 +193,25 @@ errors occurred. Additional public-game checks validated returned currencies and
 NBP coverage for all 37 representative countries; this is not a full-list timing
 benchmark. Aggregate QA reports and screenshots remain local and ignored.
 
-One live cold run per version with the supplied wishlist capped at the same 200 IDs,
-PL vs US/DE, normal pacing. Before: 815.194 s, first row 4.897 s, 534 price attempts,
-8 HTTP 429s, 157 comparisons, 2 technical failures. After: 20.664 s, first 100 rows
-10.931 s, 6 appdetails + 6 StoreBrowse attempts, no errors, 158 comparisons. All 471
-regional current/base price pairs shared by the 157 comparable games matched.
-One wishlist and two NBP requests in each run. New best-offer comparisons: 158.
-This measures HTTP-delivered backend results, not browser paint, and is not a
-statistical speed guarantee. See docs/STEAM_PRICE_PERFORMANCE.md for full results.
-Approved research TODOs: larger batches, smaller initial windows, and reduced delivery delay.
-Third-party price providers and publishing default offers before best offers are
-rejected. Early publication of complete fresh cached rows is a potential future TODO,
-without expired-data background refresh; see docs/ROADMAP.md.
+The historical 0.6.0-beta batching benchmark compared one cold 200-game run per
+version, PL vs US/DE: 815.194 seconds before and 20.664 seconds after. It measures
+HTTP-delivered backend results, not browser paint or 37-country performance.
+See docs/STEAM_PRICE_PERFORMANCE.md for the complete protocol and limitations.
+
+## Remaining work
+
+No further implementation task beyond the current scrollbar/alignment refinement
+has been selected. See docs/ROADMAP.md for:
+
+- Loading-order dropdown alignment.
+- Loading performance research: larger batches, smaller initial windows and
+  reduced delivery delay. Early publication of complete fresh cached rows remains
+  a potential investigation, without expired-data background refresh.
+- Deferred mid-load currency switching and additional regional USD groups.
+- Authenticated owned-library QA before considering enablement.
+
+Third-party price providers and publishing default offers before best offers
+remain rejected approaches.
 
 Owned-library successful authenticated live QA remains deferred until Steam Guard/
 API-key setup. Do not claim the public wishlist benchmark validates owned-library

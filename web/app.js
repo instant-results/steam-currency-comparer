@@ -148,14 +148,27 @@ function regionalHeadings(regions) {
 function setComparisonLayout(table, regions, credits = false) {
   table.classList.toggle("comparison-matrix", true);
   table.classList.toggle("matrix-with-credits", credits);
+  table.closest?.(".comparison-area")?.classList.toggle("matrix-with-credits", credits);
   table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
   table.parentElement?.refreshScrollControls?.();
 }
 function bindComparisonScroll(prefix, wrap) {
   const previous = $(prefix + "-scroll-previous"), next = $(prefix + "-scroll-next");
+  const rail = $(prefix + "-scrollbar"), extent = $(prefix + "-scrollbar-extent");
+  let synchronizedLeft;
   const refresh = () => {
     previous.disabled = wrap.scrollLeft <= 0;
     next.disabled = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1;
+    const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    if (!Number.isFinite(overflow)) return;
+    rail.parentElement.hidden = overflow < 1;
+    // The proxy covers only the visible regional columns, but has exactly the
+    // same scroll range as the table with its pinned columns at either edge.
+    extent.style.width = `${rail.clientWidth + overflow}px`;
+    if (Math.abs(rail.scrollLeft - wrap.scrollLeft) > .5) {
+      synchronizedLeft = wrap.scrollLeft;
+      rail.scrollLeft = wrap.scrollLeft;
+    }
   };
   const move = direction => {
     const table = wrap.querySelector("table");
@@ -164,8 +177,20 @@ function bindComparisonScroll(prefix, wrap) {
   };
   previous.addEventListener("click", () => move(-1));
   next.addEventListener("click", () => move(1));
+  rail.addEventListener("scroll", () => {
+    // A delayed event from a programmatic update must not rewind a newer drag.
+    if (synchronizedLeft !== undefined && Math.abs(rail.scrollLeft - synchronizedLeft) < .5) return;
+    synchronizedLeft = undefined;
+    wrap.scrollLeft = rail.scrollLeft;
+    refresh();
+  });
   wrap.addEventListener("scroll", refresh);
   window.addEventListener?.("resize", refresh);
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(refresh);
+    observer.observe(wrap);
+    observer.observe(wrap.querySelector("table"));
+  }
   wrap.refreshScrollControls = refresh;
   refresh();
 }

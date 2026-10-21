@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Move horizontal comparison scrollbars above results, limit their tracks to the
+  visible regional columns, and keep them sticky within each comparison section.
+  Retain arrow navigation and synchronized developer/publisher catalog scrolling.
+- Apply a subtle blue treatment to comparison and currency-picker scrollbars.
+- Align baseline and converted regional game prices and sale details, using
+  matching amount typography on desktop and narrow screens.
+
 ## 0.7.0-beta — 2026-10-21
 
 - Support 37 live Steam currencies with one representative storefront each and
