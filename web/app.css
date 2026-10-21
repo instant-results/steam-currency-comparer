@@ -1386,10 +1386,6 @@ td:first-child { min-width: 0; }
   .comparison-matrix .game-name { align-items: center; }
 }
 
-.storefront-scroll-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px 0 8px; color: var(--muted); font-size: 11px; }
-.storefront-scroll-controls button { background: var(--panel); border: 1px solid var(--line); color: var(--blue-light); padding: 3px 10px; font-size: 16px; }
-.storefront-scroll-controls button:disabled { opacity: .4; }
-
 .comparison-matrix .price, .comparison-matrix .difference { font-size: 14px; white-space: normal; }
 .comparison-matrix .price, .comparison-matrix .foreign > span,
 .comparison-matrix .foreign > span > span, .comparison-matrix .offer-price {

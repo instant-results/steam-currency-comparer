@@ -153,12 +153,9 @@ function setComparisonLayout(table, regions, credits = false) {
   table.parentElement?.refreshScrollControls?.();
 }
 function bindComparisonScroll(prefix, wrap) {
-  const previous = $(prefix + "-scroll-previous"), next = $(prefix + "-scroll-next");
   const rail = $(prefix + "-scrollbar"), extent = $(prefix + "-scrollbar-extent");
   let synchronizedLeft;
   const refresh = () => {
-    previous.disabled = wrap.scrollLeft <= 0;
-    next.disabled = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1;
     const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
     if (!Number.isFinite(overflow)) return;
     rail.parentElement.hidden = overflow < 1;
@@ -170,13 +167,6 @@ function bindComparisonScroll(prefix, wrap) {
       rail.scrollLeft = wrap.scrollLeft;
     }
   };
-  const move = direction => {
-    const table = wrap.querySelector("table");
-    const step = typeof getComputedStyle === "function" ? parseFloat(getComputedStyle(table).getPropertyValue("--region-width")) || 170 : 170;
-    wrap.scrollBy({left: direction * step, behavior: "smooth"});
-  };
-  previous.addEventListener("click", () => move(-1));
-  next.addEventListener("click", () => move(1));
   rail.addEventListener("scroll", () => {
     // A delayed event from a programmatic update must not rewind a newer drag.
     if (synchronizedLeft !== undefined && Math.abs(rail.scrollLeft - synchronizedLeft) < .5) return;

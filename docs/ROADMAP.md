@@ -10,7 +10,7 @@ Version `0.7.0-beta` is integrated into `main` through
 are complete. The feature branch was deleted remotely and locally after merge
 verification. Remaining items below are separate work; no next implementation
 task beyond the current scrollbar/alignment refinement has been selected.
-The refinement is implemented, uncommitted, on `codex/sticky-regional-scrollbar`:
+The refinement is implemented on `codex/sticky-regional-scrollbar`:
 a blue top scrollbar limited to regional columns, sticky scrolling access, and
 matching baseline/regional game-price alignment and typography. The separate
 stationary-heading redesign remains outside this change.
