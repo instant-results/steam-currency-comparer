@@ -5,12 +5,14 @@ const {test} = require("node:test");
 
 // Minimal DOM contract for rendering tests; no browser or network required.
 class Element {
-  constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; }
+  constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
+  get parentElement() { return this.parent; }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
   replaceChildren(...children) { for (const child of [...this.children]) child.remove(); this.append(...children); }
-  addEventListener(name, handler) { (this.listeners ||= {})[name] = handler; }
+  addEventListener(name, handler) { const previous = this.listeners?.[name]; (this.listeners ||= {})[name] = previous ? (...args) => {previous(...args); return handler(...args);} : handler; }
+  scrollBy({left}) { this.scrollLeft += left; this.listeners?.scroll?.(); }
   setAttribute(name, value) { this.attributes[name] = value; }
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector(selector) { return (this.queries ||= {})[selector] ||= new Element("p"); }
@@ -18,8 +20,8 @@ class Element {
 }
 function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const elements = new Map(), documentEvents = new Map();
-  const get = id => { if(!elements.has(id)) elements.set(id, new Element("div")); return elements.get(id); };
-  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled)}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
+  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
@@ -47,12 +49,12 @@ const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(setIm
 const librarySnapshot = (items, state = "complete", extra = {}) => ({items, state, total:items.length, home:"pl", rates:[], warnings:[], message:"Checked owned games.", ...extra});
 const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"76561198000000000",home:"pl",regions:["us"],order:"name"},
   rates:[],home:"pl",state:"complete", ...extra});
-function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null) {
+function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null, allStorefronts = false) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
-  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], timers = new Map();
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], submissions = [], timers = new Map();
   let timerId = 0;
-  const radios = Object.keys({pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
+  const radios = Object.keys(allStorefronts ? JSON.parse(fs.readFileSync("steam_price_polisher/storefronts.json","utf8")) : {pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
   const selectors = {'[name="home"]':radios,'[name="region"]':regions,'[name="region"]:checked':regions.filter(el => el.checked)};
   const libraryFilters = ["all","fair","expensive","discounts","skipped"].map(value => { const el = new Element("button"); el.dataset.filter = value; return el; });
@@ -62,7 +64,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
     sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
     setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
     fetch:async (path, options = {}) => {
-      calls.push({path,body:options.body ? JSON.parse(options.body) : null});
+      calls.push({path,body:options.body ? JSON.parse(options.body) : null, authorization:options.headers?.Authorization});
       let data;
       if (path === "/api/creators") {
         if (registryWait) await registryWait;
@@ -73,12 +75,13 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
         data = searches.shift() || {creators: [], exact_matches: []};
         if (data.error) return {ok:false, json:async () => data};
       }
-      else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs") data = {id:"a".repeat(32),token:"b".repeat(43)};
+      else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs" || path.endsWith("/currencies")) data = submissions.shift() || {id:(path.endsWith("/currencies") ? "u" : "a").repeat(32),token:(path.endsWith("/currencies") ? "v" : "b").repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
       return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
     }
   }, ownedLibraryEnabled);
+  selectors['[data-storefront]'] = [...testContext.get("baseline-options").children,...testContext.get("comparison-options").children];
   if (loadLibrary) {
     testContext.get("library-wishlist-order").value = "name";
     testContext.run(fs.readFileSync("web/library.js", "utf8"));
@@ -87,7 +90,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
   const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
   const group = () => get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,get,calls,storage,snapshots,searches,radios,regions,timers,group,body,libraryFilters,librarySorts};
+  return {...testContext,get,calls,storage,snapshots,searches,submissions,radios,regions,timers,group,body,libraryFilters,librarySorts};
 }
 
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
@@ -394,7 +397,8 @@ test("expanded catalogs retain soundtracks, avoid duplicate examples, and refres
   const refreshed = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
   assert.equal(refreshed.mode, "products"); assert.deepEqual(refreshed.app_ids, ["1","2","3","4"]);
   assert.equal(refreshed.home, "gb");
-  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 0);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 12);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].discoveryHome, "pl");
   assert.equal(ctx.body().children.length, 4);
   assert.equal(count(), "4 products shown");
   const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
@@ -979,8 +983,8 @@ test("wishlist rows show both compact credit lists beneath artwork without chang
     ["credit-label", "Publisher: "], ["credit-names", "<script>unsafe text</script>, Co-publisher"]
   ]);
   assert.equal(credits.children[3].children.length, 0); // Untrusted credits stay text.
-  assert.equal(row.children[1].className, "price");
-  assert.equal(row.children[3].className, "difference fair");
+  assert.match(row.children[1].className, /\bprice\b/);
+  assert.match(row.children[3].className, /difference fair/);
   const csvBefore = run('buildCsv(false, "2026-10-13T11:00:00Z")');
   run('render(); sort = "name"; render(); sort = "arrival"; render();');
   assert.equal(get("rows").children[0], row);
@@ -1000,7 +1004,8 @@ test("wishlist credits handle older, missing, skipped, and pending metadata and 
     ["Developer: Unavailable", "Publisher: Known publisher"],
     ["Developer: Loading…", "Publisher: Loading…"]
   ]);
-  assert.equal(get("rows").children[1].children[1].colSpan, 3);
+  assert.equal(get("rows").children[1].children.length, 4);
+  assert.match(get("rows").children[1].children[1].className, /pinned-home/);
   run('items[0].developers = ["Learned developer"]; items[0].publishers = ["Learned publisher"]; render();');
   assert.deepEqual(credits(get("rows").children[0]), ["Developer: Learned developer", "Publisher: Learned publisher"]);
   get("search").value = "old"; run("render();");
@@ -1026,13 +1031,13 @@ test("percentage sorting differs from absolute sorting and keeps undefined perce
 });
 
 
-test("baseline selection excludes itself and caps alternatives at two", () => {
+test("baseline selection excludes itself without blocking additional alternatives", () => {
   const inputs = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; const label = new Element("label"); el.closest = () => label; return el; });
   const homes = ["pl","us","de","no","gb"].map(value => { const el = new Element("input"); el.value = value; el.checked = value === "pl"; return el; });
   inputs[1].checked = inputs[2].checked = true;
   const {get,run} = setup({'[name="region"]':inputs,'[name="home"]':homes});
   assert.equal(inputs[0].closest().hidden, true);
-  assert.equal(inputs[3].disabled, true);
+  assert.equal(inputs[3].disabled, false);
   inputs[2].checked = false; run('updateSelections({target:{name:"region"}})');
   assert.equal(inputs[3].disabled, false);
   homes[0].checked = false; homes[1].checked = true; run("updateSelections()");
@@ -1052,7 +1057,7 @@ test("GBP results and CSV keep their baseline while form selection changes", () 
   run("updateSelections(); render()");
   assert.equal(get("difference-currency").textContent, "GBP");
   assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["gb"]}})'), false);
-  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), false);
+  assert.equal(run('restoreRequest({request:{identifier:"profile",home:"gb",regions:["no","pl","us"]}})'), true);
 });
 
 
@@ -1080,12 +1085,12 @@ test("baseline conflicts restore original choices across repeated switches", () 
   assert.equal(ui.caption(), "PLN ↔ USD ↔ EUR");
 });
 
-test("explicit replacement takes precedence over hidden preferences and retains the limit", () => {
+test("explicit replacement takes precedence over hidden preferences without a two-currency cap", () => {
   const ui = selectionSetup();
   ui.chooseHome("us"); ui.chooseRegion("gb", true);
   assert.deepEqual(ui.selected(), ["de","gb"]);
   ui.chooseHome("pl"); assert.deepEqual(ui.selected(), ["de","gb"]);
-  assert.equal(ui.inputs.find(el => el.value === "us").disabled, true);
+  assert.equal(ui.inputs.find(el => el.value === "us").disabled, false);
   ui.chooseRegion("de", false); ui.chooseHome("no");
   assert.deepEqual(ui.selected(), ["gb"]);
   ui.chooseRegion("gb", false); ui.chooseHome("pl");
@@ -1156,7 +1161,7 @@ for (const kind of ["developer", "publisher"]) test(`${kind} credits switch betw
   assert.equal(table().children[1].children[0].children[1].children[0].children[0].textContent,label.toUpperCase());
   assert.equal(get("creator-columns-colgroup").children.length,5);
   assert.equal(get("creator-columns-head").children[0].children.length,5);
-  assert.equal(row().children[3].className,"catalog-foreign-price");
+  assert.match(row().children[3].className,/catalog-foreign-price/);
   assert.equal(ctx.calls.length,calls);
   const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
   restored.get("creators-tab").listeners.click(); await settle();
@@ -1169,7 +1174,7 @@ for (const kind of ["developer", "publisher"]) test(`${kind} credits switch betw
   assert.equal(get("creator-columns-head").children[0].children.length,4);
 });
 
-test("credit columns preserve pending and uncompared price spans", async () => {
+test("credit columns retain separate pinned cells for pending and uncompared prices", async () => {
   const ctx = creatorSetup();
   ctx.snapshots.push({state:"running",message:"Checking…",catalogs:{},items:[skipped("1","app_unavailable")],rates:[],warnings:[]});
   ctx.get("creators-tab").listeners.click(); await settle();
@@ -1177,8 +1182,10 @@ test("credit columns preserve pending and uncompared price spans", async () => {
   const rows = ctx.body().children;
   assert.equal(rows[0].children[1].textContent,"Unavailable");
   assert.equal(rows[1].children[1].textContent,"Loading…");
-  assert.equal(rows[0].children[2].colSpan,3);
-  assert.equal(rows[1].children[2].colSpan,3);
+  assert.equal(rows[0].children.length,5);
+  assert.equal(rows[1].children.length,5);
+  assert.match(rows[0].children[2].className,/pinned-home/);
+  assert.match(rows[1].children[4].className,/pinned-difference/);
   assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
 });
 
@@ -1418,4 +1425,379 @@ test("calculated discounts display whole percentages and approximation without c
   const csv=parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])},"pl",[])`));
   assert.equal(csv.rows[0].discount_calculated,"true");
   assert.equal(csv.rows[0].best_offer_discount_calculated,"true");
+});
+
+function chooseCurrencies(ctx, home, regions) {
+  ctx.radios.forEach(el => el.checked = el.value === home);
+  ctx.regions.forEach(el => el.checked = regions.includes(el.value));
+  ctx.run("preferredComparisons = null; updateSelections();");
+}
+async function loadedWishlist(snapshot = wishlistSnapshot()) {
+  const ctx = creatorSetup(); ctx.get("wishlist-order").value = "priority";
+  ctx.snapshots.push(snapshot); ctx.ready(); await settle(); return ctx;
+}
+const switchedWishlist = (state = "complete", extra = {}) => wishlistSnapshot(state, {
+  home:"gb", regions:["us"], items:[game("1", "Updated game")], rates:[{currency:"GBP",rate_to_pln:5,cache_status:"cache"}], ...extra});
+
+test("currency action is explicit, follows the active tab, and requires a valid changed selection", async () => {
+  const ctx = await loadedWishlist();
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, true);
+  chooseCurrencies(ctx,"gb",["us"]);
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  assert.equal(ctx.calls.filter(c => c.path.endsWith("/currencies")).length,0);
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+  chooseCurrencies(ctx,"gb",[]);
+  assert.equal(ctx.get("update-currencies").disabled,true);
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: GBP/);
+  ctx.get("wishlist-tab").listeners.click();
+  assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+});
+
+test("wishlist switch preserves rows, rates, view and CSV while pending, then publishes one snapshot", async () => {
+  const ctx = await loadedWishlist();
+  ctx.get("search").value = "game"; ctx.get("show-unavailable").checked = true;
+  ctx.run('sort = "name"; direction = -1; render();');
+  const row = ctx.get("rows").children[0], csv = ctx.run('buildCsv(false,"fixed")');
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.get("rows").children[0],row);
+  assert.equal(ctx.run('buildCsv(false,"fixed")'),csv);
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("currentRates.length"),0);
+  assert.equal(ctx.radios.every(el => el.disabled),true);
+  const submission = ctx.calls.find(c => c.path.endsWith("/currencies"));
+  assert.deepEqual(submission.body,{home:"gb",regions:["us"]});
+  assert.equal(submission.authorization,"Bearer " + "b".repeat(43));
+  assert.match(ctx.get("progress-label").textContent,/GBP against USD/);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"gb");
+  assert.equal(ctx.run("currentRates[0].currency"),"GBP");
+  assert.equal(ctx.get("search").value,"game");
+  assert.equal(ctx.get("show-unavailable").checked,true);
+  assert.equal(ctx.run("sort + direction"),"name-1");
+  assert.equal(ctx.run("job.id"),"u".repeat(32));
+  assert.equal(parseCsv(ctx.run("buildCsv(false)")).rows[0].baseline_currency,"GBP");
+  assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
+});
+
+for (const state of ["failed","cancelled"]) test(`wishlist ${state} update retains source credentials and retries the currency endpoint`, async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist(state));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("job.id"),"a".repeat(32));
+  assert.match(ctx.get("notice").textContent,/unchanged/);
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  chooseCurrencies(ctx,"no",["de"]); // Retry uses the failed request, not later sidebar edits.
+  ctx.snapshots.push(switchedWishlist());
+  ctx.get("retry").listeners.click(); await settle();
+  assert.deepEqual(ctx.calls.filter(c => c.path.endsWith("/currencies")).at(-1).body,{home:"gb",regions:["us"]});
+  assert.equal(ctx.run("resultHome"),"gb");
+});
+
+for (const status of [429,404]) test(`wishlist submission ${status} preserves results and explains the next action`, async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.submissions.push({httpStatus:status,error:"Could not update"});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("items[0].name"),"Example game");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  assert.match(ctx.get("notice").textContent,status === 404 ? /expired.*new comparison/ : /unchanged.*Retry/);
+  assert.equal(ctx.get("update-currencies").disabled,status === 404);
+});
+
+test("wishlist cancellation targets the pending job and expired pending work can retry the source", async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  await ctx.get("cancel").listeners.click();
+  const cancel = ctx.calls.find(c => c.path.endsWith("/cancel"));
+  assert.equal(cancel.path,`/api/jobs/${"u".repeat(32)}/cancel`);
+  assert.equal(cancel.authorization,"Bearer " + "v".repeat(43));
+  ctx.snapshots.push({httpStatus:404,error:"Expired"}); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.match(ctx.get("notice").textContent,/update expired/);
+  ctx.snapshots.push(switchedWishlist()); ctx.get("retry").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"gb");
+});
+
+test("wishlist reload restores displayed view and reconnects pending currencies independently", async () => {
+  const ctx = await loadedWishlist();
+  ctx.get("search").value = "game"; ctx.run('filter = "fair"; sort = "home"; direction = -1; render();');
+  chooseCurrencies(ctx,"gb",["us"]); ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),"developer",false,[switchedWishlist("running",{items:[]})]);
+  await settle();
+  assert.equal(restored.run("resultHome"),"pl");
+  assert.equal(restored.get("search").value,"game");
+  assert.equal(restored.run("filter + sort + direction"),"fairhome-1");
+  assert.equal(restored.run("selectedHome()"),"gb");
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  assert.equal(restored.calls.some(c => c.path === "/api/jobs" || c.path.endsWith("/currencies")),false);
+  restored.snapshots.push(switchedWishlist("partial",{items:[skipped("1","request_failed")]}));
+  await restored.run("pollWishlistCurrencies()");
+  assert.equal(restored.run("resultHome"),"gb");
+  assert.equal(restored.run("items[0].skipped.category"),"request_failed");
+  assert.match(restored.get("notice").textContent,/Some games/);
+  const completed = creatorSetup(Object.fromEntries(restored.storage)); await settle();
+  assert.equal(completed.run("resultHome"),"gb");
+  assert.equal(completed.calls.length,0);
+});
+
+test("wishlist currency update locks other tabs and survives unavailable session storage", async () => {
+  const ctx = await loadedWishlist();
+  ctx.run('sessionStorage.setItem = () => {throw new Error("Full");}');
+  chooseCurrencies(ctx,"gb",["us"]); ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").disabled,true);
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").length,0);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()"); await settle();
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").length,1);
+});
+
+for (const kind of ["developer","publisher"]) test(`${kind} switch preserves groups, CSV, credit mode and cursor context`, async () => {
+  const ctx = creatorSetup({},kind); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"complete",message:"Expanded",items:[game("4","Soundtrack")],rates:[],warnings:[],catalogs:{studio:{products:[{app_id:"1",name:"First"},{app_id:"4",name:"Soundtrack"}],next_start:25,has_more:false,total:25}}});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  ctx.run('downloadCsv = value => {window.csv = value;}'); ctx.get("creators-export").listeners.click();
+  const csv = ctx.run("window.csv"), row = ctx.body().children[0];
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push({state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(submitted,{home:"gb",regions:["us"],mode:"products",app_ids:["1","2","3","4"]});
+  assert.equal(ctx.body().children[0],row);
+  ctx.get("creators-export").listeners.click();
+  const withoutTime = value => parseCsv(value).rows.map(({exported_at_utc, ...row}) => row);
+  assert.deepEqual(withoutTime(ctx.run("window.csv")),withoutTime(csv));
+  assert.equal(ctx.radios.every(el => el.disabled),true);
+  const pending = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.equal(pending.home,"pl"); assert.equal(pending.currencyUpdating,true);
+  ctx.snapshots.push({state:"complete",message:"Done",items:[1,2,3,4].map(id => game(String(id),"Updated")),rates:[],warnings:[],catalogs:{}});
+  await [...ctx.timers.values()].at(-1)(); await settle();
+  const saved = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.equal(saved.home,"gb"); assert.equal(saved.catalogs[0].nextStart,25);
+  assert.equal(saved.catalogs[0].discoveryHome,"pl");
+  assert.equal(ctx.get("creator-show-credits").checked,true);
+  assert.equal(ctx.get("creator-columns-head").children[0].children.length,5);
+  assert.equal(ctx.group().children[1].children[1].children[1].hidden,false);
+  ctx.get("creators-export").listeners.click(); assert.equal(parseCsv(ctx.run("window.csv")).rows[0].baseline_currency,"GBP");
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.start,0);
+  assert.equal(ctx.body().children.length,4);
+});
+
+for (const outcome of ["failed","cancelled",429,404,"partial"]) test(`catalog update outcome ${outcome} keeps snapshots and retry coherent`, async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  chooseCurrencies(ctx,"gb",["us"]);
+  if (outcome === 429) ctx.submissions.push({httpStatus:429,error:"Slow down"});
+  else ctx.snapshots.push(outcome === 404 ? {httpStatus:404,error:"Expired"} : {state:outcome,message:"Done",items:[skipped("1","request_failed")],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.equal(saved.home,outcome === "partial" ? "gb" : "pl");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+  if (outcome !== "partial") {
+    assert.equal(saved.results.length,3);
+    assert.match(ctx.get("creators-refresh").textContent,/Retry currency/);
+    chooseCurrencies(ctx,"no",["de"]);
+    ctx.get("creators-refresh").listeners.click(); await settle();
+    assert.equal(ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body.home,"gb");
+  } else assert.equal(saved.results[0].skipped.category,"request_failed");
+});
+
+test("a hidden catalog reconnects a pending currency update while preserving its display and locking the wishlist", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push({state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  ctx.get("wishlist-tab").listeners.click();
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),"developer",false,[{state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}}]);
+  restored.ready(); await settle();
+  assert.equal(JSON.parse(restored.storage.get("polisher-developer-job")).home,"pl");
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  assert.equal(restored.get("analyze").disabled,true);
+  assert.equal(restored.calls.some(c => c.path === "/api/jobs" || c.path === "/api/creator-jobs"),false);
+  restored.snapshots.push({state:"complete",message:"Done",items:[game("1","Switched")],rates:[],warnings:[],catalogs:{}});
+  await [...restored.timers.values()].at(-1)(); await settle();
+  assert.equal(JSON.parse(restored.storage.get("polisher-developer-job")).home,"gb");
+});
+
+test("currency update reconnects after a transport failure without unlocking or replacing displayed data", async () => {
+  const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
+  ctx.run('const connectedRequest = request; let interruptPoll = true; request = async (path, options) => { if (path.endsWith("u".repeat(32)) && interruptPoll) {interruptPoll = false; throw new Error("Disconnected");} return connectedRequest(path, options); };');
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.run("resultHome"),"pl");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),true);
+  assert.match(ctx.get("notice").textContent,/Reconnecting/);
+  ctx.snapshots.push(switchedWishlist()); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("resultHome"),"gb");
+  assert.equal(ctx.run("comparisonCoordinator.busy"),false);
+});
+
+test("currency switches retain both offer sets and reuse the newly completed source on the next switch", async () => {
+  const original = offerFixture();
+  const ctx = await loadedWishlist(wishlistSnapshot("complete",{items:[original]}));
+  ctx.get("show-best-offers").checked = true; ctx.get("show-best-offers").listeners.change();
+  const changed = offerFixture(); changed.best_offers.pl.name = "Updated edition";
+  changed.best_offers.gb = {...changed.best_offers.us, price:{...changed.best_offers.us.price,region:"gb",currency:"GBP"}};
+  delete changed.best_offers.us;
+  for (const comparison of [changed.comparison,changed.best_offer_comparison]) {
+    comparison.alternatives[0].region = "gb"; comparison.alternatives[0].currency = "GBP";
+  }
+  chooseCurrencies(ctx,"pl",["gb"]);
+  ctx.snapshots.push(wishlistSnapshot("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.match(contentText(ctx.get("rows").children[0]),/Complete Edition/);
+  ctx.snapshots.push(wishlistSnapshot("complete",{items:[changed]})); await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.get("show-best-offers").checked,true);
+  assert.match(contentText(ctx.get("rows").children[0]),/Updated edition/);
+  const csv = parseCsv(ctx.run("buildCsv(false)"));
+  assert.equal(csv.rows[0].best_offer_name,"Updated edition");
+  assert.equal(csv.rows[1].storefront,"gb");
+  chooseCurrencies(ctx,"pl",["us"]); ctx.snapshots.push(wishlistSnapshot("complete",{items:[original]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const submission = ctx.calls.filter(c => c.path.endsWith("/currencies")).at(-1);
+  assert.equal(submission.path,`/api/jobs/${"u".repeat(32)}/currencies`);
+  assert.equal(submission.authorization,"Bearer " + "v".repeat(43));
+  assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
+});
+
+const storefrontRegistry = JSON.parse(fs.readFileSync("steam_price_polisher/storefronts.json", "utf8"));
+const allAlternatives = home => Object.keys(storefrontRegistry).filter(region => region !== home);
+function manyCurrencyGame(home = "pl", regions = allAlternatives(home), id = "1") {
+  const row = game(id, "Many-currency example");
+  row.comparison.home_price = {region:home,currency:storefrontRegistry[home].currency,amount:100,base_amount:200,discount_percent:50};
+  row.comparison.alternatives = regions.map((region,index) => ({region,currency:storefrontRegistry[region].currency,original_amount:index+1,amount_in_home:index+1,rate_to_home:1,base_amount:2*(index+1),discount_percent:50}));
+  row.comparison.is_fair = false;
+  row.best_offers = Object.fromEntries([home,...regions].map(region => [region,{status:"available",kind:"package",id:101,name:`Offer ${region.toUpperCase()}`,source:"cache",price:{region,currency:storefrontRegistry[region].currency,amount:1,base_amount:2,discount_percent:50},amount_in_home:1}]));
+  row.best_offer_comparison = JSON.parse(JSON.stringify(row.comparison));
+  return row;
+}
+const fullSetup = (storage = {}, kind = "developer", snapshots = []) => creatorSetup(storage,kind,false,snapshots,false,null,true);
+
+test("the full picker selects all 36 alternatives, searches without deselecting, and clears explicitly", () => {
+  const ctx = fullSetup();
+  assert.equal(ctx.get("baseline-options").children.length,37);
+  assert.equal(ctx.get("comparison-options").children.length,37);
+  ctx.get("select-all-currencies").listeners.click();
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  assert.equal(ctx.regions.find(el=>el.value==="pl").checked,false);
+  assert.match(ctx.get("selection-help").textContent,/36 of 36/);
+  ctx.get("currency-search").value = "Japan"; ctx.get("currency-search").listeners.input();
+  assert.deepEqual(ctx.get("baseline-options").children.filter(el=>!el.hidden).map(el=>el.dataset.storefront),["jp"]);
+  assert.deepEqual(ctx.get("comparison-options").children.filter(el=>!el.hidden).map(el=>el.dataset.storefront),["jp"]);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  ctx.get("clear-currencies").listeners.click();
+  assert.equal(ctx.regions.some(el=>el.checked),false);
+  ctx.get("currency-search").value = ""; ctx.get("currency-search").listeners.input();
+  assert.equal(ctx.get("comparison-options").children.filter(el=>!el.hidden).length,36);
+});
+
+test("many-currency restoration preserves order, hidden conflicts and the full selection limit", () => {
+  const ctx = fullSetup(), regions = allAlternatives("jp").reverse();
+  assert.equal(ctx.run(`restoreRequest({request:{identifier:"example",home:"jp",regions:${JSON.stringify(regions)}}})`),true);
+  assert.deepEqual(Array.from(ctx.run("lastRequest.regions")),regions);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,36);
+  assert.equal(ctx.run(`validCurrencies(${JSON.stringify({home:"jp",regions:[...regions,regions[0]]})})`),false);
+  assert.equal(ctx.run(`restoreRequest({request:{identifier:"example",home:"jp",regions:${JSON.stringify([...regions,"jp"])}}})`),false);
+  chooseCurrencies(ctx,"us",["jp","de","gb","no"]);
+  assert.equal(ctx.regions.filter(el=>el.checked).length,4);
+  ctx.run("setBusy(true)");
+  assert.equal(ctx.get("select-all-currencies").disabled,true);
+  assert.equal(ctx.get("clear-currencies").disabled,true);
+});
+
+test("regional slots and best-offer placeholders keep all headers aligned even when offers are absent", () => {
+  const ctx = setup(), regions = allAlternatives("pl"), row = manyCurrencyGame();
+  delete row.best_offers.jp;
+  ctx.run(`showBestOffers = true; lastRequest = {home:"pl",regions:${JSON.stringify(regions)}}; items = ${JSON.stringify([row])}; render();`);
+  const rendered = ctx.get("rows").children[0], foreign = rendered.children[2];
+  assert.equal(ctx.get("wishlist-storefront-headings").children.length,36);
+  assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
+  assert.equal(foreign.children[0].children.length,36);
+  assert.equal(foreign.children[1].children.length,36);
+  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].textContent),regions.map(id=>id.toUpperCase()));
+  assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Offer unavailable/);
+  assert.match(rendered.children[0].className,/pinned-game/);
+  assert.match(rendered.children[1].className,/pinned-home/);
+  assert.match(rendered.children[3].className,/pinned-difference/);
+  assert.match(contentText(rendered.children[3]),/Cheapest: USD/);
+  const csv = parseCsv(ctx.run("buildCsv(false)"));
+  assert.equal(csv.rows.length,37);
+  assert.equal(csv.rows[0].comparison_storefronts,regions.join("; "));
+  assert.equal(csv.rows.find(value=>value.storefront==="jp").best_offer_name,"");
+});
+
+test("uncompared default offers retain 36 separate best-offer slots and pinned difference", () => {
+  const ctx = setup(), row = manyCurrencyGame(); delete row.comparison; delete row.best_offer_comparison;
+  row.skipped = {category:"temporary_failure",reason:"One storefront failed"};
+  ctx.run(`showBestOffers = true; lastRequest = {home:"pl",regions:${JSON.stringify(allAlternatives("pl"))}}; items=${JSON.stringify([row])}; render();`);
+  const rendered = ctx.get("rows").children[0];
+  assert.equal(rendered.children.length,4);
+  assert.equal(rendered.children[2].children[0].children.length,36);
+  assert.equal(rendered.children[2].children[1].children.length,36);
+  assert.match(rendered.children[3].className,/pinned-difference/);
+  assert.equal(parseCsv(ctx.run("buildCsv(false)")).rows.length,37);
+});
+
+test("all-currency wishlist updates preserve the old matrix and restore pending credentials on reload", async () => {
+  const ctx = fullSetup(); ctx.get("wishlist-order").value = "priority";
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  chooseCurrencies(ctx,"jp",allAlternatives("jp"));
+  ctx.snapshots.push(wishlistSnapshot("running",{home:"jp",items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.get("wishlist-storefront-headings").children.length,2);
+  assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"2");
+  const restored = fullSetup(Object.fromEntries(ctx.storage),"developer",[wishlistSnapshot("running",{home:"jp",items:[]})]); await settle();
+  assert.equal(restored.run("resultHome"),"pl");
+  assert.equal(restored.regions.filter(el=>el.checked).length,36);
+  assert.equal(restored.run("comparisonCoordinator.busy"),true);
+  restored.snapshots.push(wishlistSnapshot("complete",{home:"jp",items:[manyCurrencyGame("jp")]}));
+  await restored.run("pollWishlistCurrencies()");
+  assert.equal(restored.run("resultHome"),"jp");
+  assert.equal(restored.get("wishlist-storefront-headings").children.length,36);
+  assert.equal(restored.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
+  const csv = parseCsv(restored.run("buildCsv(false)"));
+  assert.equal(csv.rows.length,37);
+  assert.equal(new Set(csv.rows.map(row=>row.baseline_currency)).size,1);
+  assert.equal(csv.rows[0].baseline_currency,"JPY");
+});
+
+for (const kind of ["developer","publisher"]) test(`${kind} full comparisons preserve statistics, credits, scroll synchronization and exports`, async () => {
+  const ctx = fullSetup({},kind); chooseCurrencies(ctx,"pl",allAlternatives("pl"));
+  ctx.snapshots.push({state:"complete",message:"Done",items:["1","2","3"].map(id=>manyCurrencyGame("pl",allAlternatives("pl"),id)),rates:[],warnings:[],catalogs:{}});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const header = ctx.get("creator-columns-head").children[0];
+  assert.equal(header.children[2].children[1].children.length,36);
+  assert.equal(ctx.body().children[0].children[2].children[0].children.length,36);
+  assert.equal(ctx.group().children[0].children[1].children[0].tagName,"details");
+  assert.match(ctx.group().children[0].children[1].children[0].children[0].textContent,/36 currencies/);
+  ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
+  assert.equal(ctx.body().children[0].children.length,5);
+  assert.match(ctx.body().children[0].children[2].className,/pinned-home/);
+  ctx.get(kind+"s-scroll-next").listeners.click();
+  assert.equal(ctx.get("creator-columns-scroll").scrollLeft,170);
+  assert.equal(ctx.group().children[1].children[0].scrollLeft,170);
+  // A follower event can arrive after the next animation frame advances the master.
+  ctx.get("creator-columns-scroll").scrollLeft = 175;
+  ctx.group().children[1].children[0].listeners.scroll();
+  ctx.group().children[1].children[0].listeners.scroll();
+  assert.equal(ctx.get("creator-columns-scroll").scrollLeft,175);
+  ctx.get("creator-columns-scroll").listeners.scroll();
+  assert.equal(ctx.group().children[1].children[0].scrollLeft,175);
+  const overview = ctx.group().children[0].children[1].children[0];
+  overview.open = true; overview.listeners.toggle();
+  ctx.get("creator-show-credits").listeners.change();
+  assert.equal(ctx.group().children[0].children[1].children[0].open,true);
+  ctx.run('downloadCsv = value => {window.csv = value;}'); ctx.get("creators-export").listeners.click();
+  assert.equal(parseCsv(ctx.run("window.csv")).rows.length,111);
+  const restored = fullSetup(Object.fromEntries(ctx.storage),kind); restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-show-credits").checked,true);
+  assert.equal(restored.body().children[0].children[3].children[0].children.length,36);
+  assert.equal(restored.group().children[0].children[1].children[0].open,true);
 });

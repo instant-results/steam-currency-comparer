@@ -58,6 +58,46 @@ locking and automatic work that waits for idle. User-started work reserves the
 worker immediately; catalog auto-loading has priority over a queued example.
 The server's shared worker, request pacing and job limits still apply.
 
+## Change currencies after loading
+
+After a wishlist/example or catalog comparison finishes, select a baseline and
+one or more other storefronts, then click **Update currencies** in the sidebar.
+The button is available when the valid selection differs from the displayed
+comparison. It updates the current tab. Other tabs keep their own comparisons;
+the displayed-currency captions identify the selection used by their results.
+Currency changes during loading are disabled across all tabs.
+
+The previous comparison remains visible while a separate job prepares the update.
+Its rows, headings, exchange rates, statistics and CSV remain together until the
+update reaches complete or partial completion, when the new snapshot replaces them.
+Search, filters, sorting, scroll position, expanded catalogs, credit-column mode
+and the best-offer checkbox are preserved. Search/filter/sort and CSV remain usable
+while an update runs; exported data always describes the displayed comparison.
+
+Wishlist/example updates use the retained game list and loading order without
+fetching the wishlist again. Catalog updates deduplicate all loaded product IDs
+for retrieval, then keep their original groups and display order. Both default
+prices and best offers reuse the existing cache and independent freshness rules;
+only missing or expired selected-country observations need retrieval. Even fully
+cached updates are asynchronous and show progress.
+
+Cancel returns to the previous snapshot. A failed submission, failed job or expired
+pending job also leaves it available. **Retry currency update** repeats the failed
+selection using the original source. A partial update becomes the new comparison,
+with missing prices and technical failures represented as uncompared products.
+Reload in the same browser tab restores the displayed snapshot, wishlist view
+settings and pending job credentials separately, reconnecting active updates even
+on hidden catalog tabs. If the source wishlist job has expired or the server has
+restarted, start a new wishlist comparison to change currencies; saved displayed
+results remain usable. Catalog updates can still use their locally saved IDs.
+
+Catalog page cursors retain their discovery storefront. After changing the baseline,
+**Load more** starts at the first page for the new storefront and deduplicates
+against loaded products. It resumes an existing cursor only when its storefront
+matches. The current tab's **Refresh comparisons** also preserves displayed results
+until its loaded-product update finishes; after a failed update it retries that
+selection. Adding or expanding catalogs continues using their displayed currencies.
+
 ## Owned library
 
 **Deferred / hidden by default.** This prototype is retained for internal testing;
@@ -159,7 +199,7 @@ catalogs and their pagination remain. New defaults are compared automatically.
 Older combined-tab selections migrate only when they carry an explicit developer
 or publisher selector; old homepage catalogs are not assigned a role.
 New entries use the Steam-logo fallback. Existing results retain their comparison
-currencies until **Refresh comparisons** applies the sidebar choices.
+currencies until **Update currencies** or **Refresh comparisons** applies the sidebar choices.
 
 Search remains available during comparisons, while adding, refreshing, and
 expanding catalogs wait for the active comparison to finish or be cancelled.
@@ -188,12 +228,13 @@ including paid DLC and soundtracks; they do not summarize the entire Steam catal
 Statistics use existing comparison results without additional requests, update
 when more products load, and retain the results' currencies until refreshed.
 
-One shared column-heading row sits above all creators. Desktop statistics align
-with the corresponding foreign-price columns. A 1px divider separates baseline
-and foreign prices at the middle of each game row, above the expansion arrow's
-midpoint. It extends through newly appended rows, including rows awaiting prices,
-and ends at 80% of the final row's height; that row has no bottom horizontal rule.
-Narrow screens stack statistics above tables with synchronized horizontal scrolling.
+One shared column-heading row sits above all creators. Regional headings and
+prices align in fixed-width slots and scroll together; game/title, baseline and
+DIFFERENCE stay pinned. Per-currency statistics are a separate overview, expandable
+when more than four alternatives are selected; expansion survives display changes
+and reload. Dividers mark the pinned baseline and DIFFERENCE boundaries.
+Narrow screens place identity above the price row, keeping the baseline and
+DIFFERENCE at its edges. Catalog tables use synchronized horizontal scrolling.
 The arrow is shallow, has a flat top and no visible border, and fades most strongly
 at its top center; its white label remains accessible to keyboard and screen-reader
 users. The introduction keeps the free-product note, progress status, and statistics
@@ -204,7 +245,8 @@ this tab and **02 / CURRENCIES** in the wishlist tab.
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current sidebar
 choices to all displayed creator products, including expanded pages. Changing the
-baseline restarts catalog pagination to avoid skipping region-specific entries. Use it to
+baseline preserves existing cursor context and starts new-storefront discovery from
+the first page on the next Load more. Use it to
 retry incomplete prices after cancellation or a request failure. It reuses fresh
 cached prices, so refreshing does not force a new Steam request for every price.
 Only one comparison can run per connection; creator examples wait for an active
@@ -239,9 +281,9 @@ python .\steam_wishlist_compare.py 76561198000000000
 
 ## Choose comparison storefronts
 
-The command-line prototype retains Poland (PLN) as its baseline. Select up to two
-of the United States (`us`, USD), Germany (`de`, EUR), Norway (`no`, NOK), or the
-United Kingdom (`gb`, GBP) with `--regions` after the Steam identifier:
+The command-line prototype retains Poland (PLN) as its baseline. Select one to
+36 supported comparison storefronts with `--regions` after the Steam identifier.
+For example, `us` is USD, `de` is EUR and `jp` is JPY; see [the full mapping](STOREFRONTS.md).
 
 ```powershell
 python .\steam_wishlist_compare.py 76561198000000000 --regions de
@@ -251,8 +293,8 @@ python .\steam_wishlist_compare.py 76561198000000000 --regions de us
 Without `--regions`, the default is `us de`. Selection order is preserved in
 results. Currency is determined by the storefront; arbitrary currency/region
 pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The web sidebar additionally lets any of the five supported
-storefronts become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
+cache initialization. The web sidebar additionally lets any supported
+storefront become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
 
 ## Custom Steam profile URLs
 
@@ -277,16 +319,38 @@ Do not commit a populated `.env` file. The project does not automatically load
 
 ## Rates and comparison methodology
 
-The results include each currency's NBP table A mid rate, its publication
+The results include each currency's NBP mid rate and source table, its publication
 (`effectiveDate`) date, and whether it came from a live request, cache, or stale
 cache. See the [NBP API documentation](https://api.nbp.pl/en.html). The publication
 date is separate from the time the application fetched the rate; currencies can
 have different publication dates.
 
+The backend loads both latest complete tables A and B upfront for the first
+foreign-currency comparison, using one request per table before retries. All rates
+are cached, including currencies outside the active comparison. Each table has
+its own 24-hour cache age; subsequent comparisons refresh only missing or expired
+tables, even when the currently selected rates belong to the other table. Empty
+or PLN-only requests need no NBP data and do not preload tables.
+
+Only the active comparison's requested rates are returned in its results. Later
+currency selections reuse the cached observations from either table. A table
+failure does not block a comparison whose requested rates remain available from
+live data or cache. Currency codes absent from both tables fail explicitly; this
+does not add Steam storefronts to the interface. Sources distinguish `NBP table A (mid)` and `NBP table B (mid)`.
+Use each table's actual publication date rather than assuming it was published
+today. API `mid` values already express PLN per one currency unit; do not apply
+the multiples used in some printed NBP tables.
+
 Rates are cached for 24 hours. If refresh fails and all needed rates have cached
 values, the tool can use them with a visible stale-cache warning. Existing cache
 entries migrate automatically; rates without dates are refreshed, or explicitly
 shown with an unknown date when refresh fails. Fallback does not reset cache age.
+
+Table writes are atomic: malformed responses cannot partially replace cached
+rates. A successful table remains cached even if another required table fails.
+Local network permission denial stops retrieval rather than using stale rates.
+Cache schema 9 retains each rate's source and records complete-table fetch times;
+legacy Table A rows and Steam price observations are preserved on migration.
 
 `FAIR` means the baseline price is no higher than **every** selected foreign price
 converted to the baseline currency. This is a currency-conversion indicator, not a complete
@@ -528,12 +592,12 @@ establish identical regional offers.
 
 ## Baseline and comparison selection
 
-Select a baseline in the left sidebar and up to two other currencies below it.
-The baseline cannot also be an alternative;
-once two alternatives are checked, uncheck one before choosing another. One
-alternative is allowed. Both browser controls and the server enforce the limit.
-Supported pairs are PL/PLN, US/USD, DE/EUR, NO/NOK, and GB/GBP, matching
-[Steam's supported currencies](https://partner.steamgames.com/doc/store/pricing/currencies).
+Select a baseline in the searchable sidebar and one to 36 other currencies.
+The baseline cannot also be an alternative. Select all chooses every other
+representative storefront; Clear removes alternatives. Search does not deselect
+hidden choices. The browser and API use the same 37-currency registry. See
+[supported storefronts and table behavior](STOREFRONTS.md) for the complete mapping,
+pinned columns, synchronized horizontal scrolling and amount-unit validation.
 
 NBP reports PLN per currency unit. The conversion into baseline currency B is
 `rate_to_pln[A] / rate_to_pln[B]`; PLN has an identity rate of 1. The rate notebook
@@ -553,10 +617,56 @@ use the selected baseline and alternatives.
 Changing the baseline temporarily excludes conflicting comparison currencies
 without forgetting them. Returning to a non-conflicting baseline restores them.
 Explicit checkbox edits replace the remembered choices, so a newly selected pair
-wins over a previously hidden currency and the two-alternative limit remains intact.
+wins over a previously hidden currency. Up to all 36 alternatives may be selected.
 Restoring a saved comparison replaces the preferences with that run's selections.
 Regression tests exercise actual change handlers, repeated switches, explicit
 replacement/deselection, welcome captions, busy state, and saved restoration.
+
+## Backend currency changes after loading
+
+The browser uses this endpoint for wishlist/example updates. Programmatic clients
+can submit a same-origin JSON POST to `/api/jobs/{id}/currencies` with the source
+job's bearer token and a body such as `{"home":"us","regions":["pl","gb"]}`.
+The 37 supported storefronts and one-to-36 alternatives limit apply; omitted
+`home` defaults to Poland, as for initial comparisons. Additional fields, including
+new product IDs or loading orders, are rejected.
+
+Only unexpired jobs in `complete` or `partial` state can be used. The response is
+202 with a new `id`, new `token`, and `previous_job_id`. Poll and cancel the new job
+through the existing job routes using its new token. The source result is unchanged
+and remains available until its normal expiry. Clients should keep it displayed
+while the new job runs, then adopt the new result and currencies together. A failed
+or cancelled attempt can be retried by submitting against the original completed
+job. Concurrent currency changes for the same chain of comparisons are rejected,
+even from another connection; existing owner, capacity and start-rate limits apply.
+
+The operation reuses the exact loaded selection and emitted game order. It does
+not reload a wishlist, owned library, catalog page or creator search. Catalog
+membership and page cursors are retained for that job. To combine multiple loaded
+catalog pages, the frontend submits their unique app IDs through the existing
+`/api/creator-jobs` endpoint with `mode: "products"`, home and regions; it keeps
+group membership and pagination state locally. That path also skips discovery and
+reuses the shared caches. Page offsets must retain their discovery storefront context;
+later pagination in another storefront restarts discovery and deduplicates loaded
+products. See the implemented frontend behavior in [ROADMAP.md](ROADMAP.md).
+Owned-library
+currency changes remain behind the same internal feature flag.
+
+Initial loading fetches only selected Steam countries. Successful regional default
+prices, metadata and best offers are retained in the shared cache even when another
+region prevented a game comparison. Currency-change jobs reuse fresh observations
+and fetch missing or expired observations only for their selected countries.
+Switching back to fresh cached countries makes no Steam requests. A stale best offer
+can refresh independently of a fresh default price. Exchange rates use their normal
+cache rules; a fresh Steam cache alone does not imply zero NBP requests.
+Cancellation retains completed cache writes. Normal pacing, retries, stale fallback,
+provenance and local-network-denial handling remain in effect.
+
+Loaded selection/order and profile attribution are private, expiring server memory;
+the shared cache stores no profile-to-game mapping. Server restart or source-job
+expiry requires a new initial wishlist comparison for currency changes; saved
+displayed results remain available. Catalog updates use saved loaded IDs. The
+frontend preserves view settings and restores displayed/pending state separately.
 
 ## Continuing development
 
@@ -601,8 +711,8 @@ comparisons refresh once to obtain credits.
 The web app uses one batch pipeline for every list size. Default prices come from
 appdetails price-only requests, and StoreBrowse supplies metadata and Steam's
 selected purchase option. Each request has one country context. The existing
-one-or-two comparison-currency selection limit is unchanged; the retrieval layer
-already accepts larger storefront collections.
+selection limit is now one to 36 alternatives, using one representative country
+for each of the 37 supported live currencies.
 
 Enable **Show Steam's best purchase offers alongside game prices** to reveal a
 separate set of prices and regional differences. Both datasets are fetched during
@@ -664,7 +774,8 @@ These settings are operational bounds, not published Valve guarantees.
 
 See [measured performance](STEAM_PRICE_PERFORMANCE.md) and
 [implemented design](STEAM_PRICE_BATCHING_PLAN.md). Changing loaded-result currencies
-and the loading-order dropdown adjustment remain deferred in [ROADMAP.md](ROADMAP.md).
+is implemented for completed wishlist/example and catalog comparisons; the
+loading-order dropdown adjustment remains deferred in [ROADMAP.md](ROADMAP.md).
 
 
 Discount percentage preference: retain Steam's reported percentage when it agrees

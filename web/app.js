@@ -1,9 +1,30 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let items = [], filter = "all", sort = "arrival", direction = 1, job = null, running = false, demoMode = false, timer = null, lastRequest = null;
+let displayedWishlist = null, pendingCurrency = null, retryCurrency = null, wishlistExpired = false;
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
-const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
+const storefronts = JSON.parse(document.documentElement.dataset.storefronts);
+const maxComparisons = Object.keys(storefronts).length - 1;
+function buildStorefrontControls() {
+  for (const [region, value] of Object.entries(storefronts)) {
+    for (const [target, name, type] of [["baseline-options", "home", "radio"], ["comparison-options", "region", "checkbox"]]) {
+      const label = node("label", undefined, "region"), input = node("input"), caption = node("span", value.currency);
+      input.type = type; input.name = name; input.value = region;
+      input.checked = name === "home" ? region === "pl" : ["us", "de"].includes(region);
+      caption.append(node("small", `${value.currency_name} · ${value.name}`));
+      label.dataset.storefront = region; label.append(input, caption); $(target).append(label);
+    }
+  }
+}
+function filterStorefrontControls() {
+  const query = $("currency-search").value.trim().toLocaleLowerCase();
+  for (const label of document.querySelectorAll('[data-storefront]')) {
+    const region = label.dataset.storefront, value = storefronts[region];
+    label.hidden = (label.parentElement?.id === "comparison-options" && region === selectedHome())
+      || !`${value.currency} ${value.name} ${value.currency_name}`.toLocaleLowerCase().includes(query);
+  }
+}
 // Shared scheduling for every comparison tab. Restoring jobs may register while
 // initialization is held; new jobs claim the idle worker before changing results.
 const comparisonCoordinator = (() => {
@@ -50,12 +71,39 @@ const formatProvenance = (source) => {
   return source;
 };
 function selectedHome() { return [...document.querySelectorAll('[name="home"]')].find(el => el.checked)?.value || "pl"; }
+function currencySelection() {
+  return {home: selectedHome(), regions: [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value)};
+}
+function currencyLabel(selection) {
+  return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
+}
+function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
+function preserveComparisonScroll(update) {
+  const x = window.scrollX || 0, y = window.scrollY || 0;
+  const wraps = [...document.querySelectorAll('.table-wrap')].map(el => [el, el.scrollLeft]);
+  update();
+  for (const [el, left] of wraps) el.scrollLeft = left;
+  window.scrollTo?.({left: x, top: y, behavior: "instant"});
+}
+function validCurrencies(value) {
+  return value && Object.hasOwn(storefronts, value.home) && Array.isArray(value.regions) && value.regions.length >= 1 && value.regions.length <= maxComparisons
+    && new Set(value.regions).size === value.regions.length && value.regions.every(id => Object.hasOwn(storefronts, id) && id !== value.home);
+}
+function refreshCurrencyAction() {
+  const catalog = window.creatorPane?.active;
+  const displayed = catalog ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
+  const selected = currencySelection(), button = $("update-currencies");
+  button.hidden = !displayed;
+  button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed) || (!catalog && wishlistExpired);
+  $("currency-update-help").hidden = !displayed;
+  $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " This wishlist job expired; start a new comparison above." : ""}` : "";
+}
 function updateSelections(event) {
   const home = selectedHome();
   const options = [...document.querySelectorAll('[name="region"]')];
   // Baseline conflicts hide preferences temporarily; explicit checkbox edits replace them.
   if (preferredComparisons === null || event?.target?.name === "region") {
-    preferredComparisons = options.filter(el => el.checked && el.value !== home).map(el => el.value).slice(0, 2);
+    preferredComparisons = options.filter(el => el.checked && el.value !== home).map(el => el.value);
   }
   for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
@@ -65,7 +113,7 @@ function updateSelections(event) {
     for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
   }
   for (const el of options) {
-    el.disabled = comparisonCoordinator.busy || el.value === home || (!el.checked && count >= 2);
+    el.disabled = comparisonCoordinator.busy || el.value === home;
     el.closest('label').hidden = el.value === home;
   }
   document.querySelectorAll('[name="home"]').forEach(el => el.disabled = comparisonCoordinator.busy);
@@ -74,7 +122,12 @@ function updateSelections(event) {
   $("analyze").disabled = comparisonCoordinator.busy;
   $("retry").disabled = comparisonCoordinator.busy;
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
-  $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
+  $("baseline-legend").textContent = `Baseline currency · ${storefronts[home].currency}`;
+  $("selection-help").textContent = `${count} of ${maxComparisons} selected · Choose one or more.`;
+  $("select-all-currencies").disabled = comparisonCoordinator.busy || count === maxComparisons;
+  $("clear-currencies").disabled = comparisonCoordinator.busy || count === 0;
+  filterStorefrontControls();
+  refreshCurrencyAction();
 }
 function showBaseline(home) {
   resultHome = Object.hasOwn(storefronts, home) ? home : "pl";
@@ -82,6 +135,39 @@ function showBaseline(home) {
   $("converted-heading").textContent = `CONVERTED TO ${baseline().currency}`;
   $("difference-currency").textContent = baseline().currency;
   $("expensive-label").textContent = `Pricier in ${baseline().name}`;
+}
+function comparisonRegions(values, fallbackItems = []) {
+  return values?.length ? values : fallbackItems.find(item => item.comparison)?.comparison.alternatives.map(price => price.region) || [];
+}
+function regionalHeadings(regions) {
+  return regions.map(region => {
+    const label = node("span", storefronts[region].currency, "storefront-heading");
+    label.append(node("small", storefronts[region].name)); return label;
+  });
+}
+function setComparisonLayout(table, regions, credits = false) {
+  table.classList.toggle("comparison-matrix", true);
+  table.classList.toggle("matrix-with-credits", credits);
+  table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
+  table.parentElement?.refreshScrollControls?.();
+}
+function bindComparisonScroll(prefix, wrap) {
+  const previous = $(prefix + "-scroll-previous"), next = $(prefix + "-scroll-next");
+  const refresh = () => {
+    previous.disabled = wrap.scrollLeft <= 0;
+    next.disabled = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1;
+  };
+  const move = direction => {
+    const table = wrap.querySelector("table");
+    const step = typeof getComputedStyle === "function" ? parseFloat(getComputedStyle(table).getPropertyValue("--region-width")) || 170 : 170;
+    wrap.scrollBy({left: direction * step, behavior: "smooth"});
+  };
+  previous.addEventListener("click", () => move(-1));
+  next.addEventListener("click", () => move(1));
+  wrap.addEventListener("scroll", refresh);
+  window.addEventListener?.("resize", refresh);
+  wrap.refreshScrollControls = refresh;
+  refresh();
 }
 function gameArtwork(appId) {
   const frame = node("span", undefined, "game-artwork");
@@ -108,7 +194,7 @@ function showProfile(profile) {
 function restoreRequest(saved) {
   const request = saved?.request;
   const order = request?.order || "priority";
-  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
+  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > maxComparisons || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
   preferredComparisons = [...request.regions];
   lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl", order};
   document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
@@ -157,6 +243,65 @@ function percentageLabel(value) {
   return `${rounded > 0 ? "+" : rounded < 0 ? "−" : ""}${Math.abs(rounded).toFixed(1)}%`;
 }
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
+function saveWishlist() {
+  if (!displayedWishlist) return;
+  saveJob({...job, request: lastRequest, displayed: displayedWishlist, pending: pendingCurrency, retryCurrency, expired: wishlistExpired,
+    view: {search: $("search").value, filter, sort, direction, showUnavailable: $("show-unavailable").checked}});
+}
+function applyWishlistSnapshot(data, body) {
+  lastRequest = body; demoMode = body.identifier === "example";
+  showBaseline(body.home); items = data.items; showRates(data.rates);
+  $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison";
+  $("wishlist-currencies").textContent = `Displayed: ${currencyLabel(body)}`;
+  $("wishlist-currencies").hidden = false;
+  render();
+}
+async function updateWishlistCurrencies(selection = currencySelection()) {
+  if (!displayedWishlist || !validCurrencies(selection) || wishlistExpired || !comparisonCoordinator.claim("wishlist")) return;
+  retryCurrency = selection;
+  pendingCurrency = {request: {...displayedWishlist.request, ...selection}, job: null};
+  setBusy(true); $("cancel").disabled = true; status("UPDATING CURRENCIES", true);
+  $("progress").value = 0; $("progress-label").textContent = `Updating to ${currencyLabel(selection)}… Displayed results remain available.`;
+  notice(""); saveWishlist();
+  try {
+    pendingCurrency.job = await request(`/api/jobs/${job.id}/currencies`, {method: "POST", body: JSON.stringify(selection), headers: {Authorization: `Bearer ${job.token}`}});
+    saveWishlist(); $("cancel").disabled = false; pollWishlistCurrencies();
+  } catch (error) {
+    pendingCurrency = null; wishlistExpired = error.status === 404;
+    setBusy(false); status("UPDATE COULD NOT START");
+    notice(wishlistExpired ? "This wishlist comparison expired. Start a new comparison above to change currencies. Displayed results are still available." : `${error.message} Displayed results are unchanged. Retry the currency update.`, true);
+    $("retry").textContent = wishlistExpired ? "Reload wishlist ↻" : "Retry currency update ↻"; saveWishlist();
+  }
+}
+async function pollWishlistCurrencies() {
+  const pending = pendingCurrency;
+  if (!pending?.job) return;
+  try {
+    const data = await request(`/api/jobs/${pending.job.id}`, {headers: {Authorization: `Bearer ${pending.job.token}`}});
+    const terminal = ["complete", "partial", "cancelled", "failed"].includes(data.state);
+    $("progress-label").textContent = `Updating to ${currencyLabel(pending.request)}: ${data.message}`;
+    $("progress").max = Math.max(data.total, 1); $("progress").value = data.items.length;
+    if (data.state === "cancelling") { $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; }
+    if (!terminal) { timer = setTimeout(pollWishlistCurrencies, 1200); return; }
+    preserveComparisonScroll(() => {
+      pendingCurrency = null;
+      if (["complete", "partial"].includes(data.state)) {
+        job = pending.job; displayedWishlist = {request: pending.request, data}; retryCurrency = null;
+        applyWishlistSnapshot(data, pending.request);
+        notice(data.state === "partial" ? "Currencies updated. Some games could not be compared; retry to check missing prices." : (data.warnings || []).join(" "));
+      } else notice(`${data.error || (data.state === "cancelled" ? "Currency update cancelled." : "Currency update failed.")} Displayed results are unchanged. Retry the currency update.`, data.state === "failed");
+      setBusy(false); status(data.state.toUpperCase());
+      $("retry").textContent = retryCurrency ? "Retry currency update ↻" : "Retry comparison ↻";
+      saveWishlist();
+    });
+  } catch (error) {
+    if (error.status === 404) {
+      pendingCurrency = null; setBusy(false); status("UPDATE EXPIRED");
+      notice("The currency update expired. Displayed results are unchanged. Retry the currency update.", true);
+      $("retry").textContent = "Retry currency update ↻"; saveWishlist();
+    } else { notice("Connection interrupted. Reconnecting to the currency update; displayed results remain available…", true); timer = setTimeout(pollWishlistCurrencies, 4000); }
+  }
+}
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
 function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
@@ -183,21 +328,17 @@ function offerPriceBlock(offer, converted, currency) {
   else block.append(saleNote(offer.price, offer.price.currency));
   return block;
 }
-function appendBestOffers(tr, item, home) {
+function appendBestOffers(tr, item, home, regions) {
   if (!showBestOffers || item.pending) return;
   const offers = item.best_offers, best = item.best_offer_comparison;
   if (!offers) { tr.children[0].append(node("small", "Refresh comparison to load Steam best offers.", "best-offer")); return; }
-  if (!item.comparison) {
-    tr.children[1].remove();
-    tr.append(node("td", item.skipped?.reason || "Default offer unavailable", "skip-reason"), node("td"), node("td"));
-  }
   const currency = storefronts[home].currency === "PLN" ? "zł" : storefronts[home].currency;
   tr.children[1].append(offerPriceBlock(offers[home], offers[home]?.price?.amount, currency));
   const alternatives = node("div", undefined, "foreign");
-  for (const [region, offer] of Object.entries(offers)) {
-    if (region === home) continue;
+  for (const region of regions) {
+    const offer = offers[region];
     const converted = best?.alternatives.find(p => p.region === region);
-    const block = offerPriceBlock(offer, offer.amount_in_home ?? converted?.amount_in_home ?? offer.price?.amount, (offer.amount_in_home != null || converted) ? currency : offer.price?.currency);
+    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount, (offer?.amount_in_home != null || converted) ? currency : offer?.price?.currency);
     block.insertBefore(node("small", region.toUpperCase()), block.children[0]);
     alternatives.append(block);
   }
@@ -212,7 +353,9 @@ function appendBestOffers(tr, item, home) {
   } else delta.append(node("small", "Not all storefront offers could be compared"));
   tr.children[3].append(delta);
 }
-function comparisonRow(item, resultHome, showWishlistCredits = false) {
+function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null) {
+  const regions = selectedRegions?.length ? selectedRegions : item.comparison?.alternatives.map(p => p.region)
+    || Object.keys(item.best_offers || {}).filter(region => region !== resultHome);
   const baseline = () => storefronts[resultHome];
   const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
   const diff = item => item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home));
@@ -244,7 +387,9 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     if (homeProvenance) home.title = homeProvenance;
     home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
     const td = node("td"), alternatives = node("div", undefined, "foreign");
-    for (const p of c.alternatives) {
+    for (const region of regions) {
+      const p = c.alternatives.find(value => value.region === region);
+      if (!p) { alternatives.append(node("span", "Price unavailable")); continue; }
       const price = node("span");
       price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
       const altProvenance = formatProvenance(p.source);
@@ -256,11 +401,22 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
     percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
     difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
-  } else { const td = node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
-  appendBestOffers(tr, item, resultHome);
+    const cheapest = c.alternatives.reduce((best, value) => value.amount_in_home < best.amount_in_home ? value : best);
+    difference.append(node("small", `Cheapest: ${cheapest.currency} · ${storefronts[cheapest.region]?.name || cheapest.region.toUpperCase()}`, "cheapest-storefront"));
+  } else {
+    tr.append(node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"));
+    const foreign = node("td"), placeholders = node("div", undefined, "foreign");
+    for (const region of regions) placeholders.append(node("span", item.pending ? "Waiting…" : "Not compared", "skip-reason"));
+    foreign.append(placeholders); tr.append(foreign, node("td", item.pending ? "Waiting…" : "Not compared", "skip-reason"));
+  }
+  appendBestOffers(tr, item, resultHome, regions);
+  for (const [index, name] of [[0,"pinned-game"],[1,"pinned-home"],[2,"scrolling-storefronts"],[3,"pinned-difference"]]) tr.children[index].className = `${tr.children[index].className || ""} ${name}`.trim();
   return tr;
 }
 function render() {
+  const regions = comparisonRegions(lastRequest?.regions, items);
+  setComparisonLayout($("wishlist-table"), regions);
+  $("wishlist-storefront-headings").replaceChildren(...regionalHeadings(regions));
   $("export-csv").disabled = !items.length;
   $("filter-help").hidden = filter !== "skipped";
   const comparable = items.filter(item => item.comparison);
@@ -283,10 +439,10 @@ function render() {
   for (const id of rowCache.keys()) if (!currentIds.has(id)) rowCache.delete(id);
   let position = 0;
   for (const item of visible) {
-    const signature = resultHome + showBestOffers + JSON.stringify(item);
+    const signature = resultHome + regions.join(",") + showBestOffers + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
-    const tr = comparisonRow(item, resultHome, true);
+    const tr = comparisonRow(item, resultHome, true, regions);
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
     rowCache.set(item.app_id, cached);
@@ -308,6 +464,7 @@ function render() {
   document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
     if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
   });
+  saveWishlist();
 }
 function formatRateTime(isoString) {
   if (!isoString) return "";
@@ -343,6 +500,8 @@ async function start(body) {
   automaticExampleDismissed = true;
   comparisonCoordinator.cancel("wishlist-example");
   if (!comparisonCoordinator.claim("wishlist")) { notice("A comparison is running. Wait for it or cancel it on its tab.", true); return; }
+  displayedWishlist = null; pendingCurrency = null; retryCurrency = null; wishlistExpired = false;
+  $("wishlist-currencies").hidden = true; $("retry").textContent = "Retry comparison ↻";
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
   try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
@@ -357,6 +516,11 @@ async function poll() {
     $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison";
     showBaseline(data.home || "pl"); items = data.items; showRates(data.rates); render();
     const complete = ["complete", "partial", "cancelled", "failed"].includes(data.state);
+    if (["complete", "partial"].includes(data.state) && lastRequest && items.length) {
+      displayedWishlist = {request: {...lastRequest, home: data.home || lastRequest.home || "pl"}, data};
+      $("wishlist-currencies").textContent = `Displayed: ${currencyLabel(displayedWishlist.request)}`;
+      $("wishlist-currencies").hidden = false; saveWishlist();
+    }
     status(data.state.toUpperCase(), !complete); if (data.state === "cancelling") { $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; } $("progress-label").textContent = data.message; $("progress").max = Math.max(data.total, 1); $("progress").value = data.items.length;
     if(data.error) notice(data.error, true); else if(data.state === "partial") notice("Some games could not be compared because a request failed. Retry to reuse completed prices and check the remaining games."); else if(data.warnings.length) notice(data.warnings.join(" ")); else if(data.state === "cancelled") notice("Comparison cancelled. Completed regional prices are cached for your next attempt."); else if(demoMode && complete) notice("Example comparison: showing live Steam prices and official NBP exchange rates for a curated sample of games. Run your own wishlist for personal data."); else notice("");
     if(complete) { setBusy(false); if(!items.length) { $("empty").querySelector("h3").textContent = data.state === "cancelled" ? "Comparison cancelled." : "No results this time."; $("empty").querySelector("p").textContent = demoMode ? "Use Retry comparison to check the example again, or enter your public Steam profile above." : "Check your profile and make sure your wishlist is public, then try again."; } } else timer = setTimeout(poll, 1200);
@@ -453,12 +617,30 @@ function downloadCsv(contents, filename) {
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
-$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
+$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
+buildStorefrontControls();
+bindComparisonScroll("wishlist", $("wishlist-table").parentElement || $("wishlist-scroll"));
+bindComparisonScroll("library", $("library-table").parentElement || $("library-scroll"));
+$("currency-search").addEventListener("input", filterStorefrontControls);
+for (const [id, checked] of [["select-all-currencies", true], ["clear-currencies", false]]) {
+  $(id).addEventListener("click", () => {
+    if (comparisonCoordinator.busy) return;
+    document.querySelectorAll('[name="region"]').forEach(el => el.checked = checked && el.value !== selectedHome());
+    updateSelections({target: {name: "region"}});
+  });
+}
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();
 comparisonCoordinator.subscribe(updateSelections);
-$("cancel").addEventListener("click", async () => { if(!job) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${job.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${job.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
-$("retry").addEventListener("click", () => { if(lastRequest) start(lastRequest); });
+$("update-currencies").addEventListener("click", () => {
+  if (window.creatorPane?.active) window.creatorPane.updateCurrencies();
+  else if (!window.libraryPane?.active) updateWishlistCurrencies();
+});
+$("cancel").addEventListener("click", async () => { const target = pendingCurrency?.job || job; if(!target) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${target.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${target.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
+$("retry").addEventListener("click", () => {
+  if (displayedWishlist && !wishlistExpired) updateWishlistCurrencies(retryCurrency || {home: displayedWishlist.request.home, regions: displayedWishlist.request.regions});
+  else if(lastRequest) start(wishlistExpired && retryCurrency ? {...lastRequest, ...retryCurrency} : lastRequest);
+});
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
 $("show-best-offers").checked = showBestOffers;
@@ -511,6 +693,25 @@ if (document.modelContext?.registerTool) {
 try {
   const saved = JSON.parse(sessionStorage.getItem("polisher-job") || "null");
   if(saved && /^[A-Za-z0-9_-]{32}$/.test(saved.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.token)) {
-    job = {id: saved.id, token: saved.token}; if (!restoreRequest(saved)) showProfile(null); setBusy(true); status("RECONNECTING", true); poll();
+    job = {id: saved.id, token: saved.token};
+    if (saved.displayed && validCurrencies(saved.displayed.request) && typeof saved.displayed.request.identifier === "string"
+        && Array.isArray(saved.displayed.data?.items) && Array.isArray(saved.displayed.data?.rates)) {
+      restoreRequest({request: saved.displayed.request});
+      displayedWishlist = saved.displayed; wishlistExpired = saved.expired === true;
+      retryCurrency = validCurrencies(saved.retryCurrency) ? saved.retryCurrency : null;
+      const view = saved.view || {};
+      $("search").value = typeof view.search === "string" ? view.search : "";
+      filter = ["all", "fair", "expensive", "discounts", "skipped"].includes(view.filter) ? view.filter : "all";
+      sort = ["arrival", "name", "home", "percentage", "difference"].includes(view.sort) ? view.sort : "arrival";
+      direction = view.direction === -1 ? -1 : 1; $("show-unavailable").checked = view.showUnavailable === true;
+      document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle("active", el.dataset.filter === filter); el.setAttribute("aria-pressed", String(el.dataset.filter === filter)); });
+      applyWishlistSnapshot(displayedWishlist.data, displayedWishlist.request);
+      if (saved.pending && validCurrencies(saved.pending.request) && /^[A-Za-z0-9_-]{32}$/.test(saved.pending.job?.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.pending.job?.token)) {
+        pendingCurrency = saved.pending; retryCurrency = {home: pendingCurrency.request.home, regions: pendingCurrency.request.regions};
+        preferredComparisons = [...pendingCurrency.request.regions];
+        document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === pendingCurrency.request.home);
+        setBusy(true); status("RECONNECTING", true); saveWishlist(); pollWishlistCurrencies();
+      } else { setBusy(false); status(displayedWishlist.data.state.toUpperCase()); $("retry").textContent = wishlistExpired ? "Reload wishlist ↻" : retryCurrency ? "Retry currency update ↻" : "Retry comparison ↻"; saveWishlist(); }
+    } else { if (!restoreRequest(saved)) showProfile(null); setBusy(true); status("RECONNECTING", true); poll(); }
   }
 } catch (_) { saveJob(null); }

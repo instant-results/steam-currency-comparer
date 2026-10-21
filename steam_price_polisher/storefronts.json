@@ -1,0 +1,187 @@
+{
+  "pl": {
+    "currency": "PLN",
+    "name": "Poland",
+    "currency_name": "Polish złoty"
+  },
+  "us": {
+    "currency": "USD",
+    "name": "United States",
+    "currency_name": "US dollar"
+  },
+  "de": {
+    "currency": "EUR",
+    "name": "Germany",
+    "currency_name": "Euro"
+  },
+  "no": {
+    "currency": "NOK",
+    "name": "Norway",
+    "currency_name": "Norwegian krone"
+  },
+  "gb": {
+    "currency": "GBP",
+    "name": "United Kingdom",
+    "currency_name": "British pound"
+  },
+  "ae": {
+    "currency": "AED",
+    "name": "United Arab Emirates",
+    "currency_name": "UAE dirham"
+  },
+  "au": {
+    "currency": "AUD",
+    "name": "Australia",
+    "currency_name": "Australian dollar"
+  },
+  "br": {
+    "currency": "BRL",
+    "name": "Brazil",
+    "currency_name": "Brazilian real"
+  },
+  "ca": {
+    "currency": "CAD",
+    "name": "Canada",
+    "currency_name": "Canadian dollar"
+  },
+  "ch": {
+    "currency": "CHF",
+    "name": "Switzerland",
+    "currency_name": "Swiss franc"
+  },
+  "cl": {
+    "currency": "CLP",
+    "name": "Chile",
+    "currency_name": "Chilean peso"
+  },
+  "cn": {
+    "currency": "CNY",
+    "name": "China",
+    "currency_name": "Chinese yuan"
+  },
+  "co": {
+    "currency": "COP",
+    "name": "Colombia",
+    "currency_name": "Colombian peso"
+  },
+  "cr": {
+    "currency": "CRC",
+    "name": "Costa Rica",
+    "currency_name": "Costa Rican colón"
+  },
+  "hk": {
+    "currency": "HKD",
+    "name": "Hong Kong",
+    "currency_name": "Hong Kong dollar"
+  },
+  "il": {
+    "currency": "ILS",
+    "name": "Israel",
+    "currency_name": "Israeli new shekel"
+  },
+  "id": {
+    "currency": "IDR",
+    "name": "Indonesia",
+    "currency_name": "Indonesian rupiah"
+  },
+  "in": {
+    "currency": "INR",
+    "name": "India",
+    "currency_name": "Indian rupee"
+  },
+  "jp": {
+    "currency": "JPY",
+    "name": "Japan",
+    "currency_name": "Japanese yen"
+  },
+  "kr": {
+    "currency": "KRW",
+    "name": "South Korea",
+    "currency_name": "South Korean won"
+  },
+  "kw": {
+    "currency": "KWD",
+    "name": "Kuwait",
+    "currency_name": "Kuwaiti dinar"
+  },
+  "kz": {
+    "currency": "KZT",
+    "name": "Kazakhstan",
+    "currency_name": "Kazakhstani tenge"
+  },
+  "mx": {
+    "currency": "MXN",
+    "name": "Mexico",
+    "currency_name": "Mexican peso"
+  },
+  "my": {
+    "currency": "MYR",
+    "name": "Malaysia",
+    "currency_name": "Malaysian ringgit"
+  },
+  "nz": {
+    "currency": "NZD",
+    "name": "New Zealand",
+    "currency_name": "New Zealand dollar"
+  },
+  "pe": {
+    "currency": "PEN",
+    "name": "Peru",
+    "currency_name": "Peruvian sol"
+  },
+  "ph": {
+    "currency": "PHP",
+    "name": "Philippines",
+    "currency_name": "Philippine peso"
+  },
+  "qa": {
+    "currency": "QAR",
+    "name": "Qatar",
+    "currency_name": "Qatari riyal"
+  },
+  "ru": {
+    "currency": "RUB",
+    "name": "Russia",
+    "currency_name": "Russian rouble"
+  },
+  "sa": {
+    "currency": "SAR",
+    "name": "Saudi Arabia",
+    "currency_name": "Saudi riyal"
+  },
+  "sg": {
+    "currency": "SGD",
+    "name": "Singapore",
+    "currency_name": "Singapore dollar"
+  },
+  "th": {
+    "currency": "THB",
+    "name": "Thailand",
+    "currency_name": "Thai baht"
+  },
+  "tw": {
+    "currency": "TWD",
+    "name": "Taiwan",
+    "currency_name": "New Taiwan dollar"
+  },
+  "ua": {
+    "currency": "UAH",
+    "name": "Ukraine",
+    "currency_name": "Ukrainian hryvnia"
+  },
+  "uy": {
+    "currency": "UYU",
+    "name": "Uruguay",
+    "currency_name": "Uruguayan peso"
+  },
+  "vn": {
+    "currency": "VND",
+    "name": "Vietnam",
+    "currency_name": "Vietnamese dong"
+  },
+  "za": {
+    "currency": "ZAR",
+    "name": "South Africa",
+    "currency_name": "South African rand"
+  }
+}

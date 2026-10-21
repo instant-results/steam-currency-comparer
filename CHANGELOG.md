@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.7.0-beta — 2026-10-21
+
+- Support 37 live Steam currencies with one representative storefront each and
+  one to 36 alternatives. Share the registry between configuration, API and browser;
+  add a searchable picker with Select all/Clear. Keep US as the USD representative.
+- Pin game/title, baseline and DIFFERENCE while regional columns scroll in aligned
+  slots. Synchronize catalog scrolling, retain separate slots for missing best
+  offers, and put large catalog statistics in an expandable overview. On narrow
+  screens, keep identity above the pinned baseline/difference price edges.
+- Validate the additional countries and NBP coverage with public game samples;
+  preserve Steam amount scaling, pacing, caching, post-load updates and CSV schema.
+
+- Prepare the exchange-rate backend for post-load currency switching: retrieve
+  complete NBP Tables A and B upfront, refreshing only missing or expired tables.
+  Cache every validated table rate, including unselected currencies.
+- Preserve table-specific source, publication date and retrieval age through
+  live/cache/stale results. Commit table observations atomically and migrate
+  existing caches to schema 9 without changing Steam price data.
+- Keep successful table retrievals when the other table fails, and allow comparisons
+  whose required rates are available to proceed. Reject
+  malformed tables and stop on local network denial.
+- Add a backend currency-change endpoint for completed comparisons. Reuse the
+  loaded games, their order and catalog membership without repeating discovery;
+  retrieve only missing or expired selected-country observations using the existing
+  default-price and best-offer caches. Keep the original result available while
+  a separate, cancellable job computes the new comparison.
+- Keep capability-token access, shared worker limits and per-comparison currency
+  change locking. Additional supported storefronts are listed in docs/STOREFRONTS.md.
+- Add explicit post-load **Update currencies** for the current wishlist/example,
+  Developers or Publishers tab. Retain the displayed comparison during updates,
+  swap complete/partial snapshots together and preserve it on failure/cancellation.
+- Preserve view settings, catalog groups and storefront-specific pagination context.
+  Restore displayed and pending state separately on reload; keep CSV tied to the
+  displayed currencies and lock competing starts until updates finish.
+
 ## 0.6.2-beta — 2026-10-20
 
 - Automatically compare the seven-game example on a fresh visit and remove the

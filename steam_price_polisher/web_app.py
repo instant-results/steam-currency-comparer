@@ -6,6 +6,7 @@ job state is in memory and expires after one hour. Regional price cache persists
 from __future__ import annotations
 
 import hmac
+from html import escape
 import json
 import os
 import queue
@@ -13,6 +14,7 @@ import re
 import secrets
 import threading
 import time
+from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +22,7 @@ from urllib.parse import urlsplit
 
 from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
-from .configuration import ComparisonConfig
+from .configuration import ComparisonConfig, MAX_COMPARISONS, STOREFRONTS
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
 from .http_client import HttpClientError, UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
@@ -91,8 +93,8 @@ def validate_request(payload):
         if not re.fullmatch(pattern, url.path):
             raise InputError("Use a Steam /profiles/ or /id/ profile URL.")
     regions = payload["regions"]
-    if not isinstance(regions, list) or not 1 <= len(regions) <= 2:
-        raise InputError("Choose one or two comparison storefronts.")
+    if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_COMPARISONS:
+        raise InputError(f"Choose between one and {MAX_COMPARISONS} comparison storefronts.")
     try:
         config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     except ValueError as exc:
@@ -124,7 +126,7 @@ def validate_creator_request(payload):
         raise InputError("Choose featured games or a catalog.")
     regions = payload["regions"]
     if not isinstance(regions, list):
-        raise InputError("Choose one or two comparison storefronts.")
+        raise InputError(f"Choose between one and {MAX_COMPARISONS} comparison storefronts.")
     config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     source = {"mode": payload["mode"]}
     if payload["mode"] == "products":
@@ -162,6 +164,12 @@ class Job:
         self.identifier, self.config, self.owner, self.order = identifier, config, owner, order
         self.creator_request = creator_request
         self.library = library
+        # Private, expiring discovery state; never saved to the shared price cache.
+        self.loaded_items = None
+        self.creator_membership = {}
+        self.catalog_warnings = []
+        self.comparison_id = self.id
+        self.previous_job_id = None
         self.cancel = threading.Event()
         self.lock = threading.Lock()
         self.updated = time.monotonic()
@@ -227,11 +235,23 @@ class JobManager:
             self.thread = threading.Thread(target=self._work, daemon=True, name="wishlist-worker")
             self.thread.start()
 
-    def submit(self, identifier, config, owner, order="priority", creator_request=None, library=False):
+    def submit(self, identifier, config, owner, order="priority", creator_request=None, library=False,
+               *, source_job=None):
         if order not in WISHLIST_ORDERS:
             raise ValueError(f"Unsupported wishlist order: {order!r}")
         with self.lock:
             now = time.monotonic()
+            if source_job is not None:
+                if (self.jobs.get(source_job.id) is not source_job or
+                        now - source_job.updated >= 3600):
+                    raise InputError("This comparison is unavailable or has expired.")
+                if source_job.data["state"] not in {"complete", "partial"} or source_job.loaded_items is None:
+                    raise BusyError("Wait for the comparison to finish before changing currencies.")
+                if any(job.comparison_id == source_job.comparison_id and job.data["state"] not in TERMINAL
+                       for job in self.jobs.values()):
+                    raise BusyError("A currency change is already running for this comparison.")
+                identifier = source_job.data["profile"]
+                order, creator_request, library = source_job.order, source_job.creator_request, source_job.library
             self.jobs = {key: job for key, job in self.jobs.items()
                          if job.data["state"] not in TERMINAL or now - job.updated < 3600}
             if any(job.owner == owner and job.data["state"] not in TERMINAL for job in self.jobs.values()):
@@ -242,10 +262,24 @@ class JobManager:
             if len(self.jobs) >= self.max_jobs or self.queue.full():
                 raise BusyError("The comparison service is busy. Please try again later.")
             job = Job(identifier, config, owner, order, creator_request, library)
+            if source_job is not None:
+                job.loaded_items = source_job.loaded_items
+                job.creator_membership = deepcopy(source_job.creator_membership)
+                job.catalog_warnings = list(source_job.catalog_warnings)
+                job.comparison_id = source_job.comparison_id
+                job.previous_job_id = source_job.id
+                job.data.update(previous_job_id=source_job.id, total=len(job.loaded_items),
+                                message="Queued — updating comparison currencies.")
+                if creator_request:
+                    job.data["catalogs"] = deepcopy(source_job.data["catalogs"])
             self.jobs[job.id] = job
             emit("job_queued", job_id=job.id)
             self.queue.put_nowait(job)
             return job
+
+    def change_currencies(self, source_job, config, owner):
+        """Queue a new comparison of a completed job's exact loaded selection."""
+        return self.submit("", config, owner, source_job=source_job)
 
     def get(self, job_id, token):
         with self.lock:
@@ -311,7 +345,8 @@ class JobManager:
                 job.identifier = ""  # Attribution remains only in the private, expiring result.
 
     def _analyze(self, job):
-        job.update(state="loading", message="Loading owned library…" if job.library else "Loading catalog products…" if job.creator_request else "Loading public wishlist…")
+        job.update(state="loading", message="Updating comparison currencies…" if job.previous_job_id else
+                   "Loading owned library…" if job.library else "Loading catalog products…" if job.creator_request else "Loading public wishlist…")
         def sleep(seconds):
             if job.cancel.wait(seconds):
                 raise Cancelled()
@@ -324,7 +359,14 @@ class JobManager:
         steam = SteamClient(steam_http, request_delay=0, web_api_key=self.api_key)
         creator_membership = {}
         catalog_warnings = []
-        if job.creator_request:
+        if job.previous_job_id is not None:
+            wishlist = job.loaded_items
+            creator_membership = job.creator_membership
+            catalog_warnings = job.catalog_warnings
+            if not wishlist:
+                job.update(state="complete", message="No loaded products to compare.")
+                return
+        elif job.creator_request:
             job.update(message="Loading catalog…")
             catalogs = {}
             if job.creator_request["mode"] == "products":
@@ -364,6 +406,7 @@ class JobManager:
                 job.update(state="failed", error=f"This version supports up to {self.max_games} owned games per comparison. This library exceeds that limit; no partial library was compared.", error_code="library_limit")
                 return
             if not wishlist:
+                job.loaded_items = ()
                 job.update(state="complete", message="Steam returned an empty library. Free-to-play games are excluded.")
                 return
         elif job.identifier == "example":
@@ -395,9 +438,14 @@ class JobManager:
             if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
                 raise ValueError("Invalid app ID")
         if job.creator_request and not wishlist:
+            job.loaded_items = ()
+            job.catalog_warnings = list(catalog_warnings)
             job.update(state="complete", total=0, warnings=catalog_warnings,
                        message="No individual products found on this catalog page. Try Load more if available, or check the exact name.")
             return
+        job.loaded_items = tuple(wishlist)
+        job.creator_membership = creator_membership
+        job.catalog_warnings = list(catalog_warnings)
         job.update(total=len(wishlist), message="Getting exchange rates…")
         cache = SQLiteCache(self.data_directory / "cache.sqlite3")
         rates = CachedExchangeRateProvider(NbpExchangeRateProvider(client()), cache).get_rate_details(tuple(dict.fromkeys((*job.config.currencies, job.config.home.currency))))
@@ -427,6 +475,7 @@ class JobManager:
             wishlist,
             rates_to_baseline(rates, job.config.home.currency),
             order=job.order,
+            preserve_order=job.previous_job_id is not None,
         ):
             job.check_cancelled()
             item = asdict(progress)
@@ -449,6 +498,9 @@ class JobManager:
             warnings.append("Some Steam best purchase offers could not be retrieved. Default game comparisons remain available.")
             job.update(warnings=warnings)
         noun = "products" if job.creator_request else "games"
+        # Keep the emitted order even when new country metadata has different names.
+        originals = {item.app_id: item for item in wishlist}
+        job.loaded_items = tuple(originals[item["app_id"]] for item in job.snapshot()["items"])
         job.update(state="partial" if partial else "complete", message=f"Checked {len(wishlist)} {noun}.")
 
 
@@ -480,6 +532,7 @@ class WebApplication:
             content = (self.assets / filename).read_bytes()
             if filename == "index.html":
                 content = content.replace(b"{{APP_VERSION}}", __version__.encode("ascii"))
+                content = content.replace(b"{{STOREFRONTS}}", escape(json.dumps(dict(STOREFRONTS)), quote=True).encode("utf-8"))
                 content = content.replace(b"{{OWNED_LIBRARY_ENABLED}}", b"true" if self.owned_library_enabled else b"false")
                 if self.owned_library_enabled:
                     content = content.replace(b'<button id="library-tab" hidden', b'<button id="library-tab"')
@@ -511,7 +564,7 @@ class WebApplication:
                         raise ValueError("Choose developers or publishers.")
                     term = validate_search_term(payload["query"])
                     home = payload["home"]
-                    if not isinstance(home, str) or home not in {"pl", "us", "de", "no", "gb"}:
+                    if not isinstance(home, str) or home not in STOREFRONTS:
                         raise ValueError("Choose a supported storefront.")
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})
@@ -550,14 +603,28 @@ class WebApplication:
                 except BusyError as exc:
                     return respond("429 Too Many Requests", {"error": str(exc)})
                 return respond("202 Accepted", {"id": job.id, "token": job.token})
-        match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]{32})(/cancel)?", path)
+        match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]{32})(/cancel|/currencies)?", path)
         if match and ((method == "GET" and not match[2]) or (method == "POST" and match[2])):
             authorization = environ.get("HTTP_AUTHORIZATION", "")
             token = authorization[7:] if authorization.startswith("Bearer ") else ""
             job = self.manager.get(match[1], token)
             if job is None:
                 return respond("404 Not Found", {"error": "This comparison is unavailable or has expired."})
-            if match[2]:
+            if match[2] == "/currencies":
+                if job.library and not self.owned_library_enabled:
+                    return respond("404 Not Found", {"error": "Owned-library comparisons are not enabled."})
+                try:
+                    if not isinstance(payload, dict) or not {"regions"} <= payload.keys() <= {"home", "regions"}:
+                        raise InputError("Supply a baseline and comparison storefronts.")
+                    _, config = validate_request({"identifier": "example", **payload})
+                    updated = self.manager.change_currencies(job, config, environ.get("REMOTE_ADDR", "unknown"))
+                except ValueError as exc:
+                    return respond("400 Bad Request", {"error": str(exc)})
+                except BusyError as exc:
+                    return respond("429 Too Many Requests", {"error": str(exc)})
+                return respond("202 Accepted", {"id": updated.id, "token": updated.token,
+                                                 "previous_job_id": job.id})
+            if match[2] == "/cancel":
                 self.manager.cancel_job(job)
             return respond("200 OK", job.snapshot())
         return respond("404 Not Found", {"error": "Not found."})

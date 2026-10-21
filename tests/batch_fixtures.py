@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 
 from steam_price_polisher.batching import SteamBatchProvider
+from steam_price_polisher.configuration import REGION_CURRENCIES
 from steam_price_polisher.http_client import HttpClientError
 from steam_price_polisher.models import PriceStatus
 from steam_price_polisher.steam_access import SteamAccessError
@@ -25,7 +26,7 @@ class BatchHttpFixture:
             region = request['context']['country_code'].lower()
         else:
             ids, region = query['appids'][0].split(','), query['cc'][0]
-        currency = {'pl':'PLN', 'us':'USD', 'de':'EUR', 'no':'NOK', 'gb':'GBP'}.get(region, 'EUR')
+        currency = REGION_CURRENCIES.get(region, 'EUR')
         values = {}
         for app_id in ids:
             key = (app_id, region)

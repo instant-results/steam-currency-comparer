@@ -1,6 +1,6 @@
 # Development roadmap
 
-Updated: 2026-10-20. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-21. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
@@ -62,7 +62,7 @@ background refresh from this potential task. The design must account for indepen
 prices, best offers and exchange rates, plus requested row order. No cache-first
 publication implementation has been approved; this is a potential future TODO.
 
-Other unselected investigations: new countries, opt-in best-offer retrieval and
+Other unselected investigations: additional regional USD groups, opt-in best-offer retrieval and
 regular bundle/package price enrichment. Concurrency remains unselected.
 
 ## Comparison experience improvements
@@ -82,20 +82,81 @@ Completed in `0.6.2-beta` and merged from `codex/automatic-example-loading` into
   until the wishlist is visible; active catalog work takes priority.
 - Failures and cancellations retain the existing explicit retry behavior.
 
-### TODO: change currencies without reloading the game list
+### Implemented: change currencies after loading without reloading the game list
 
-- Allow baseline and comparison selections to update a list during loading and
-  after completion, preserving games, search, filters, sort choices, and catalog positions.
+Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
+
+- Enable currency changes after loading finishes; changes during loading remain
+  deferred. Preserve games, search, filters, sorting and catalog positions.
+- Keep initial Steam retrieval limited to the selected storefronts. Reuse retained
+  observations immediately when possible. When another storefront is selected,
+  fetch its missing/stale data without retrieving the wishlist again. Keep both
+  default and best offers. Further selection changes wait for that fetch to finish.
+- Keep completed observations in the shared cache; switching back reuses fresh data.
+  Currency-change jobs apply normal cache freshness rules. Show progress and preserve the old
+  comparison while additional data loads, without relabeling old regional prices.
 - Retain observations independently of the baseline, including partial regional
-  results. Recalculate immediately when the needed prices are available; fetch
-  only missing/stale data when necessary, with clear progress and provenance.
-- Evaluate preloading all five storefronts after backend batching is measured;
-  prioritize selected storefronts and avoid making large lists wait unnecessarily.
-- Consider fetching the latest NBP Table A in one request and retaining the four
-  supported foreign rates plus PLN identity. Preserve publication/retrieval dates,
-  cache rules, and cross-rate calculation through PLN.
-- Keep statistics, discount badges, availability, saved state, and CSV exports
-  consistent with the active currency selection across visible tabs.
+  results and failures. Keep statistics, discount badges, availability, saved state,
+  and CSV consistent with the active selection.
+- Separate supported storefronts from the set fetched for a comparison. Additional
+  Steam countries require validation; worldwide preloading is not the default.
+
+Current backend stage: NBP preparation and Steam currency-change jobs are implemented on the feature branch.
+Complete tables A and B are fetched upfront for foreign-currency comparisons;
+fresh tables are reused independently for 24 hours. All rates are cached, including
+unselected currencies. A failed table does not block available requested rates.
+Atomic cache schema 9
+preserves table-specific publication dates, sources and retrieval ages. Fresh tables
+and rates are reused, stale fallback remains labeled, and local network denial stops
+retrieval. The UI and API now support 37 representative storefronts, with up to 36 alternatives.
+The backend retains each job's loaded selection/order and catalog membership in
+expiring memory. POST `/api/jobs/{id}/currencies` queues a separate comparison of
+that selection after complete/partial completion, without repeating discovery.
+The existing cache retains successful regional observations even for uncompared
+games; default prices, metadata and best offers keep independent freshness rules.
+Only missing/expired selected-country observations need Steam retrieval. Original
+results stay accessible, including after failure/cancellation of the new job.
+Token access, shared worker limits and a lock across related jobs apply.
+Frontend integration is implemented, including combining loaded catalog pages,
+separate displayed/pending state, reload restoration and CSV selection. Representative-country expansion is implemented separately below; mid-load
+switching remains deferred.
+
+#### Frontend integration
+
+Implemented in `web/app.js`, `web/creators.js`, shared controls and rendering:
+
+- Explicit **Update currencies** applies a valid changed selection to the current
+  tab after loading. Other tabs retain their displayed comparison. The coordinator
+  reserves submissions and locks shared controls and competing job starts.
+- Wishlist/example source credentials and displayed rows/rates are retained
+  separately from a pending currency job. Catalog updates compare the deduplicated
+  loaded IDs through product mode, retaining groups, order and expansion.
+- Displayed rows, headings, rates, statistics and CSV switch together at complete
+  or partial completion. Search, filters, sort, scroll and display settings survive.
+  Failed submissions/jobs and cancellation preserve the displayed snapshot and
+  offer a retry of the failed selection. Expired wishlist sources require reloading
+  the wishlist; catalogs can use retained product IDs.
+- Reload restores the displayed snapshot and pending credentials independently.
+  Hidden catalog work reconnects before new automatic jobs. Catalog discovery
+  cursors retain their storefront; Load more restarts at zero for another
+  storefront and deduplicates against already loaded products.
+- Frontend regression coverage exercises pending/completed/partial snapshots,
+  submission failures, cancellation/retry, expiry, reload, CSV and cross-tab locks.
+  Browser QA uses the production worker with labeled synthetic upstream data;
+  previous backend live Steam/NBP checks remain separate evidence.
+
+Mid-load changes and the loading-order dropdown adjustment remain separate work. Retain the current version until a version change is requested.
+
+### Implemented: many-currency selection and scrolling comparisons
+
+Support one representative country for each of 37 live currencies (US for USD,
+Germany for EUR), up to 36 alternatives, with a searchable picker and Select all /
+Clear. The shared registry drives API validation and browser choices. The table
+pins game/title and baseline on the left and DIFFERENCE on the right; regional
+headings and both offer sets share horizontal slots. Catalog scrolling is
+synchronized and large per-currency statistics are expandable. Narrow layouts put
+identity above the pinned price edges. Existing completed/pending updates and CSV
+stay consistent with the displayed selection. See [mapping and validation](STOREFRONTS.md).
 
 ### TODO: align the loading-order dropdown
 
