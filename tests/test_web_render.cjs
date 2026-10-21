@@ -1392,6 +1392,52 @@ test("best offers show their own original price and omit country-code prefixes",
   assert.equal(offer.children[1].children[1].children[1].textContent, "USD");
 });
 
+test("best-offer bands compensate for wrapped defaults and can shrink again after resizing", () => {
+  const ctx = setup(), table = ctx.get("alignment-table"), row = new Element("tr");
+  const heights = [{top:100,label:36,value:21,name:42}, {top:74,label:18,value:42,name:14}, {top:80,label:18,value:54,name:0}];
+  const blocks = heights.map(metrics => {
+    const block = new Element("div"), fields = {};
+    for (const band of ["label", "value", "name"]) if (metrics[band]) {
+      const field = new Element("span");
+      field.getBoundingClientRect = () => ({top:metrics.top,height:metrics[band]});
+      fields[`.offer-${band}`] = field;
+    }
+    block.querySelector = selector => fields[selector] || null;
+    return block;
+  });
+  table.getBoundingClientRect = () => ({width:1000});
+  table.querySelectorAll = () => [row]; row.querySelectorAll = () => blocks;
+  ctx.run('showBestOffers = true; alignBestOffers(document.getElementById("alignment-table"));');
+  assert.equal(row.style.getPropertyValue("--offer-label-height"), "36px");
+  assert.equal(row.style.getPropertyValue("--offer-value-height"), "54px");
+  assert.equal(row.style.getPropertyValue("--offer-name-height"), "42px");
+  assert.deepEqual(blocks.map(block => block.style.getPropertyValue("--offer-align-offset")), ["0px", "26px", "20px"]);
+  for (const metric of heights) Object.assign(metric, {top:90,label:18,value:21,name:14});
+  ctx.run('alignBestOffers(document.getElementById("alignment-table"));');
+  assert.equal(row.style.getPropertyValue("--offer-label-height"), "18px");
+  assert.equal(row.style.getPropertyValue("--offer-value-height"), "21px");
+  assert.equal(row.style.getPropertyValue("--offer-name-height"), "14px");
+  assert.deepEqual(blocks.map(block => block.style.getPropertyValue("--offer-align-offset")), ["0px", "0px", "0px"]);
+});
+
+test("best-offer layout coalesces renders and responds only to width changes", () => {
+  const frames = [], observers = [];
+  const ctx = setup({}, {requestAnimationFrame:callback => { frames.push(callback); return frames.length; },
+    ResizeObserver:class { constructor(callback) { this.callback = callback; observers.push(this); } observe(target) { this.target = target; } }});
+  const table = ctx.get("alignment-table");
+  ctx.run('alignBestOffers = table => {table.alignments = (table.alignments || 0) + 1;}; scheduleOfferAlignment(document.getElementById("alignment-table")); scheduleOfferAlignment(document.getElementById("alignment-table"));');
+  assert.equal(frames.length, 1);
+  frames.shift()(); assert.equal(table.alignments, 1);
+  const observer = observers.find(value => value.target === table);
+  observer.callback([{contentRect:{width:1000}}]);
+  assert.equal(frames.length, 1); frames.shift()();
+  observer.callback([{contentRect:{width:1000}}]);
+  assert.equal(frames.length, 0);
+  observer.callback([{contentRect:{width:800}}]);
+  assert.equal(frames.length, 1); frames.shift()();
+  assert.equal(table.alignments, 3);
+});
+
 test("best-offer checkbox reveals separate offers without replacing default prices or changing counts", () => {
   const ctx=setup();const item=offerFixture();
   ctx.run(`items=${JSON.stringify([item])}; render();`);
