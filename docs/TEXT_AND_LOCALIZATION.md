@@ -82,6 +82,14 @@ baseline and DIFFERENCE at its edges. Missing observations occupy their regional
 slot rather than shifting other prices. The overall difference identifies the
 cheapest selected storefront. Large catalog metrics use **Regional statistics**.
 
+Use two header levels. On desktop, vertically centre GAME NAME, the baseline
+heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTHER
+STOREFRONTS and its conversion caption fixed horizontally within the visible
+regional area. Put individual currency/country labels in a separate row below,
+scrolling with the corresponding prices. Keep each country below its currency.
+On narrow screens retain the identity/credit rows above the price headings and
+reserve enough space below wrapped group labels for their conversion caption.
+
 The horizontal scrollbar sits above each comparison and spans only the visible
 regional columns, excluding pinned identity, optional credits, baseline and
 DIFFERENCE. Keep it sticky at the viewport top within that comparison section.

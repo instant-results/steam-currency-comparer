@@ -1323,7 +1323,8 @@ td:first-child { min-width: 0; }
 .comparison-matrix .difference-column { width: var(--difference-width); }
 .comparison-matrix td, .comparison-matrix th { box-sizing: border-box; padding: 12px; overflow-wrap: anywhere; }
 .comparison-matrix th { white-space: normal; }
-.comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: static; }
+.comparison-matrix thead tr:not(.storefront-label-row) { height: 88px; }
+.comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: absolute; }
 .comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: flex-end; gap: 12px; }
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
   display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
@@ -1331,9 +1332,19 @@ td:first-child { min-width: 0; }
 }
 .comparison-matrix .foreign > * { min-width: 0; padding: 10px 12px; border-left: 1px solid var(--line); }
 .comparison-matrix .foreign > span:not(.storefront-heading) { padding-top: 0; padding-bottom: 0; }
-.comparison-matrix .storefront-headings { margin-top: 12px; }
+.comparison-matrix .storefront-headings { margin-top: 0; }
+.comparison-matrix .storefront-label-row { height: auto; }
+.comparison-matrix .storefront-label-row > td { border-top: 0; padding: 0; }
+.comparison-matrix .storefront-label-row > .storefront-label-cell { text-align: left; }
+.comparison-matrix .storefront-group-heading > .header-stack {
+  position: sticky; left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
+  z-index: 1; background: var(--panel);
+  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width) - 24px));
+}
+.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 0; white-space: normal; }
+.creator-panel th.catalog-foreign-heading.storefront-group-heading { border-left: 0; }
 .comparison-matrix .storefront-heading { color: var(--text); text-align: left; }
-.comparison-matrix .storefront-heading small { font-size: 10px; letter-spacing: 0; }
+.comparison-matrix .storefront-heading small { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0; }
 .comparison-matrix td.scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { padding-left: 0; padding-right: 0; }
 .comparison-matrix th:nth-last-child(2) > .header-stack { padding-left: 12px; }
 .comparison-matrix .pinned-game, .comparison-matrix th:first-child {
@@ -1384,6 +1395,13 @@ td:first-child { min-width: 0; }
   .comparison-matrix.matrix-with-credits .pinned-difference, .comparison-matrix.matrix-with-credits th:last-child { grid-row: 3; grid-column: 3; }
   .comparison-matrix .foreign > * { padding: 10px 8px; }
   .comparison-matrix .game-name { align-items: center; }
+  .comparison-matrix thead tr:not(.storefront-label-row) { height: auto; }
+  .comparison-matrix thead .storefront-group-heading { padding-bottom: 40px; }
+  .comparison-matrix .storefront-label-row > .pinned-game,
+  .comparison-matrix .storefront-label-row > .catalog-credit-cell { display: none; }
+  .comparison-matrix .storefront-label-row > .pinned-home { grid-row: 1; grid-column: 1; }
+  .comparison-matrix .storefront-label-row > .storefront-label-cell { grid-row: 1; grid-column: 2; }
+  .comparison-matrix .storefront-label-row > .pinned-difference { grid-row: 1; grid-column: 3; }
 }
 
 .comparison-matrix .price, .comparison-matrix .difference { font-size: 14px; white-space: normal; }

@@ -12,8 +12,9 @@ verification. Remaining items below are separate work; no next implementation
 task beyond the current scrollbar/alignment refinement has been selected.
 The refinement is implemented on `codex/sticky-regional-scrollbar`:
 a blue top scrollbar limited to regional columns, sticky scrolling access, and
-matching baseline/regional game-price alignment and typography. The separate
-stationary-heading redesign remains outside this change.
+matching baseline/regional game-price alignment and typography. Its follow-up
+two-level header is also implemented: OTHER STOREFRONTS stays fixed horizontally
+beside the other main headings; currency/country labels scroll on a row below.
 Owned-library code remains hidden behind an internal flag
 while authenticated live testing is deferred.
 
