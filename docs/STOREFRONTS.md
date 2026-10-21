@@ -29,6 +29,9 @@ Each regional price cell shows the converted price on the left and a muted
 original price on the right. Currency codes line up at the right edge across
 rows, independent of the number of digits. Long original prices can wrap below
 the converted amount on narrow screens while retaining their right alignment.
+Best-offer blocks share a vertical start and label/price/name heights within
+each game, so wrapped defaults and unavailable offers do not shift the other
+storefronts. Following offer sale details align after the shared name band.
 Regional currency headings, default prices and best offers use the same ordered,
 fixed-width slots between them. The blue horizontal scrollbar sits above the list,
 spans only the visible regional columns, and stays at the viewport top while

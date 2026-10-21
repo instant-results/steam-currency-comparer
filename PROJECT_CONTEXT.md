@@ -41,19 +41,24 @@ Scrolling-arrow removal is committed as `77496ec`, with test updates `851222c`.
 The two-level heading implementation/docs are committed as `dcf9c9b`, with
 regression tests `04f07d8`.
 
-The implemented follow-up keeps regional currency/country titles visible
-beneath the sticky scrollbar once their normal row reaches it. A visual copy
-tracks horizontal offsets and selected currencies; original table labels remain
-for layout/accessibility, with no duplicate IDs. Titles stop at the comparison
-boundary and also work when all columns fit without a scrollbar. Country codes
-are now shown beside country names in normal/sticky titles, separated by a middle
-dot. Regional default/best-offer cells show converted prices on the left and
-muted original prices on the right, keeping currency codes aligned across rows.
-Long native prices wrap as a unit when needed on narrow screens. Sticky title
-padding is reduced from 10px to 5px vertically. Validation: 118 frontend tests and
-desktop/mobile browser QA passed, including catalog synchronization, optional
-credits, currency updates, no-overflow comparisons, section boundaries, original
-price/code alignment and large VND values.
+Sticky-title/original-price implementation/docs are committed as `bd1a6c0`, with
+regression tests `8e98886`. Titles stay beneath the scrollbar, track horizontal
+scrolling and currency updates, stop at the comparison boundary and work without
+horizontal overflow. Country codes follow country names with a middle dot.
+Regional default/best-offer cells show converted prices left and muted original
+prices right, with currency codes aligned across rows. Long native prices wrap
+as a unit when needed. Sticky-title vertical padding is 5px.
+
+The best-offer alignment refinement is implemented on this branch. Each game shares
+label, value and offer-name heights across baseline, regional and difference
+blocks; per-block offsets compensate for differently wrapped default details.
+Measurements run after rendering and width changes, with reset/read/write batches
+and coalesced animation frames. Missing/subscription offers retain value slots.
+The previously measured 26px price offset is now 0px. Validation: 120 frontend
+tests, syntax/diff checks, and isolated browser QA at 1440px/900px/390px passed.
+QA covers long package names, wrapped defaults/native prices, missing baseline/
+regional offers, subscription placeholders, missing defaults, toggling, resizing,
+both catalog roles and optional credits. Title-wrapping improvements remain open.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in
