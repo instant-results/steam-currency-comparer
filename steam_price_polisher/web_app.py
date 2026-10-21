@@ -6,6 +6,7 @@ job state is in memory and expires after one hour. Regional price cache persists
 from __future__ import annotations
 
 import hmac
+from html import escape
 import json
 import os
 import queue
@@ -21,7 +22,7 @@ from urllib.parse import urlsplit
 
 from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
-from .configuration import ComparisonConfig
+from .configuration import ComparisonConfig, MAX_COMPARISONS, STOREFRONTS
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
 from .http_client import HttpClientError, UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
@@ -92,8 +93,8 @@ def validate_request(payload):
         if not re.fullmatch(pattern, url.path):
             raise InputError("Use a Steam /profiles/ or /id/ profile URL.")
     regions = payload["regions"]
-    if not isinstance(regions, list) or not 1 <= len(regions) <= 2:
-        raise InputError("Choose one or two comparison storefronts.")
+    if not isinstance(regions, list) or not 1 <= len(regions) <= MAX_COMPARISONS:
+        raise InputError(f"Choose between one and {MAX_COMPARISONS} comparison storefronts.")
     try:
         config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     except ValueError as exc:
@@ -125,7 +126,7 @@ def validate_creator_request(payload):
         raise InputError("Choose featured games or a catalog.")
     regions = payload["regions"]
     if not isinstance(regions, list):
-        raise InputError("Choose one or two comparison storefronts.")
+        raise InputError(f"Choose between one and {MAX_COMPARISONS} comparison storefronts.")
     config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     source = {"mode": payload["mode"]}
     if payload["mode"] == "products":
@@ -531,6 +532,7 @@ class WebApplication:
             content = (self.assets / filename).read_bytes()
             if filename == "index.html":
                 content = content.replace(b"{{APP_VERSION}}", __version__.encode("ascii"))
+                content = content.replace(b"{{STOREFRONTS}}", escape(json.dumps(dict(STOREFRONTS)), quote=True).encode("utf-8"))
                 content = content.replace(b"{{OWNED_LIBRARY_ENABLED}}", b"true" if self.owned_library_enabled else b"false")
                 if self.owned_library_enabled:
                     content = content.replace(b'<button id="library-tab" hidden', b'<button id="library-tab"')
@@ -562,7 +564,7 @@ class WebApplication:
                         raise ValueError("Choose developers or publishers.")
                     term = validate_search_term(payload["query"])
                     home = payload["home"]
-                    if not isinstance(home, str) or home not in {"pl", "us", "de", "no", "gb"}:
+                    if not isinstance(home, str) or home not in STOREFRONTS:
                         raise ValueError("Choose a supported storefront.")
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})

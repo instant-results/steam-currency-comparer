@@ -15,6 +15,7 @@
     let currencyUpdating = false, currencyRetry = null, completedComparison = false;
     let searching = false, searchChoices = [];
     const groups = new Map(), results = new Map(), defaultIds = new Set();
+    const synchronizedScrolls = new WeakMap();
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
@@ -23,7 +24,7 @@
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
-            products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome})),
+            products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
           results: [...results.values()], rates: creatorRates, currencyUpdating, currencyRetry, completedComparison}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
@@ -76,7 +77,12 @@
           stack.className += " header-stack-right";
           stack.append(node("small", `${storefronts[home].currency} / %`));
         }
-        th.append(stack); row.append(th);
+        th.append(stack);
+        if (label === "OTHER STOREFRONTS") {
+          const headings = node("div", undefined, "foreign storefront-headings");
+          headings.append(...regionalHeadings(creatorRegions)); th.append(headings);
+        }
+        row.append(th);
       }
       return row;
     }
@@ -100,7 +106,8 @@
         const statistics = node("div", undefined, "creator-statistics");
         statistics.setAttribute("aria-label", `${creator.name} statistics for loaded products`);
         heading.append(identity, statistics);
-        const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap");
+        const catalog = node("div", undefined, "creator-catalog"), wrap = node("div", undefined, "table-wrap comparison-scroll");
+        wrap.tabIndex = 0; wrap.setAttribute("aria-label", `Scroll ${creator.name} regional comparisons`);
         const table = node("table"), columns = node("colgroup"), head = node("thead", undefined, "creator-accessible-head"), body = node("tbody");
         table.setAttribute("aria-label", `${creator.name} regional price comparisons`);
         columns.append(...tableColumns());
@@ -115,7 +122,7 @@
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
           discoveryHome: creatorHome,
-          expanded: !creator.examples.length, body, head, columns, wrap, statistics, count, more, rowCache: new Map()});
+          expanded: !creator.examples.length, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map()});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
       renderGroups();
@@ -129,9 +136,17 @@
     }
 
     function syncColumns(source) {
+      // Ignore events caused by our own assignments. A delayed follower event
+      // must not rewind a heading that has already advanced in a smooth scroll.
+      const expected = synchronizedScrolls.get(source);
+      if (expected !== undefined && Math.abs(source.scrollLeft - expected) < 1) return;
+      synchronizedScrolls.delete(source);
       // One shared heading follows every catalog when narrow screens require scrolling.
       for (const wrap of [$("creator-columns-scroll"), ...[...groups.values()].map(group => group.wrap)]) {
-        if (wrap.scrollLeft !== source.scrollLeft) wrap.scrollLeft = source.scrollLeft;
+        if (wrap !== source && wrap.scrollLeft !== source.scrollLeft) {
+          synchronizedScrolls.set(wrap, source.scrollLeft);
+          wrap.scrollLeft = source.scrollLeft;
+        }
       }
     }
 
@@ -141,6 +156,14 @@
       const uncompared = loaded.filter(item => item?.skipped).length;
       const pending = loaded.length - compared.length - uncompared;
       group.statistics.replaceChildren();
+      let target = group.statistics;
+      if (creatorRegions.length > 4) {
+        const overview = node("details", undefined, "regional-statistics-overview");
+        overview.open = group.statisticsExpanded === true;
+        overview.addEventListener("toggle", () => { group.statisticsExpanded = overview.open; save(); });
+        overview.append(node("summary", `Regional statistics · ${creatorRegions.length} currencies`));
+        target = node("div", undefined, "regional-statistics-grid"); overview.append(target); group.statistics.append(overview);
+      }
       for (const region of creatorRegions) {
         const differences = [];
         for (const item of compared) {
@@ -166,12 +189,12 @@
         medianRow.append(node("span", "Median"), node("strong", median == null ? "—" : percentageLabel(median),
           "creator-statistic-value" + (median == null ? "" : median > 0 ? " pricier" : " cheaper")));
         metric.append(medianRow);
-        group.statistics.append(metric);
+        target.append(metric);
       }
       const cheaper = compared.filter(item => item.comparison.is_fair).length;
       const coverage = node("p", `${compared.length} of ${loaded.length} compared · ${cheaper} cheaper/equal · ${compared.length - cheaper} pricier · ${uncompared} uncompared${pending ? ` · ${pending} pending` : ""}`, "creator-statistics-coverage");
       coverage.title = "Cheaper/equal means the baseline price is no higher than every selected converted foreign price. Pricier means it exceeds at least one. Counts cover only loaded non-free products.";
-      group.statistics.append(coverage);
+      target.append(coverage);
     }
 
     function renderGroups() {
@@ -180,6 +203,7 @@
       $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
       $("creator-columns-colgroup").replaceChildren(...tableColumns());
       $("creator-columns-head").replaceChildren(tableHeading(creatorHome));
+      setComparisonLayout($("creator-columns-table"), creatorRegions, $("creator-show-credits").checked);
       for (const group of groups.values()) {
         // Preserve unavailable paid products; missing prices alone do not mean free.
         group.products = group.products.filter(product => {
@@ -189,6 +213,7 @@
         renderStatistics(group);
         group.columns.replaceChildren(...tableColumns());
         group.head.replaceChildren(tableHeading(creatorHome));
+        setComparisonLayout(group.table, creatorRegions, $("creator-show-credits").checked);
         const displayedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
         for (const id of group.rowCache.keys()) if (!displayedIds.has(id)) group.rowCache.delete(id);
@@ -196,11 +221,11 @@
           const product = group.products[index];
           const item = results.get(product.app_id) || {...product, pending: true};
           const showCredits = $("creator-show-credits").checked;
-          const signature = creatorHome + showCredits + showBestOffers + JSON.stringify(item);
+          const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
-            const row = comparisonRow(item, creatorHome);
-            if (item.comparison) row.children[2].className = "catalog-foreign-price";
+            const row = comparisonRow(item, creatorHome, false, creatorRegions);
+            row.children[2].className += " catalog-foreign-price";
             const role = kind === "developer" ? "Publisher" : "Developer";
             const names = item[kind === "developer" ? "publishers" : "developers"];
             const credit = Array.isArray(names) && names.length ? names.join(", ") : item.pending ? "Loading…" : "Unavailable";
@@ -247,6 +272,8 @@
         if (data.state === "cancelling") { cancelRequested = true; refreshControls(); }
         if (terminal.has(data.state)) {
           preserveComparisonScroll(() => {
+            if (updating) $("creators-progress").textContent = ["complete", "partial"].includes(data.state)
+              ? `Updated to ${currencyLabel(savedRequest)}. ${data.message}` : `Currency update ${data.state}.`;
             if (updating && ["complete", "partial"].includes(data.state)) {
               creatorHome = savedRequest.home; creatorRegions = [...savedRequest.regions]; creatorRates = data.rates || [];
               results.clear(); for (const item of data.items) results.set(item.app_id, item);
@@ -282,7 +309,7 @@
     }
 
     async function startCreators(body, preserve = false) {
-      if (!body.regions.length) { message("Choose one or two comparison currencies.", true); return; }
+      if (!body.regions.length) { message("Choose one or more comparison currencies.", true); return; }
       if (!comparisonCoordinator.claim(kind)) return;
       comparisonCoordinator.cancel(`${kind}-featured`);
       clearTimeout(pollTimer); cancelRequested = false; creatorJob = null;
@@ -310,7 +337,7 @@
       if (comparisonCoordinator.busy) return;
       const selected = selections();
       if (results.size) { updateCurrencies(currencyRetry || selected); return; }
-      if (!selected.regions.length) { message("Choose one or two comparison currencies.", true); return; }
+      if (!selected.regions.length) { message("Choose one or more comparison currencies.", true); return; }
       const mode = "products";
       const appIds = [...new Set([...groups.values()].flatMap(group => group.products.map(item => item.app_id)))];
       if (!appIds.length) { message("No products loaded yet. Search for a catalog to compare."); return; }
@@ -391,7 +418,7 @@
 
     function restore(saved) {
       if (!saved || !Object.hasOwn(storefronts, saved.home) || !Array.isArray(saved.regions) ||
-          saved.regions.length < 1 || saved.regions.length > 2 || new Set(saved.regions).size !== saved.regions.length ||
+          saved.regions.length < 1 || saved.regions.length > maxComparisons || new Set(saved.regions).size !== saved.regions.length ||
           saved.regions.some(id => !Object.hasOwn(storefronts, id) || id === saved.home)) return false;
       const oldDefaults = Array.isArray(saved.featuredIds) ? saved.featuredIds
         : (saved.creators || []).filter(value => value.examples?.length).map(value => value.id);
@@ -423,6 +450,7 @@
         group.products = catalog.products.filter(item => /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string");
         group.nextStart = catalog.nextStart; group.hasMore = catalog.hasMore; group.total = catalog.total;
         group.discoveryHome = Object.hasOwn(storefronts, catalog.discoveryHome) ? catalog.discoveryHome : saved.home;
+        group.statisticsExpanded = catalog.statisticsExpanded === true;
         const featuredIds = new Set(creators.find(creator => creator.id === catalog.id).examples.map(product => product.app_id));
         group.expanded = catalog.expanded === true || catalog.nextStart > 0 || catalog.total != null ||
           group.products.some(product => !featuredIds.has(product.app_id));
@@ -474,6 +502,7 @@
     function activate(value) {
       active = value;
       if (active) {
+        $("creator-columns-scroll").refreshScrollControls?.();
         renderRates(creatorRates, $("rates"));
         initialize();
         if (initialized && (!savedRequest || defaultsChanged) && !busy) scheduleFeatured();
@@ -481,6 +510,7 @@
     }
 
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
+    bindComparisonScroll(plural, $("creator-columns-scroll"));
     $("creators-export").addEventListener("click", () => downloadCsv(catalogCsv(), `steam-${plural}-comparison.csv`));
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
@@ -510,7 +540,7 @@
       document.getElementById(kind + "s-panel").hidden = tab !== kind;
       pane.activate(tab === kind);
     }
-    if (tab === "wishlist") renderRates(currentRates, document.getElementById("rates"));
+    if (tab === "wishlist") { renderRates(currentRates, document.getElementById("rates")); document.getElementById("wishlist-scroll").refreshScrollControls?.(); }
     for (const name of ["wishlist", "library", "developer", "publisher"]) {
       const button = document.getElementById(tabId(name));
       button.setAttribute("aria-selected", String(tab === name)); button.tabIndex = tab === name ? 0 : -1;

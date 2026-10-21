@@ -1275,3 +1275,103 @@ td:first-child { min-width: 0; }
 .offer-difference.offer-fair { color: var(--green, #4fd399); }
 .offer-difference.offer-pricier { color: var(--red, #ff7979); }
 .best-offer small:not(.offer-label) { color: var(--muted); }
+
+/* Many-currency picker: selections are independent of the visible search results. */
+.currency-search { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+.currency-search input { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.storefront-list { max-height: 250px; overflow-y: auto; scrollbar-gutter: stable; padding-right: 6px; }
+.storefront-list .region { margin: 6px 0; }
+.currency-selection-actions { display: flex; gap: 14px; margin-bottom: 10px; }
+.currency-selection-actions button { background: none; border: 0; color: var(--blue-light); padding: 4px 0; font-size: 12px; }
+.currency-selection-actions button:disabled { opacity: .5; }
+
+/* One scroll surface, with fixed context at both edges and aligned regional slots. */
+.comparison-scroll { max-width: 100%; container-type: inline-size; isolation: isolate; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: auto; }
+.comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.comparison-matrix {
+  --game-width: 230px; --credit-width: 0px; --home-width: 125px;
+  --region-width: 170px; --difference-width: 165px;
+  width: calc(var(--game-width) + var(--credit-width) + var(--home-width) + var(--region-count) * var(--region-width) + var(--difference-width));
+  min-width: 0 !important; table-layout: fixed; border-collapse: separate; border-spacing: 0;
+}
+.comparison-matrix.matrix-with-credits { --credit-width: 125px; }
+.comparison-matrix .game-column { width: var(--game-width); }
+.comparison-matrix .credit-column { width: var(--credit-width); }
+.comparison-matrix .home-column { width: var(--home-width); }
+.comparison-matrix .foreign-column { width: calc(var(--region-count) * var(--region-width)); }
+.comparison-matrix .difference-column { width: var(--difference-width); }
+.comparison-matrix td, .comparison-matrix th { box-sizing: border-box; padding: 12px; overflow-wrap: anywhere; }
+.comparison-matrix th { white-space: normal; }
+.comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: static; }
+.comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: flex-end; gap: 12px; }
+.comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
+  display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
+  width: calc(var(--region-count) * var(--region-width));
+}
+.comparison-matrix .foreign > * { min-width: 0; padding: 10px 12px; border-left: 1px solid var(--line); }
+.comparison-matrix .storefront-headings { margin-top: 12px; }
+.comparison-matrix .storefront-heading { color: var(--text); text-align: left; }
+.comparison-matrix .storefront-heading small { font-size: 10px; letter-spacing: 0; }
+.comparison-matrix td.scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { padding-left: 0; padding-right: 0; }
+.comparison-matrix th:nth-last-child(2) > .header-stack { padding-left: 12px; }
+.comparison-matrix .pinned-game, .comparison-matrix th:first-child {
+  position: sticky; left: 0; z-index: 2; background: var(--panel);
+}
+.comparison-matrix .pinned-home, .comparison-matrix th:nth-child(2) {
+  position: sticky; left: var(--game-width); z-index: 2; background: var(--panel);
+  box-shadow: 2px 0 0 var(--line);
+}
+.comparison-matrix .pinned-difference, .comparison-matrix th:last-child {
+  position: sticky; right: 0; z-index: 3; background: var(--panel); box-shadow: -2px 0 0 var(--line);
+}
+.comparison-matrix.matrix-with-credits .catalog-credit-cell,
+.comparison-matrix.matrix-with-credits th:nth-child(2) { position: sticky; left: var(--game-width); z-index: 2; background: var(--panel); box-shadow: none; }
+.comparison-matrix.matrix-with-credits .pinned-home,
+.comparison-matrix.matrix-with-credits th:nth-child(3) { position: sticky; left: calc(var(--game-width) + var(--credit-width)); z-index: 2; background: var(--panel); box-shadow: 2px 0 0 var(--line); }
+.comparison-matrix .cheapest-storefront { color: var(--muted); font-size: 10px; }
+.creator-catalog .comparison-matrix tbody tr { background-image: none; }
+.creator-panel .creator-group-heading, .credit-column-visible .creator-group-heading { display: block; }
+.creator-panel .creator-identity { margin-bottom: 18px; }
+.creator-panel .creator-statistics { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 14px; }
+.creator-panel .creator-statistic:nth-child(n), .credit-column-visible .creator-statistic:nth-child(n) { grid-column: auto; padding: 0; }
+.creator-panel .creator-statistics-coverage, .credit-column-visible .creator-statistics-coverage { grid-column: 1 / -1; padding: 0; }
+.regional-statistics-overview { grid-column: 1 / -1; }
+.regional-statistics-overview summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+.regional-statistics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px; padding-top: 16px; }
+.regional-statistics-grid .creator-statistic-value { font-size: 20px; }
+
+/* On phones the pinned identity occupies a row above the pinned price edges. */
+@media (max-width: 700px) {
+  .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
+  .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
+  .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
+  .comparison-matrix colgroup { display: none; }
+  .comparison-matrix tr { display: grid; grid-template-columns: var(--home-width) calc(var(--region-count) * var(--region-width)) var(--difference-width); height: auto; }
+  .comparison-matrix td, .comparison-matrix th { display: block; padding: 10px 8px; font-size: 12px; }
+  .comparison-matrix .pinned-game, .comparison-matrix th:first-child {
+    grid-row: 1; grid-column: 1 / -1; width: 100cqw; max-width: 100cqw; text-align: left;
+  }
+  .comparison-matrix .pinned-home, .comparison-matrix th:nth-child(2) { grid-row: 2; grid-column: 1; left: 0; }
+  .comparison-matrix .scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { grid-row: 2; grid-column: 2; }
+  .comparison-matrix .pinned-difference, .comparison-matrix th:last-child { grid-row: 2; grid-column: 3; }
+  .comparison-matrix.matrix-with-credits .catalog-credit-cell, .comparison-matrix.matrix-with-credits th:nth-child(2) {
+    grid-row: 2; grid-column: 1 / -1; left: 0; width: 100cqw; max-width: 100cqw; text-align: left;
+  }
+  .comparison-matrix.matrix-with-credits .pinned-home, .comparison-matrix.matrix-with-credits th:nth-child(3) { grid-row: 3; grid-column: 1; left: 0; }
+  .comparison-matrix.matrix-with-credits .scrolling-storefronts, .comparison-matrix.matrix-with-credits th:nth-last-child(2) { grid-row: 3; grid-column: 2; }
+  .comparison-matrix.matrix-with-credits .pinned-difference, .comparison-matrix.matrix-with-credits th:last-child { grid-row: 3; grid-column: 3; }
+  .comparison-matrix .foreign > * { padding: 10px 8px; }
+  .comparison-matrix .game-name { align-items: center; }
+}
+
+.storefront-scroll-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px 0 8px; color: var(--muted); font-size: 11px; }
+.storefront-scroll-controls button { background: var(--panel); border: 1px solid var(--line); color: var(--blue-light); padding: 3px 10px; font-size: 16px; }
+.storefront-scroll-controls button:disabled { opacity: .4; }
+
+.comparison-matrix .price, .comparison-matrix .difference { font-size: 14px; white-space: normal; }
+.comparison-matrix .foreign > span, .comparison-matrix .offer-price { font-size: 14px; }
+.creator-catalog .comparison-matrix .foreign > span > span { white-space: normal; }
+@media (max-width: 700px) {
+  .comparison-matrix .price, .comparison-matrix .difference,
+  .comparison-matrix .foreign > span, .comparison-matrix .offer-price { font-size: 12px; }
+}

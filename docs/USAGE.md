@@ -61,7 +61,7 @@ The server's shared worker, request pacing and job limits still apply.
 ## Change currencies after loading
 
 After a wishlist/example or catalog comparison finishes, select a baseline and
-one or two other storefronts, then click **Update currencies** in the sidebar.
+one or more other storefronts, then click **Update currencies** in the sidebar.
 The button is available when the valid selection differs from the displayed
 comparison. It updates the current tab. Other tabs keep their own comparisons;
 the displayed-currency captions identify the selection used by their results.
@@ -228,12 +228,13 @@ including paid DLC and soundtracks; they do not summarize the entire Steam catal
 Statistics use existing comparison results without additional requests, update
 when more products load, and retain the results' currencies until refreshed.
 
-One shared column-heading row sits above all creators. Desktop statistics align
-with the corresponding foreign-price columns. A 1px divider separates baseline
-and foreign prices at the middle of each game row, above the expansion arrow's
-midpoint. It extends through newly appended rows, including rows awaiting prices,
-and ends at 80% of the final row's height; that row has no bottom horizontal rule.
-Narrow screens stack statistics above tables with synchronized horizontal scrolling.
+One shared column-heading row sits above all creators. Regional headings and
+prices align in fixed-width slots and scroll together; game/title, baseline and
+DIFFERENCE stay pinned. Per-currency statistics are a separate overview, expandable
+when more than four alternatives are selected; expansion survives display changes
+and reload. Dividers mark the pinned baseline and DIFFERENCE boundaries.
+Narrow screens place identity above the price row, keeping the baseline and
+DIFFERENCE at its edges. Catalog tables use synchronized horizontal scrolling.
 The arrow is shallow, has a flat top and no visible border, and fades most strongly
 at its top center; its white label remains accessible to keyboard and screen-reader
 users. The introduction keeps the free-product note, progress status, and statistics
@@ -280,9 +281,9 @@ python .\steam_wishlist_compare.py 76561198000000000
 
 ## Choose comparison storefronts
 
-The command-line prototype retains Poland (PLN) as its baseline. Select up to two
-of the United States (`us`, USD), Germany (`de`, EUR), Norway (`no`, NOK), or the
-United Kingdom (`gb`, GBP) with `--regions` after the Steam identifier:
+The command-line prototype retains Poland (PLN) as its baseline. Select one to
+36 supported comparison storefronts with `--regions` after the Steam identifier.
+For example, `us` is USD, `de` is EUR and `jp` is JPY; see [the full mapping](STOREFRONTS.md).
 
 ```powershell
 python .\steam_wishlist_compare.py 76561198000000000 --regions de
@@ -292,8 +293,8 @@ python .\steam_wishlist_compare.py 76561198000000000 --regions de us
 Without `--regions`, the default is `us de`. Selection order is preserved in
 results. Currency is determined by the storefront; arbitrary currency/region
 pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The web sidebar additionally lets any of the five supported
-storefronts become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
+cache initialization. The web sidebar additionally lets any supported
+storefront become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
 
 ## Custom Steam profile URLs
 
@@ -591,12 +592,12 @@ establish identical regional offers.
 
 ## Baseline and comparison selection
 
-Select a baseline in the left sidebar and up to two other currencies below it.
-The baseline cannot also be an alternative;
-once two alternatives are checked, uncheck one before choosing another. One
-alternative is allowed. Both browser controls and the server enforce the limit.
-Supported pairs are PL/PLN, US/USD, DE/EUR, NO/NOK, and GB/GBP, matching
-[Steam's supported currencies](https://partner.steamgames.com/doc/store/pricing/currencies).
+Select a baseline in the searchable sidebar and one to 36 other currencies.
+The baseline cannot also be an alternative. Select all chooses every other
+representative storefront; Clear removes alternatives. Search does not deselect
+hidden choices. The browser and API use the same 37-currency registry. See
+[supported storefronts and table behavior](STOREFRONTS.md) for the complete mapping,
+pinned columns, synchronized horizontal scrolling and amount-unit validation.
 
 NBP reports PLN per currency unit. The conversion into baseline currency B is
 `rate_to_pln[A] / rate_to_pln[B]`; PLN has an identity rate of 1. The rate notebook
@@ -616,7 +617,7 @@ use the selected baseline and alternatives.
 Changing the baseline temporarily excludes conflicting comparison currencies
 without forgetting them. Returning to a non-conflicting baseline restores them.
 Explicit checkbox edits replace the remembered choices, so a newly selected pair
-wins over a previously hidden currency and the two-alternative limit remains intact.
+wins over a previously hidden currency. Up to all 36 alternatives may be selected.
 Restoring a saved comparison replaces the preferences with that run's selections.
 Regression tests exercise actual change handlers, repeated switches, explicit
 replacement/deselection, welcome captions, busy state, and saved restoration.
@@ -626,7 +627,7 @@ replacement/deselection, welcome captions, busy state, and saved restoration.
 The browser uses this endpoint for wishlist/example updates. Programmatic clients
 can submit a same-origin JSON POST to `/api/jobs/{id}/currencies` with the source
 job's bearer token and a body such as `{"home":"us","regions":["pl","gb"]}`.
-The existing five storefronts and one-or-two alternatives limit apply; omitted
+The 37 supported storefronts and one-to-36 alternatives limit apply; omitted
 `home` defaults to Poland, as for initial comparisons. Additional fields, including
 new product IDs or loading orders, are rejected.
 
@@ -710,8 +711,8 @@ comparisons refresh once to obtain credits.
 The web app uses one batch pipeline for every list size. Default prices come from
 appdetails price-only requests, and StoreBrowse supplies metadata and Steam's
 selected purchase option. Each request has one country context. The existing
-one-or-two comparison-currency selection limit is unchanged; the retrieval layer
-already accepts larger storefront collections.
+selection limit is now one to 36 alternatives, using one representative country
+for each of the 37 supported live currencies.
 
 Enable **Show Steam's best purchase offers alongside game prices** to reveal a
 separate set of prices and regional differences. Both datasets are fetched during

@@ -1,0 +1,108 @@
+# Supported storefronts and the comparison matrix
+
+Updated: 2026-10-21. The app supports 37 live Steam currencies, with one
+representative country per currency. Any can be the baseline; select one to 36
+others. The default remains PLN against USD/EUR.
+
+Use the searchable sidebar picker to find a currency or country. Select all
+chooses every alternative to the current baseline; Clear removes alternatives.
+Searching hides choices without changing their selection. Changing the baseline
+excludes that country from alternatives while retaining temporarily conflicting
+preferences; Select all can fill the remaining choices again. After loading,
+Update currencies applies the choices to the current tab.
+
+## Table behavior
+
+Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
+the right. Regional headings, default prices and best offers use the same ordered,
+fixed-width slots between them. Scroll with the visible scrollbar, the arrow
+controls, a trackpad, or arrow keys after focusing the table. Catalog headings
+and all catalog tables synchronize their horizontal position. Filters, sorts,
+per-tab completed/pending snapshots and CSV keep their existing behavior.
+
+At narrow widths the pinned game/title occupies a full-width row above prices;
+baseline and DIFFERENCE remain at the left/right edges of the price row. Optional
+catalog credits occupy another identity row. This leaves space for regional prices
+without compressing text or widening the page. Desktop optional credit columns
+stay with the pinned identity.
+
+Catalog summaries show per-currency average/median/sample sizes. With more than
+four alternatives these metrics are grouped under expandable Regional statistics.
+The overall DIFFERENCE still compares the baseline with the cheapest selected
+alternative and now identifies that storefront. Missing required regional prices
+still make a product uncompared; Show unavailable products and retained partial
+best offers use the existing rules. More countries do not change that arithmetic.
+
+## Registry
+
+`steam_price_polisher/storefronts.json` is the shared registry for configuration,
+API validation and browser choices. The server injects its escaped JSON into the
+HTML; the frontend does not maintain a second country/currency mapping. US is the
+only USD representative and Germany remains the EUR representative. Regional USD
+pricing groups (CIS, LATAM, MENA, South Asia) are excluded from this stage.
+
+| Currency | Representative country | Country code |
+| --- | --- | --- |
+| AED | United Arab Emirates | AE |
+| AUD | Australia | AU |
+| BRL | Brazil | BR |
+| CAD | Canada | CA |
+| CHF | Switzerland | CH |
+| CLP | Chile | CL |
+| CNY | China | CN |
+| COP | Colombia | CO |
+| CRC | Costa Rica | CR |
+| EUR | Germany | DE |
+| GBP | United Kingdom | GB |
+| HKD | Hong Kong | HK |
+| IDR | Indonesia | ID |
+| ILS | Israel | IL |
+| INR | India | IN |
+| JPY | Japan | JP |
+| KRW | South Korea | KR |
+| KWD | Kuwait | KW |
+| KZT | Kazakhstan | KZ |
+| MXN | Mexico | MX |
+| MYR | Malaysia | MY |
+| NOK | Norway | NO |
+| NZD | New Zealand | NZ |
+| PEN | Peru | PE |
+| PHP | Philippines | PH |
+| PLN | Poland | PL |
+| QAR | Qatar | QA |
+| RUB | Russia | RU |
+| SAR | Saudi Arabia | SA |
+| SGD | Singapore | SG |
+| THB | Thailand | TH |
+| TWD | Taiwan | TW |
+| UAH | Ukraine | UA |
+| USD | United States | US |
+| UYU | Uruguay | UY |
+| VND | Vietnam | VN |
+| ZAR | South Africa | ZA |
+
+## Sources and validation
+
+- [Valve supported currencies](https://partner.steamgames.com/doc/store/pricing/currencies):
+  live currencies, regional USD groups and amount units. Currency enum identifiers
+  also include legacy/non-live entries and are not the supported list.
+- [NBP API](https://api.nbp.pl/en.html), latest complete tables A and B: all 37
+  currencies were covered in the 2026-10-20 validation, including PLN identity.
+- Live production-client checks on 2026-10-20 queried public Stardew Valley/Hades
+  IDs (413150/1145360) in all 37 countries. Returned price currencies matched all
+  representatives; price and StoreBrowse parsing produced no errors. The check
+  used normal 1.5-second pacing and retries, with no user profile or wishlist.
+  Local aggregate results are ignored in .steam-price-polisher/qa/storefront-validation.json.
+
+Steam appdetails and StoreBrowse amounts continue to use hundredths, including
+JPY, KRW and KWD. Do not substitute native ISO minor-unit rules (for example,
+KWD thousandths) for Steam's protocol units. Explicit appdetails currency mismatches
+remain errors. StoreBrowse still attributes currency to its requested storefront
+because its response does not supply an independent currency code.
+
+Initial loading fetches selected countries only. Post-load updates reuse fresh
+observations and fetch missing/expired selected-country data, retaining default
+and best offers independently. Work grows with selected countries; batch sizing,
+pacing, retry budgets, cache freshness and cancellation rules are unchanged.
+The live sample establishes regional compatibility, not universal availability
+for every product or a performance guarantee for 37-country comparisons.
