@@ -4,7 +4,27 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 let displayedWishlist = null, pendingCurrency = null, retryCurrency = null, wishlistExpired = false;
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
-const storefronts = {pl:{currency:"PLN",name:"Poland"},us:{currency:"USD",name:"United States"},de:{currency:"EUR",name:"Germany"},no:{currency:"NOK",name:"Norway"},gb:{currency:"GBP",name:"United Kingdom"}};
+const storefronts = JSON.parse(document.documentElement.dataset.storefronts);
+const maxComparisons = Object.keys(storefronts).length - 1;
+function buildStorefrontControls() {
+  for (const [region, value] of Object.entries(storefronts)) {
+    for (const [target, name, type] of [["baseline-options", "home", "radio"], ["comparison-options", "region", "checkbox"]]) {
+      const label = node("label", undefined, "region"), input = node("input"), caption = node("span", value.currency);
+      input.type = type; input.name = name; input.value = region;
+      input.checked = name === "home" ? region === "pl" : ["us", "de"].includes(region);
+      caption.append(node("small", `${value.currency_name} · ${value.name}`));
+      label.dataset.storefront = region; label.append(input, caption); $(target).append(label);
+    }
+  }
+}
+function filterStorefrontControls() {
+  const query = $("currency-search").value.trim().toLocaleLowerCase();
+  for (const label of document.querySelectorAll('[data-storefront]')) {
+    const region = label.dataset.storefront, value = storefronts[region];
+    label.hidden = (label.parentElement?.id === "comparison-options" && region === selectedHome())
+      || !`${value.currency} ${value.name} ${value.currency_name}`.toLocaleLowerCase().includes(query);
+  }
+}
 // Shared scheduling for every comparison tab. Restoring jobs may register while
 // initialization is held; new jobs claim the idle worker before changing results.
 const comparisonCoordinator = (() => {
@@ -55,7 +75,7 @@ function currencySelection() {
   return {home: selectedHome(), regions: [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value)};
 }
 function currencyLabel(selection) {
-  return `${storefronts[selection.home].currency} against ${selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
+  return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
 }
 function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
 function preserveComparisonScroll(update) {
@@ -66,7 +86,7 @@ function preserveComparisonScroll(update) {
   window.scrollTo?.({left: x, top: y, behavior: "instant"});
 }
 function validCurrencies(value) {
-  return value && Object.hasOwn(storefronts, value.home) && Array.isArray(value.regions) && value.regions.length >= 1 && value.regions.length <= 2
+  return value && Object.hasOwn(storefronts, value.home) && Array.isArray(value.regions) && value.regions.length >= 1 && value.regions.length <= maxComparisons
     && new Set(value.regions).size === value.regions.length && value.regions.every(id => Object.hasOwn(storefronts, id) && id !== value.home);
 }
 function refreshCurrencyAction() {
@@ -83,7 +103,7 @@ function updateSelections(event) {
   const options = [...document.querySelectorAll('[name="region"]')];
   // Baseline conflicts hide preferences temporarily; explicit checkbox edits replace them.
   if (preferredComparisons === null || event?.target?.name === "region") {
-    preferredComparisons = options.filter(el => el.checked && el.value !== home).map(el => el.value).slice(0, 2);
+    preferredComparisons = options.filter(el => el.checked && el.value !== home).map(el => el.value);
   }
   for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
@@ -93,7 +113,7 @@ function updateSelections(event) {
     for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
   }
   for (const el of options) {
-    el.disabled = comparisonCoordinator.busy || el.value === home || (!el.checked && count >= 2);
+    el.disabled = comparisonCoordinator.busy || el.value === home;
     el.closest('label').hidden = el.value === home;
   }
   document.querySelectorAll('[name="home"]').forEach(el => el.disabled = comparisonCoordinator.busy);
@@ -102,7 +122,11 @@ function updateSelections(event) {
   $("analyze").disabled = comparisonCoordinator.busy;
   $("retry").disabled = comparisonCoordinator.busy;
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
-  $("selection-help").textContent = `${count} of 2 selected · Uncheck one to choose another.`;
+  $("baseline-legend").textContent = `Baseline currency · ${storefronts[home].currency}`;
+  $("selection-help").textContent = `${count} of ${maxComparisons} selected · Choose one or more.`;
+  $("select-all-currencies").disabled = comparisonCoordinator.busy || count === maxComparisons;
+  $("clear-currencies").disabled = comparisonCoordinator.busy || count === 0;
+  filterStorefrontControls();
   refreshCurrencyAction();
 }
 function showBaseline(home) {
@@ -111,6 +135,39 @@ function showBaseline(home) {
   $("converted-heading").textContent = `CONVERTED TO ${baseline().currency}`;
   $("difference-currency").textContent = baseline().currency;
   $("expensive-label").textContent = `Pricier in ${baseline().name}`;
+}
+function comparisonRegions(values, fallbackItems = []) {
+  return values?.length ? values : fallbackItems.find(item => item.comparison)?.comparison.alternatives.map(price => price.region) || [];
+}
+function regionalHeadings(regions) {
+  return regions.map(region => {
+    const label = node("span", storefronts[region].currency, "storefront-heading");
+    label.append(node("small", storefronts[region].name)); return label;
+  });
+}
+function setComparisonLayout(table, regions, credits = false) {
+  table.classList.toggle("comparison-matrix", true);
+  table.classList.toggle("matrix-with-credits", credits);
+  table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
+  table.parentElement?.refreshScrollControls?.();
+}
+function bindComparisonScroll(prefix, wrap) {
+  const previous = $(prefix + "-scroll-previous"), next = $(prefix + "-scroll-next");
+  const refresh = () => {
+    previous.disabled = wrap.scrollLeft <= 0;
+    next.disabled = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1;
+  };
+  const move = direction => {
+    const table = wrap.querySelector("table");
+    const step = typeof getComputedStyle === "function" ? parseFloat(getComputedStyle(table).getPropertyValue("--region-width")) || 170 : 170;
+    wrap.scrollBy({left: direction * step, behavior: "smooth"});
+  };
+  previous.addEventListener("click", () => move(-1));
+  next.addEventListener("click", () => move(1));
+  wrap.addEventListener("scroll", refresh);
+  window.addEventListener?.("resize", refresh);
+  wrap.refreshScrollControls = refresh;
+  refresh();
 }
 function gameArtwork(appId) {
   const frame = node("span", undefined, "game-artwork");
@@ -137,7 +194,7 @@ function showProfile(profile) {
 function restoreRequest(saved) {
   const request = saved?.request;
   const order = request?.order || "priority";
-  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > 2 || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
+  if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > maxComparisons || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
   preferredComparisons = [...request.regions];
   lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl", order};
   document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
@@ -271,21 +328,17 @@ function offerPriceBlock(offer, converted, currency) {
   else block.append(saleNote(offer.price, offer.price.currency));
   return block;
 }
-function appendBestOffers(tr, item, home) {
+function appendBestOffers(tr, item, home, regions) {
   if (!showBestOffers || item.pending) return;
   const offers = item.best_offers, best = item.best_offer_comparison;
   if (!offers) { tr.children[0].append(node("small", "Refresh comparison to load Steam best offers.", "best-offer")); return; }
-  if (!item.comparison) {
-    tr.children[1].remove();
-    tr.append(node("td", item.skipped?.reason || "Default offer unavailable", "skip-reason"), node("td"), node("td"));
-  }
   const currency = storefronts[home].currency === "PLN" ? "zł" : storefronts[home].currency;
   tr.children[1].append(offerPriceBlock(offers[home], offers[home]?.price?.amount, currency));
   const alternatives = node("div", undefined, "foreign");
-  for (const [region, offer] of Object.entries(offers)) {
-    if (region === home) continue;
+  for (const region of regions) {
+    const offer = offers[region];
     const converted = best?.alternatives.find(p => p.region === region);
-    const block = offerPriceBlock(offer, offer.amount_in_home ?? converted?.amount_in_home ?? offer.price?.amount, (offer.amount_in_home != null || converted) ? currency : offer.price?.currency);
+    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount, (offer?.amount_in_home != null || converted) ? currency : offer?.price?.currency);
     block.insertBefore(node("small", region.toUpperCase()), block.children[0]);
     alternatives.append(block);
   }
@@ -300,7 +353,9 @@ function appendBestOffers(tr, item, home) {
   } else delta.append(node("small", "Not all storefront offers could be compared"));
   tr.children[3].append(delta);
 }
-function comparisonRow(item, resultHome, showWishlistCredits = false) {
+function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null) {
+  const regions = selectedRegions?.length ? selectedRegions : item.comparison?.alternatives.map(p => p.region)
+    || Object.keys(item.best_offers || {}).filter(region => region !== resultHome);
   const baseline = () => storefronts[resultHome];
   const unit = () => baseline().currency === "PLN" ? "zł" : baseline().currency;
   const diff = item => item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(p => p.amount_in_home));
@@ -332,7 +387,9 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     if (homeProvenance) home.title = homeProvenance;
     home.append(saleNote(c.home_price, baseline().currency)); tr.append(home);
     const td = node("td"), alternatives = node("div", undefined, "foreign");
-    for (const p of c.alternatives) {
+    for (const region of regions) {
+      const p = c.alternatives.find(value => value.region === region);
+      if (!p) { alternatives.append(node("span", "Price unavailable")); continue; }
       const price = node("span");
       price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
       const altProvenance = formatProvenance(p.source);
@@ -344,11 +401,22 @@ function comparisonRow(item, resultHome, showWishlistCredits = false) {
     const delta = diff(item), difference = node("td", `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${money(Math.abs(delta))} ${unit()}`, "difference" + (c.is_fair ? " fair" : "")); const percentage = node("span", percentageLabel(percentageDifference(c)), "difference-percent");
     percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
     difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
-  } else { const td = node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"); td.colSpan = 3; tr.append(td); }
-  appendBestOffers(tr, item, resultHome);
+    const cheapest = c.alternatives.reduce((best, value) => value.amount_in_home < best.amount_in_home ? value : best);
+    difference.append(node("small", `Cheapest: ${cheapest.currency} · ${storefronts[cheapest.region]?.name || cheapest.region.toUpperCase()}`, "cheapest-storefront"));
+  } else {
+    tr.append(node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"));
+    const foreign = node("td"), placeholders = node("div", undefined, "foreign");
+    for (const region of regions) placeholders.append(node("span", item.pending ? "Waiting…" : "Not compared", "skip-reason"));
+    foreign.append(placeholders); tr.append(foreign, node("td", item.pending ? "Waiting…" : "Not compared", "skip-reason"));
+  }
+  appendBestOffers(tr, item, resultHome, regions);
+  for (const [index, name] of [[0,"pinned-game"],[1,"pinned-home"],[2,"scrolling-storefronts"],[3,"pinned-difference"]]) tr.children[index].className = `${tr.children[index].className || ""} ${name}`.trim();
   return tr;
 }
 function render() {
+  const regions = comparisonRegions(lastRequest?.regions, items);
+  setComparisonLayout($("wishlist-table"), regions);
+  $("wishlist-storefront-headings").replaceChildren(...regionalHeadings(regions));
   $("export-csv").disabled = !items.length;
   $("filter-help").hidden = filter !== "skipped";
   const comparable = items.filter(item => item.comparison);
@@ -371,10 +439,10 @@ function render() {
   for (const id of rowCache.keys()) if (!currentIds.has(id)) rowCache.delete(id);
   let position = 0;
   for (const item of visible) {
-    const signature = resultHome + showBestOffers + JSON.stringify(item);
+    const signature = resultHome + regions.join(",") + showBestOffers + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
-    const tr = comparisonRow(item, resultHome, true);
+    const tr = comparisonRow(item, resultHome, true, regions);
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
     rowCache.set(item.app_id, cached);
@@ -549,7 +617,18 @@ function downloadCsv(contents, filename) {
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
-$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > 2) return notice("Choose one or two comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
+$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
+buildStorefrontControls();
+bindComparisonScroll("wishlist", $("wishlist-table").parentElement || $("wishlist-scroll"));
+bindComparisonScroll("library", $("library-table").parentElement || $("library-scroll"));
+$("currency-search").addEventListener("input", filterStorefrontControls);
+for (const [id, checked] of [["select-all-currencies", true], ["clear-currencies", false]]) {
+  $(id).addEventListener("click", () => {
+    if (comparisonCoordinator.busy) return;
+    document.querySelectorAll('[name="region"]').forEach(el => el.checked = checked && el.value !== selectedHome());
+    updateSelections({target: {name: "region"}});
+  });
+}
 document.querySelectorAll('[name="home"], [name="region"]').forEach(el => el.addEventListener("change", updateSelections));
 updateSelections();
 comparisonCoordinator.subscribe(updateSelections);

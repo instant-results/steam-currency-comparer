@@ -1,6 +1,6 @@
 # Text and localization decisions
 
-Updated: 2026-10-20. This is the current reference for user-facing wording,
+Updated: 2026-10-21. This is the current reference for user-facing wording,
 typography, and text alignment. Update the relevant decision when changing copy
 or its presentation. English is the current interface language; a translation
 system and language selector have not been implemented.
@@ -65,6 +65,21 @@ is used when an expired source job requires a new initial comparison.
 Keep these captions in the existing hint typography. The sidebar action uses the
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
 alignment, horizontal table scrolling and both compact and separate credit layouts.
+
+## Many-currency comparisons
+
+Use **Find a currency or country**, **Select all**, **Clear**, **Previous storefront**
+and **Next storefront** for selection and scrolling. Headings pair a currency code
+with its representative country; USD means United States and EUR means Germany.
+For more than four alternatives the compact displayed caption gives the baseline
+and storefront count; actual column headings and CSV retain every selected code.
+
+Keep the existing column order and typography. Pin game/title and baseline on the
+left and DIFFERENCE on the right; regional headings and both offer sets use the
+same ordered slots. On narrow screens put identity above the price row, keeping
+baseline and DIFFERENCE at its edges. Missing observations occupy their regional
+slot rather than shifting other prices. The overall difference identifies the
+cheapest selected storefront. Large catalog metrics use **Regional statistics**.
 
 ## Owned-library wording
 

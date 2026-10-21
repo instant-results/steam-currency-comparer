@@ -1,11 +1,11 @@
 # Steam Currency Comparer
 
-**Version: 0.6.2-beta** · Beta for local use.
+**Version: 0.7.0-beta** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
 Compare the prices of games on your public Steam wishlist, or browse featured
-developer and publisher catalogs, across regional Steam storefronts. Choose a baseline currency and one or two other storefronts; the app
+developer and publisher catalogs, across regional Steam storefronts. Choose a baseline currency and up to 36 other storefronts; the app
 converts their prices using National Bank of Poland (NBP) exchange rates and shows
 which games cost more or less in your baseline storefront, including current sales.
 
@@ -25,9 +25,12 @@ change over time. No personal Steam profile is used.
 
 ## What it does
 
-- Compares Poland (PLN), the United States (USD), Germany (EUR), Norway (NOK),
-  and the United Kingdom (GBP). Any can be the baseline; the default is PLN
-  against USD and EUR.
+- Compares 37 currencies using one representative Steam storefront per currency.
+  Any can be the baseline, with up to 36 alternatives. Search the currency picker
+  or choose Select all; the default is PLN against USD and EUR.
+  See the [supported storefronts](docs/STOREFRONTS.md).
+- Keeps game/title, baseline and DIFFERENCE visible while regional price columns
+  scroll horizontally. Catalog tables share the same scroll position.
 - Shows regional final prices, discounts, converted prices, and absolute and
   percentage differences.
 - Optionally shows Steam's best purchase offers alongside default game prices,
@@ -133,7 +136,7 @@ An existing wishlist comparison is restored first.
 
 1. Enter your 17-digit SteamID64 or your numeric Steam profile URL to compare
    your own public wishlist.
-2. Select a baseline and one or two comparison currencies.
+2. Select a baseline and one or more comparison currencies.
 3. Choose the loading order and click **Compare regional prices**.
 
 The example uses live Steam prices and NBP exchange rates, so it also needs
@@ -149,9 +152,11 @@ installation if the project's dependencies change.
 ## What to expect
 
 - **Public wishlists only**, with at most 1,000 games per comparison in the web app.
-- **Large wishlists take time.** Steam requests are paced at 1.5-second intervals.
-  A cold 100-game comparison across three storefronts needs roughly 7½ minutes
-  of request spacing, plus network delays and retries. Cached prices reduce work.
+- **More storefronts take more time.** Steam requests are paced at 1.5-second
+  intervals and data is retrieved in batches. A cold 100-game window across all
+  37 storefronts normally needs 74 data requests before retries or URL-driven
+  splitting. Cached prices reduce work; the three-storefront performance example
+  above does not predict an all-storefront comparison time.
 - **Name order may start slowly:** it first fetches missing game names from the
   baseline storefront. Your Rank is the default.
 - **Unavailable products are hidden by default.** Enable **Show unavailable

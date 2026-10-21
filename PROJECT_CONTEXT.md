@@ -1,18 +1,17 @@
 # Steam Currency Comparer — development handoff
 
-Updated: 2026-10-20. Current state, not a change log.
+Updated: 2026-10-21. Current state, not a change log.
 
 ## Start here
 
 Read README.md and docs/USAGE.md, then inspect code and Git status.
-Integration target: `main`. Version: **0.6.2-beta** in
-steam_price_polisher/version.py. Current branch: `feature/post-load-currency-switching`.
+Integration target: `main`. Version: **0.7.0-beta** in
+steam_price_polisher/version.py.
 Substantial features increment MINOR; refinements increment PATCH; first stable
-version is 1.0.0. Automatic example loading and shared frontend coordination are
-integrated into main from `codex/automatic-example-loading`. The active branch adds
-NBP preparation, the Steam currency-change backend and frontend switching; no release version bump yet. Commit implementation
-and regression tests separately when authorized. Tags, releases and deployment
-have not been requested. For integration, push the branch,
+version is 1.0.0. NBP preparation, post-load currency switching and 37-currency
+comparisons are implemented in 0.7.0-beta. Commit implementation and regression
+tests separately. Tags, releases and deployment have not been requested.
+For integration, push the branch,
 open/review/test a pull request, merge it on
 GitHub, synchronize main, then delete the confirmed merged branch remotely/locally.
 Repository: https://github.com/instant-results/steam-currency-comparer.
@@ -36,9 +35,16 @@ is implemented for wishlist/example, Developers and Publishers; see docs/ROADMAP
   hidden/disabled behind OWNED_LIBRARY_ENABLED=False pending authenticated live
   API-key QA. A key alone does not enable it. Its saved state remains dormant and
   must not lock controls or restore currencies while disabled.
-- Five supported pairs: PL/PLN, US/USD, DE/EUR, NO/NOK, GB/GBP. Default PLN against
-  USD/EUR. Public validation still requires one baseline and one or two alternatives.
-  Remember temporarily conflicting choices; active jobs lock shared currency controls.
+- 37 live currencies, one representative storefront each (US for USD, Germany for
+  EUR), any baseline and one to 36 alternatives. Default PLN against USD/EUR. Shared
+  registry: steam_price_polisher/storefronts.json, escaped into HTML for the browser.
+  Searchable bounded picker, Select all/Clear, retained conflicting preferences and
+  shared busy locking. See docs/STOREFRONTS.md for mapping and live validation.
+- The matrix pins game/title and baseline on the left and DIFFERENCE on the right.
+  Regional headings/default/best-offer slots scroll together. Catalog tables share
+  scroll positions, suppress delayed synchronized events and keep separate slots for
+  missing offers. Narrow screens put identity above the pinned price edges. Large
+  catalog statistics are expandable and their state survives rerender/reload.
 - Wishlist: Your Rank, Date Added, Name; public numeric profiles need no key, vanity
   resolution optionally uses a server-side Steam key. At most 1,000 games, no silent
   truncation. The 200-game performance cap exists only in an ignored benchmark harness.
@@ -109,15 +115,15 @@ separately; hidden catalog jobs reconnect before automatic work. Catalog cursors
 retain discoveryHome: Load more uses zero when the displayed baseline differs,
 then deduplicates against loaded products. Expired wishlist sources need a new
 initial comparison; completed saved snapshots stay available. Owned library stays
-disabled, and no additional storefronts or mid-load switching are included.
+disabled; additional regional USD groups and mid-load switching remain outside scope.
 
 BatchPolicy defaults: metadata/price sizes 100, encoded URL budget 6,000 bytes,
 7 logical recovery calls and 21 physical attempts per planned batch, shared across
 children. Configurable via JobManager(batch_policy=...). One country per request.
 Default price batches use appdetails filters=price_overview. StoreBrowse requests
 basic info and best_purchase_option. Both datasets require two requests per country
-per window cold. Retrieval fixtures exercise more than three/five countries; new real
-countries still require validation before enabling them in configuration/UI.
+per window cold. Retrieval fixtures exercise more than three/five countries; all 37 configured
+representatives were live-validated with public sample games on 2026-10-20.
 
 Match IDs, not array positions. Validate currencies, prices, metadata, missing and
 duplicate records. Successful empty appdetails arrays mean no price, not free.
@@ -152,49 +158,24 @@ source lines, locals and private paths. Aggregate batch logs are privacy-filtere
 
 ## Verification and measurement
 
-Current backend stage: 158 distinct focused Python tests passed across runs covering
-currency changes, web jobs, batching, analysis, rates/cache, configuration,
-conversion, logging, catalogs and the hidden library. Sixteen new switching tests
-cover selective fetching, both offer sets, fixed order, partial observations,
-cache expiry, cancellation/retry, network denial, tokens, limits and source reuse.
-An older library test fixture now returns complete NBP tables. Git diff checks pass.
-Frontend switching validation: all 103 frontend tests pass (19 new cases), plus
-63 focused Python currency/backend/catalog tests and JavaScript syntax checks.
-Browser QA passed at 1440px/960px/390px CSS widths with synthetic upstream data
-and the production worker: snapshot retention, reload, both offer sets, catalog
-expansion, cancellation/retry, aligned columns and no narrow-screen page overflow.
-A downloaded 30-row catalog CSV retained the displayed PLN snapshot after a
-cancelled GBP update. Browser console checks were clean. Local report/screenshot:
-ignored .steam-price-polisher/qa/frontend-currency-switching.md and
-currency-switching-desktop.png. These are not new live Steam/NBP measurements.
-Live Steam/NBP backend validation passed on 2026-10-20 using an isolated temporary
-cache and normal pacing/retries. The sandbox blocked the initial wishlist request;
-approved elevated execution succeeded. The full wishlist loaded once. A baseline
-swap and switch back made zero network requests; adding GBP fetched only UK price
-and metadata/offer batches. Game order and original results remained unchanged.
-Both NBP tables loaded once; previously unselected Table A/B currencies reused the
-cache without HTTP. No HTTP errors occurred in the elevated run. This checks the
-production worker through in-process WSGI routes, not browser integration.
-Local aggregate report: ignored `.steam-price-polisher/qa/live_currency_check_result.json`.
+Many-currency stage: all 208 Python tests and 110 frontend tests pass; JS syntax
+and diff checks pass. Added coverage exercises all 37 baselines/full selections,
+API/HTML registry consistency, Steam amount units, cached baseline swaps, missing
+offer slots, 37-region CSV, restoration and delayed catalog scroll events. Browser
+QA passed at 1440px and 390px with synthetic prices: all-currency baseline changes,
+reload, optional credits, both offers, no page overflow, fixed pinned columns,
+long VND values without cell overflow and catalog scroll synchronization. The
+333-row downloaded CSV retained all 37 storefronts and both offer sets for nine
+products. Browser console checks were clean. Check `/api/health` before reusing a
+local preview; restart the server after Python code or version changes.
 
-Merge verification: all 165 Python tests and 84 frontend tests pass;
-JavaScript syntax and Git diff checks pass. New coverage exercises fresh startup,
-restoration/expiry, hidden catalog reconnect, initialization races, user priority,
-cancellation/retry, unavailable storage and enabled/disabled library coordination.
-Live browser QA confirms seven example results load automatically, survive reload
-and remain intact after catalog work; shared controls lock during catalog startup.
-The button is removed and the form remains aligned at desktop/medium widths.
-Screenshot: ignored .steam-price-polisher/qa/automatic-example.png.
-Additional live profile QA covered the full wishlist, reload during/after loading,
-cancellation/partial restoration/retry, catalog waiting and refresh, display
-controls and CSV. No functional defects or browser console warnings/errors found.
-Detailed report: ignored .steam-price-polisher/qa/public-wishlist-behavior.md;
-profile-linked screenshots, snapshots and exports remain local and uncommitted.
-Tests cover batching limits/recovery/cache/cancellation, five/six storefronts, offer
-semantics, shared physical-attempt accounting, rate-limit backoff, all existing job
-contracts, checkbox rendering without requests, credit columns and CSV separation.
-Earlier batching browser QA used labeled isolated fixture prices to confirm both
-offers, aligned columns and refresh persistence. QA artifacts remain ignored.
+Live Steam/NBP backend validation passed on 2026-10-20 using an isolated temporary
+cache and normal pacing/retries. The wishlist loaded once; a baseline swap and
+switch back made zero HTTP requests, and adding GBP fetched only UK data. Both
+NBP tables loaded once and previously unselected rates reused the cache. No HTTP
+errors occurred. Additional public-game checks validated returned currencies and
+NBP coverage for all 37 representative countries; this is not a full-list timing
+benchmark. Aggregate QA reports and screenshots remain local and ignored.
 
 One live cold run per version with the supplied wishlist capped at the same 200 IDs,
 PL vs US/DE, normal pacing. Before: 815.194 s, first row 4.897 s, 534 price attempts,
@@ -211,4 +192,4 @@ without expired-data background refresh; see docs/ROADMAP.md.
 
 Owned-library successful authenticated live QA remains deferred until Steam Guard/
 API-key setup. Do not claim the public wishlist benchmark validates owned-library
-retrieval. Existing hidden prototype and local main merge remain as before this branch.
+retrieval. The existing prototype remains hidden and disabled.

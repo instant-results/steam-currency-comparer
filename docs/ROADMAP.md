@@ -1,6 +1,6 @@
 # Development roadmap
 
-Updated: 2026-10-20. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-21. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
@@ -62,7 +62,7 @@ background refresh from this potential task. The design must account for indepen
 prices, best offers and exchange rates, plus requested row order. No cache-first
 publication implementation has been approved; this is a potential future TODO.
 
-Other unselected investigations: new countries, opt-in best-offer retrieval and
+Other unselected investigations: additional regional USD groups, opt-in best-offer retrieval and
 regular bundle/package price enrichment. Concurrency remains unselected.
 
 ## Comparison experience improvements
@@ -108,7 +108,7 @@ unselected currencies. A failed table does not block available requested rates.
 Atomic cache schema 9
 preserves table-specific publication dates, sources and retrieval ages. Fresh tables
 and rates are reused, stale fallback remains labeled, and local network denial stops
-retrieval. The current UI and public storefront validation still support five pairs.
+retrieval. The UI and API now support 37 representative storefronts, with up to 36 alternatives.
 The backend retains each job's loaded selection/order and catalog membership in
 expiring memory. POST `/api/jobs/{id}/currencies` queues a separate comparison of
 that selection after complete/partial completion, without repeating discovery.
@@ -118,8 +118,8 @@ Only missing/expired selected-country observations need Steam retrieval. Origina
 results stay accessible, including after failure/cancellation of the new job.
 Token access, shared worker limits and a lock across related jobs apply.
 Frontend integration is implemented, including combining loaded catalog pages,
-separate displayed/pending state, reload restoration and CSV selection. No additional countries or
-mid-load switching are included in this stage.
+separate displayed/pending state, reload restoration and CSV selection. Representative-country expansion is implemented separately below; mid-load
+switching remains deferred.
 
 #### Frontend integration
 
@@ -145,8 +145,18 @@ Implemented in `web/app.js`, `web/creators.js`, shared controls and rendering:
   Browser QA uses the production worker with labeled synthetic upstream data;
   previous backend live Steam/NBP checks remain separate evidence.
 
-Additional countries, mid-load changes and the loading-order dropdown adjustment
-remain separate work. Retain the current version until a version change is requested.
+Mid-load changes and the loading-order dropdown adjustment remain separate work. Retain the current version until a version change is requested.
+
+### Implemented: many-currency selection and scrolling comparisons
+
+Support one representative country for each of 37 live currencies (US for USD,
+Germany for EUR), up to 36 alternatives, with a searchable picker and Select all /
+Clear. The shared registry drives API validation and browser choices. The table
+pins game/title and baseline on the left and DIFFERENCE on the right; regional
+headings and both offer sets share horizontal slots. Catalog scrolling is
+synchronized and large per-currency statistics are expandable. Narrow layouts put
+identity above the pinned price edges. Existing completed/pending updates and CSV
+stay consistent with the displayed selection. See [mapping and validation](STOREFRONTS.md).
 
 ### TODO: align the loading-order dropdown
 

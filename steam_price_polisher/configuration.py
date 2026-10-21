@@ -3,10 +3,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from types import MappingProxyType
 
-# Limited to the existing supported Steam storefront/currency pairs.
-REGION_CURRENCIES = MappingProxyType({"pl": "PLN", "us": "USD", "de": "EUR", "no": "NOK", "gb": "GBP"})
+# One representative country per live Steam currency; regional USD groups are excluded.
+STOREFRONTS = MappingProxyType(json.loads(Path(__file__).with_name("storefronts.json").read_text(encoding="utf-8")))
+REGION_CURRENCIES = MappingProxyType({region: value["currency"] for region, value in STOREFRONTS.items()})
+MAX_COMPARISONS = len(REGION_CURRENCIES) - 1
 
 
 @dataclass(frozen=True)
@@ -20,7 +24,7 @@ class RegionConfig:
         region = self.region.strip().lower()
         currency = self.currency.strip().upper()
         if region not in REGION_CURRENCIES:
-            raise ValueError(f"Unsupported region: {region!r}. Choose pl, us, de, no, or gb.")
+            raise ValueError(f"Unsupported region: {region!r}. Choose a supported Steam storefront.")
         expected = REGION_CURRENCIES[region]
         if currency != expected:
             raise ValueError(f"Region {region} requires {expected}, not {currency!r}")
@@ -46,8 +50,8 @@ class ComparisonConfig:
         if not isinstance(self.home, RegionConfig):
             raise ValueError("Home must be a RegionConfig")
         alternatives = tuple(self.alternatives)
-        if not 1 <= len(alternatives) <= 2:
-            raise ValueError("Choose one or two comparison regions")
+        if not 1 <= len(alternatives) <= MAX_COMPARISONS:
+            raise ValueError(f"Choose between one and {MAX_COMPARISONS} comparison regions")
         seen = {self.home.region}
         for alternative in alternatives:
             if not isinstance(alternative, RegionConfig):
