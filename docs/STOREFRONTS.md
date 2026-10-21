@@ -20,6 +20,15 @@ Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
 the right. The main column headings share a vertical centre on desktop. OTHER
 STOREFRONTS and its conversion caption remain fixed horizontally; the individual
 currency/country labels occupy a separate row below and scroll with the prices.
+Once that row reaches the sticky scrollbar, its titles remain visible directly
+beneath it while scrolling through results. They keep the same horizontal offset,
+including across catalog tables, and stop following at the comparison boundary.
+Titles remain available when all columns fit without a scrollbar. Country labels
+include the country code after a middle dot (for example, United States · US).
+Each regional price cell shows the converted price on the left and a muted
+original price on the right. Currency codes line up at the right edge across
+rows, independent of the number of digits. Long original prices can wrap below
+the converted amount on narrow screens while retaining their right alignment.
 Regional currency headings, default prices and best offers use the same ordered,
 fixed-width slots between them. The blue horizontal scrollbar sits above the list,
 spans only the visible regional columns, and stays at the viewport top while

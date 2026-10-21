@@ -32,8 +32,10 @@ change over time. No personal Steam profile is used.
 - Keeps game/title, baseline and DIFFERENCE visible while regional price columns
   scroll horizontally. A blue scrollbar above the results spans only the regional
   columns and stays available while scrolling down the comparison. Catalog tables
-  share the same scroll position.
-- Shows regional final prices, discounts, converted prices, and absolute and
+  share the same scroll position. Currency/country titles stay visible beneath the
+  scrollbar while scrolling through results.
+- Shows converted regional prices alongside muted original-currency prices,
+  right-aligned currency codes, discounts, and absolute and
   percentage differences.
 - Optionally shows Steam's best purchase offers alongside default game prices,
   identifying packages and bundles separately. Toggling the checkbox uses already
