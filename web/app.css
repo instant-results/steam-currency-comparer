@@ -154,7 +154,7 @@ h1 > span { color: var(--muted); }
   grid-template-columns: 300px minmax(0, 1fr);
   border: 1px solid var(--line);
   border-radius: 13px;
-  overflow: hidden;
+  overflow: clip;
 }
 .profile-row {
   grid-column: 1 / -1;
@@ -1280,17 +1280,38 @@ td:first-child { min-width: 0; }
 .currency-search { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
 .currency-search input { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
 .storefront-list { max-height: 250px; overflow-y: auto; scrollbar-gutter: stable; padding-right: 6px; }
+.storefront-list, .regional-scrollbar { scrollbar-width: auto; }
+@supports not selector(::-webkit-scrollbar) {
+  .storefront-list, .regional-scrollbar { scrollbar-color: #5275a0 #172236; }
+}
+:is(.storefront-list, .regional-scrollbar)::-webkit-scrollbar { width: 12px; height: 12px; }
+:is(.storefront-list, .regional-scrollbar)::-webkit-scrollbar-track { background: #172236; }
+:is(.storefront-list, .regional-scrollbar)::-webkit-scrollbar-thumb { background: #5275a0; border: 3px solid #172236; border-radius: 8px; }
+:is(.storefront-list, .regional-scrollbar)::-webkit-scrollbar-thumb:hover { background: #6b96c6; }
 .storefront-list .region { margin: 6px 0; }
 .currency-selection-actions { display: flex; gap: 14px; margin-bottom: 10px; }
 .currency-selection-actions button { background: none; border: 0; color: var(--blue-light); padding: 4px 0; font-size: 12px; }
 .currency-selection-actions button:disabled { opacity: .5; }
 
 /* One scroll surface, with fixed context at both edges and aligned regional slots. */
-.comparison-scroll { max-width: 100%; container-type: inline-size; isolation: isolate; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: auto; }
-.comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
-.comparison-matrix {
+.comparison-scroll { max-width: 100%; container-type: inline-size; isolation: isolate; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: auto; scrollbar-width: none; }
+.comparison-scroll::-webkit-scrollbar { display: none; }
+.comparison-area { min-width: 0; position: relative; }
+.comparison-area, .comparison-matrix {
   --game-width: 230px; --credit-width: 0px; --home-width: 125px;
   --region-width: 170px; --difference-width: 165px;
+}
+.comparison-area.matrix-with-credits { --credit-width: 125px; }
+.regional-scrollbar-shell {
+  position: sticky; top: 0; z-index: 6;
+  padding: 8px var(--difference-width) 8px calc(var(--game-width) + var(--credit-width) + var(--home-width));
+  background: var(--panel);
+}
+.regional-scrollbar { overflow-x: scroll; overflow-y: hidden; min-width: 0; }
+.regional-scrollbar-extent { height: 1px; }
+.regional-scrollbar:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.comparison-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.comparison-matrix {
   width: calc(var(--game-width) + var(--credit-width) + var(--home-width) + var(--region-count) * var(--region-width) + var(--difference-width));
   min-width: 0 !important; table-layout: fixed; border-collapse: separate; border-spacing: 0;
 }
@@ -1302,16 +1323,28 @@ td:first-child { min-width: 0; }
 .comparison-matrix .difference-column { width: var(--difference-width); }
 .comparison-matrix td, .comparison-matrix th { box-sizing: border-box; padding: 12px; overflow-wrap: anywhere; }
 .comparison-matrix th { white-space: normal; }
-.comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: static; }
+.comparison-matrix thead tr:not(.storefront-label-row) { height: 88px; }
+.comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: absolute; }
 .comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: flex-end; gap: 12px; }
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
   display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
   width: calc(var(--region-count) * var(--region-width));
 }
 .comparison-matrix .foreign > * { min-width: 0; padding: 10px 12px; border-left: 1px solid var(--line); }
-.comparison-matrix .storefront-headings { margin-top: 12px; }
+.comparison-matrix .foreign > span:not(.storefront-heading) { padding-top: 0; padding-bottom: 0; }
+.comparison-matrix .storefront-headings { margin-top: 0; }
+.comparison-matrix .storefront-label-row { height: auto; }
+.comparison-matrix .storefront-label-row > td { border-top: 0; padding: 0; }
+.comparison-matrix .storefront-label-row > .storefront-label-cell { text-align: left; }
+.comparison-matrix .storefront-group-heading > .header-stack {
+  position: sticky; left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
+  z-index: 1; background: var(--panel);
+  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width) - 24px));
+}
+.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 0; white-space: normal; }
+.creator-panel th.catalog-foreign-heading.storefront-group-heading { border-left: 0; }
 .comparison-matrix .storefront-heading { color: var(--text); text-align: left; }
-.comparison-matrix .storefront-heading small { font-size: 10px; letter-spacing: 0; }
+.comparison-matrix .storefront-heading small { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0; }
 .comparison-matrix td.scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { padding-left: 0; padding-right: 0; }
 .comparison-matrix th:nth-last-child(2) > .header-stack { padding-left: 12px; }
 .comparison-matrix .pinned-game, .comparison-matrix th:first-child {
@@ -1342,8 +1375,8 @@ td:first-child { min-width: 0; }
 
 /* On phones the pinned identity occupies a row above the pinned price edges. */
 @media (max-width: 700px) {
-  .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
-  .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
+  .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
+  .comparison-area.matrix-with-credits, .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
   .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
   .comparison-matrix colgroup { display: none; }
   .comparison-matrix tr { display: grid; grid-template-columns: var(--home-width) calc(var(--region-count) * var(--region-width)) var(--difference-width); height: auto; }
@@ -1362,16 +1395,74 @@ td:first-child { min-width: 0; }
   .comparison-matrix.matrix-with-credits .pinned-difference, .comparison-matrix.matrix-with-credits th:last-child { grid-row: 3; grid-column: 3; }
   .comparison-matrix .foreign > * { padding: 10px 8px; }
   .comparison-matrix .game-name { align-items: center; }
+  .comparison-matrix thead tr:not(.storefront-label-row) { height: auto; }
+  .comparison-matrix thead .storefront-group-heading { padding-bottom: 40px; }
+  .comparison-matrix .storefront-label-row > .pinned-game,
+  .comparison-matrix .storefront-label-row > .catalog-credit-cell { display: none; }
+  .comparison-matrix .storefront-label-row > .pinned-home { grid-row: 1; grid-column: 1; }
+  .comparison-matrix .storefront-label-row > .storefront-label-cell { grid-row: 1; grid-column: 2; }
+  .comparison-matrix .storefront-label-row > .pinned-difference { grid-row: 1; grid-column: 3; }
 }
 
-.storefront-scroll-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px 0 8px; color: var(--muted); font-size: 11px; }
-.storefront-scroll-controls button { background: var(--panel); border: 1px solid var(--line); color: var(--blue-light); padding: 3px 10px; font-size: 16px; }
-.storefront-scroll-controls button:disabled { opacity: .4; }
-
 .comparison-matrix .price, .comparison-matrix .difference { font-size: 14px; white-space: normal; }
-.comparison-matrix .foreign > span, .comparison-matrix .offer-price { font-size: 14px; }
+.comparison-matrix .price, .comparison-matrix .foreign > span,
+.comparison-matrix .foreign > span > span, .comparison-matrix .offer-price {
+  font-size: 14px; font-weight: 400; line-height: 1.5; color: var(--text);
+}
+.comparison-matrix .foreign > span > span { display: inline; }
+.comparison-matrix .sale-note { line-height: 1.5; }
 .creator-catalog .comparison-matrix .foreign > span > span { white-space: normal; }
 @media (max-width: 700px) {
   .comparison-matrix .price, .comparison-matrix .difference,
-  .comparison-matrix .foreign > span, .comparison-matrix .offer-price { font-size: 12px; }
+  .comparison-matrix .foreign > span, .comparison-matrix .foreign > span > span,
+  .comparison-matrix .offer-price { font-size: 12px; }
 }
+
+/* Keep regional context below the sticky scrollbar without moving the table head. */
+.regional-scrollbar-shell.without-scrollbar { padding-top: 0; padding-bottom: 0; }
+.sticky-storefront-titles.comparison-matrix {
+  position: absolute; top: 100%;
+  left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
+  right: var(--difference-width); width: auto;
+  overflow: hidden; background: var(--panel); border-bottom: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.sticky-storefront-titles .foreign > .storefront-heading { padding-top: 5px; padding-bottom: 5px; }
+
+/* Keep converted prices at the start and original-currency codes at the end. */
+.comparison-matrix .foreign .regional-price-line {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+  gap: 2px 8px; font-size: 14px; line-height: 1.5;
+}
+.regional-price-line .converted-price { white-space: nowrap; }
+.comparison-matrix .regional-price-line .original-price {
+  display: inline-flex; gap: 4px; margin: 0 0 0 auto;
+  font-size: 12px; font-weight: 400; line-height: 1.5;
+  color: #64748b; white-space: nowrap;
+}
+.original-price-currency { min-width: 3ch; text-align: right; }
+
+@media (max-width: 700px) {
+  .comparison-matrix .foreign .regional-price-line { font-size: 12px; }
+}
+
+/* Shared offer bands keep each game's best prices level across all storefronts. */
+.comparison-matrix .best-offer { margin-top: calc(1rem + var(--offer-align-offset, 0px)); }
+.comparison-matrix .best-offer .offer-label { min-height: var(--offer-label-height, 0px); }
+.comparison-matrix .best-offer .offer-value { min-height: var(--offer-value-height, 0px); }
+.comparison-matrix .best-offer .offer-name { min-height: var(--offer-name-height, 0px); }
+
+.comparison-matrix .offer-difference > span.offer-value { font-size: 14px; line-height: 1.5; }
+@media (max-width: 700px) {
+  .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
+}
+
+/* Keep the shared offer display choice beside the results it changes. */
+.results-panel .offer-controls {
+  margin: 0 0 16px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--blue-subtle);
+}
+.results-panel .offer-controls label { align-items: flex-start; font-size: 13px; }
+.results-panel .offer-controls input { flex: 0 0 auto; margin-top: 3px; }
+.results-panel .offer-controls .hint { margin: 6px 0 0; }

@@ -102,13 +102,13 @@ budgets, throttling, request accounting, and both offer calculations. UI tests
 cover toggling without requests, retained default values, credit columns, exports
 and refresh. The live benchmark is one run per version, not a repeated load test.
 
-The baseline is preserved by its pre-change commit and an isolated running process
-that imported the original modules before implementation edits. Raw responses,
-benchmark selection, caches and UI fixtures stay ignored. The research documents
-were committed before implementation. Feature changes are committed as `97a5c98`
-and tests as `88cb5de`, with delivery documentation committed separately. The user
-authorized pushing the branch. No release, deployment or owned-library enablement
-is authorized.
+The historical benchmark baseline is preserved by its pre-change commit; an
+isolated process imported the original modules for measurement. Raw responses,
+benchmark selection, caches and UI fixtures stay ignored. Research documents were
+committed before implementation, feature changes as `97a5c98`, and tests as
+`88cb5de`, with delivery documentation separate. This batching stage is complete;
+see [project context](../PROJECT_CONTEXT.md) for current integration status and
+[the roadmap](ROADMAP.md) for remaining work. Owned-library enablement remains deferred.
 
 
 Discount percentage preference: retain Steam's reported percentage when it agrees

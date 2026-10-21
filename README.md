@@ -30,11 +30,16 @@ change over time. No personal Steam profile is used.
   or choose Select all; the default is PLN against USD and EUR.
   See the [supported storefronts](docs/STOREFRONTS.md).
 - Keeps game/title, baseline and DIFFERENCE visible while regional price columns
-  scroll horizontally. Catalog tables share the same scroll position.
-- Shows regional final prices, discounts, converted prices, and absolute and
+  scroll horizontally. A blue scrollbar above the results spans only the regional
+  columns and stays available while scrolling down the comparison. Catalog tables
+  share the same scroll position. Currency/country titles stay visible beneath the
+  scrollbar while scrolling through results.
+- Shows converted regional prices alongside muted original-currency prices,
+  right-aligned currency codes, discounts, and absolute and
   percentage differences.
 - Optionally shows Steam's best purchase offers alongside default game prices,
-  identifying packages and bundles separately. Toggling the checkbox uses already
+  identifying packages and bundles separately. Find the checkbox directly above
+  the table in each tab. Toggling it uses already
   loaded data; filters and totals continue to describe default game offers.
 - Retrieves prices in batches. A single 200-game cold-cache measurement took
   20.7 seconds versus 13 minutes 35 seconds previously; first results arrived in

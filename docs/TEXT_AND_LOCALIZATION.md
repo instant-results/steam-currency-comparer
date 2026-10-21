@@ -68,8 +68,9 @@ alignment, horizontal table scrolling and both compact and separate credit layou
 
 ## Many-currency comparisons
 
-Use **Find a currency or country**, **Select all**, **Clear**, **Previous storefront**
-and **Next storefront** for selection and scrolling. Headings pair a currency code
+Use **Find a currency or country**, **Select all**, and **Clear** for selection.
+Use **Scroll other storefronts horizontally** as the top scrollbar's accessible
+label. Headings pair a currency code
 with its representative country; USD means United States and EUR means Germany.
 For more than four alternatives the compact displayed caption gives the baseline
 and storefront count; actual column headings and CSV retain every selected code.
@@ -80,6 +81,56 @@ same ordered slots. On narrow screens put identity above the price row, keeping
 baseline and DIFFERENCE at its edges. Missing observations occupy their regional
 slot rather than shifting other prices. The overall difference identifies the
 cheapest selected storefront. Large catalog metrics use **Regional statistics**.
+
+Use two header levels. On desktop, vertically centre GAME NAME, the baseline
+heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTHER
+STOREFRONTS and its conversion caption fixed horizontally within the visible
+regional area. Put individual currency/country labels in a separate row below,
+scrolling with the corresponding prices. Keep each country below its currency.
+When this label row reaches the sticky scrollbar, retain its currency/country
+titles immediately below the scrollbar until the comparison ends. Match its
+column widths, typography and horizontal offset to the original labels and prices;
+use the same behavior when no horizontal scrollbar is needed. Retain original
+accessible table labels and keep any visual copy hidden from assistive technology.
+Use 5px vertical padding in the sticky title copy (rather than the normal 10px)
+to reduce its height without shrinking either text line.
+Country codes now follow country names in both normal and sticky titles,
+separated by a middle dot with a space on either side (United States · US).
+Remove the country-code prefix from default and best-offer price rows. Keep the
+converted price at the start and show the original price in the existing muted
+12px country-code styling at the end. Keep the original currency code at the
+same right edge across rows. Original amount and code form one unit that can
+wrap together below the converted price when space is limited. Do not change
+comparison arithmetic, sale-note currencies, or CSV values.
+
+Best-offer blocks share their label, value and name bands across a game's
+baseline, regional and difference cells. Compensate for wrapped default details
+before the best-offer label; align the best-offer amounts and the sale details
+following offer names. Missing or subscription offers retain their value slot.
+Measure actual wrapping after render/width changes so bands can shrink as well
+as grow, preserving original-price alignment and the existing default-offer view.
+On narrow screens retain the identity/credit rows above the price headings and
+reserve enough space below wrapped group labels for their conversion caption.
+
+The horizontal scrollbar sits above each comparison and spans only the visible
+regional columns, excluding pinned identity, optional credits, baseline and
+DIFFERENCE. Keep it sticky at the viewport top within that comparison section.
+Use a muted blue thumb and dark blue track for this scrollbar and the vertical
+currency pickers. The redundant scrolling-arrow buttons and caption are removed;
+the native scrollbar and table retain keyboard navigation.
+Baseline and converted regional game amounts share font family, size, weight,
+line height and vertical starting position; their sale notes start together too.
+Keep compact country labels inline with amounts on narrow screens.
+
+## Best-offer display control
+
+Place **Show Steam's best purchase offers alongside game prices** directly above
+the comparison table in every tab, after the local filters/display controls or
+catalog overview. Keep the explanatory paragraph in the same outlined panel.
+Use a labelled checkbox, a unique help-text association and the local table/list
+as its controlled region. All copies reflect the same saved display setting;
+changing one rerenders loaded results without fetching more prices. The internal
+library copy remains inside its disabled/hidden panel during normal use.
 
 ## Owned-library wording
 

@@ -4,6 +4,9 @@ Updated: 2026-10-21. The app supports 37 live Steam currencies, with one
 representative country per currency. Any can be the baseline; select one to 36
 others. The default remains PLN against USD/EUR.
 
+Available in `0.7.0-beta`, integrated into `main` through
+[PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1).
+
 Use the searchable sidebar picker to find a currency or country. Select all
 chooses every alternative to the current baseline; Clear removes alternatives.
 Searching hides choices without changing their selection. Changing the baseline
@@ -14,10 +17,29 @@ Update currencies applies the choices to the current tab.
 ## Table behavior
 
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
-the right. Regional headings, default prices and best offers use the same ordered,
-fixed-width slots between them. Scroll with the visible scrollbar, the arrow
-controls, a trackpad, or arrow keys after focusing the table. Catalog headings
-and all catalog tables synchronize their horizontal position. Filters, sorts,
+the right. The main column headings share a vertical centre on desktop. OTHER
+STOREFRONTS and its conversion caption remain fixed horizontally; the individual
+currency/country labels occupy a separate row below and scroll with the prices.
+Once that row reaches the sticky scrollbar, its titles remain visible directly
+beneath it while scrolling through results. They keep the same horizontal offset,
+including across catalog tables, and stop following at the comparison boundary.
+Titles remain available when all columns fit without a scrollbar. Country labels
+include the country code after a middle dot (for example, United States · US).
+Each regional price cell shows the converted price on the left and a muted
+original price on the right. Currency codes line up at the right edge across
+rows, independent of the number of digits. Long original prices can wrap below
+the converted amount on narrow screens while retaining their right alignment.
+Best-offer blocks share a vertical start and label/price/name heights within
+each game, so wrapped defaults and unavailable offers do not shift the other
+storefronts. Following offer sale details align after the shared name band.
+Regional currency headings, default prices and best offers use the same ordered,
+fixed-width slots between them. The blue horizontal scrollbar sits above the list,
+spans only the visible regional columns, and stays at the viewport top while
+scrolling through the comparison. It stops following at the section's end.
+Currency-picker scrollbars use the same blue treatment. Scroll with the top
+scrollbar, a trackpad, or arrow keys after focusing the table or scrollbar.
+Catalog currency headings and all catalog tables synchronize their horizontal
+position. Filters, sorts,
 per-tab completed/pending snapshots and CSV keep their existing behavior.
 
 At narrow widths the pinned game/title occupies a full-width row above prices;

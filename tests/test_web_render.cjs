@@ -7,6 +7,7 @@ const {test} = require("node:test");
 class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
   get parentElement() { return this.parent; }
+  get firstElementChild() { return this.children[0] || null; }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
@@ -1361,6 +1362,115 @@ const offerFixture = () => {
 };
 const contentText = el => [el.textContent || "", ...el.children.map(contentText)].join(" ");
 
+test("regional headings identify the country while rows retain converted and original prices separately", () => {
+  const ctx = setup();
+  const headings = ctx.run('regionalHeadings(["us", "de"])');
+  assert.equal(headings[0].textContent, "USD");
+  assert.equal(headings[0].children[0].textContent, "United States " + String.fromCharCode(183) + " US");
+  const item = game("1", "Original prices");
+  item.comparison.alternatives[0].original_amount = 12345.67;
+  ctx.run(`items = ${JSON.stringify([item])}; render();`);
+  const slot = ctx.get("rows").children[0].children[2].children[0].children[0];
+  const line = slot.children[0];
+  assert.equal(line.className, "regional-price-line");
+  assert.equal(line.children[0].textContent, "20.00 zł");
+  assert.equal(line.children[1].children[0].textContent, "12,345.67");
+  assert.equal(line.children[1].children[1].textContent, "USD");
+  assert.equal(line.children[1].children[1].className, "original-price-currency");
+  item.comparison.alternatives[0].original_amount = 0;
+  ctx.run(`items = ${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.get("rows").children[0].children[2].children[0].children[0].children[0].children[1].children[0].textContent, "0.00");
+});
+
+test("best offers show their own original price and omit country-code prefixes", () => {
+  const ctx = setup(), item = offerFixture();
+  ctx.run(`showBestOffers = true; items = ${JSON.stringify([item])}; render();`);
+  const offer = ctx.get("rows").children[0].children[2].children[1].children[0];
+  assert.equal(offer.children[0].textContent, "Steam best offer");
+  assert.equal(offer.children[1].children[0].textContent, "20.00 zł");
+  assert.equal(offer.children[1].children[1].children[0].textContent, "5.00");
+  assert.equal(offer.children[1].children[1].children[1].textContent, "USD");
+});
+
+test("best-offer bands compensate for wrapped defaults and can shrink again after resizing", () => {
+  const ctx = setup(), table = ctx.get("alignment-table"), row = new Element("tr");
+  const heights = [{top:100,label:36,value:21,name:42}, {top:74,label:18,value:42,name:14}, {top:80,label:18,value:54,name:0}];
+  const blocks = heights.map(metrics => {
+    const block = new Element("div"), fields = {};
+    for (const band of ["label", "value", "name"]) if (metrics[band]) {
+      const field = new Element("span");
+      field.getBoundingClientRect = () => ({top:metrics.top,height:metrics[band]});
+      fields[`.offer-${band}`] = field;
+    }
+    block.querySelector = selector => fields[selector] || null;
+    return block;
+  });
+  table.getBoundingClientRect = () => ({width:1000});
+  table.querySelectorAll = () => [row]; row.querySelectorAll = () => blocks;
+  ctx.run('showBestOffers = true; alignBestOffers(document.getElementById("alignment-table"));');
+  assert.equal(row.style.getPropertyValue("--offer-label-height"), "36px");
+  assert.equal(row.style.getPropertyValue("--offer-value-height"), "54px");
+  assert.equal(row.style.getPropertyValue("--offer-name-height"), "42px");
+  assert.deepEqual(blocks.map(block => block.style.getPropertyValue("--offer-align-offset")), ["0px", "26px", "20px"]);
+  for (const metric of heights) Object.assign(metric, {top:90,label:18,value:21,name:14});
+  ctx.run('alignBestOffers(document.getElementById("alignment-table"));');
+  assert.equal(row.style.getPropertyValue("--offer-label-height"), "18px");
+  assert.equal(row.style.getPropertyValue("--offer-value-height"), "21px");
+  assert.equal(row.style.getPropertyValue("--offer-name-height"), "14px");
+  assert.deepEqual(blocks.map(block => block.style.getPropertyValue("--offer-align-offset")), ["0px", "0px", "0px"]);
+});
+
+test("best-offer layout coalesces renders and responds only to width changes", () => {
+  const frames = [], observers = [];
+  const ctx = setup({}, {requestAnimationFrame:callback => { frames.push(callback); return frames.length; },
+    ResizeObserver:class { constructor(callback) { this.callback = callback; observers.push(this); } observe(target) { this.target = target; } }});
+  const table = ctx.get("alignment-table");
+  ctx.run('alignBestOffers = table => {table.alignments = (table.alignments || 0) + 1;}; scheduleOfferAlignment(document.getElementById("alignment-table")); scheduleOfferAlignment(document.getElementById("alignment-table"));');
+  assert.equal(frames.length, 1);
+  frames.shift()(); assert.equal(table.alignments, 1);
+  const observer = observers.find(value => value.target === table);
+  observer.callback([{contentRect:{width:1000}}]);
+  assert.equal(frames.length, 1); frames.shift()();
+  observer.callback([{contentRect:{width:1000}}]);
+  assert.equal(frames.length, 0);
+  observer.callback([{contentRect:{width:800}}]);
+  assert.equal(frames.length, 1); frames.shift()();
+  assert.equal(table.alignments, 3);
+});
+
+test("best-offer display controls restore, synchronize and persist one shared setting", () => {
+  const values = new Map([["polisher-best-offers", "true"]]);
+  const storage = {getItem:key => values.get(key) || null, setItem:(key,value) => values.set(key,value)};
+  const ctx = setup({}, {sessionStorage:storage});
+  const ids = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"];
+  for (const id of ids) assert.equal(ctx.get(id).checked, true);
+  ctx.get("publishers-show-best-offers").checked = false;
+  ctx.get("publishers-show-best-offers").listeners.change();
+  for (const id of ids) assert.equal(ctx.get(id).checked, false);
+  assert.equal(ctx.run("showBestOffers"), false);
+  assert.equal(values.get("polisher-best-offers"), "false");
+  const restored = setup({}, {sessionStorage:storage});
+  for (const id of ids) assert.equal(restored.get(id).checked, false);
+});
+
+test("the catalog-local best-offer control rerenders loaded offers without new requests", async () => {
+  const item = offerFixture();
+  const ctx = creatorSetup({}, "developer", false, [{state:"complete",message:"Done",items:[item],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:item.app_id,name:item.name}],next_start:1,has_more:false,total:1}}}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const before = ctx.calls.length;
+  ctx.get("developers-show-best-offers").checked = true;
+  ctx.get("developers-show-best-offers").listeners.change();
+  assert.match(contentText(ctx.body()), /Complete Edition/);
+  assert.equal(ctx.get("show-best-offers").checked, true);
+  assert.equal(ctx.get("publishers-show-best-offers").checked, true);
+  assert.equal(ctx.calls.length, before);
+  ctx.get("developers-show-best-offers").checked = false;
+  ctx.get("developers-show-best-offers").listeners.change();
+  assert.doesNotMatch(contentText(ctx.body()), /Complete Edition/);
+  assert.equal(ctx.calls.length, before);
+});
+
 test("best-offer checkbox reveals separate offers without replacing default prices or changing counts", () => {
   const ctx=setup();const item=offerFixture();
   ctx.run(`items=${JSON.stringify([item])}; render();`);
@@ -1721,7 +1831,7 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
   assert.equal(foreign.children[0].children.length,36);
   assert.equal(foreign.children[1].children.length,36);
-  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].textContent),regions.map(id=>id.toUpperCase()));
+  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].children[1].children[1].textContent),regions.map(id=>storefrontRegistry[id].currency));
   assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Offer unavailable/);
   assert.match(rendered.children[0].className,/pinned-game/);
   assert.match(rendered.children[1].className,/pinned-home/);
@@ -1731,6 +1841,91 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(csv.rows.length,37);
   assert.equal(csv.rows[0].comparison_storefronts,regions.join("; "));
   assert.equal(csv.rows.find(value=>value.storefront==="jp").best_offer_name,"");
+});
+
+test("sticky currency titles follow scrolling, refresh their labels, and stop at the comparison boundary", () => {
+  const listeners = [];
+  const ctx = setup({}, {window:{addEventListener:(name, handler) => { if (name === "scroll") listeners.push(handler); }}});
+  const wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar"), shell = new Element("div");
+  shell.append(rail);
+  const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
+  let sourceTop = 200, areaBottom = 1000, clones = 0;
+  source.innerHTML = "USD EUR";
+  source.cloneNode = () => { clones++; const copy = new Element("div"); copy.setAttribute("id", "wishlist-storefront-headings"); return copy; };
+  table.classList.contains = () => false;
+  table.style.setProperty("--region-count", "2");
+  source.getBoundingClientRect = () => ({top:sourceTop,height:60});
+  wrap.getBoundingClientRect = () => ({top:0});
+  wrap.closest = () => ({getBoundingClientRect:() => ({bottom:areaBottom})});
+  shell.getBoundingClientRect = () => ({bottom:29});
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  const titles = shell.children[1];
+  assert.equal(titles.hidden, true);
+  assert.equal(titles.attributes["aria-hidden"], "true");
+  assert.equal(titles.firstElementChild.attributes.id, undefined);
+  sourceTop = 20; listeners[0]();
+  assert.equal(titles.hidden, false);
+  rail.scrollLeft = 340; rail.listeners.scroll();
+  assert.equal(titles.firstElementChild.style.transform, "translateX(-340px)");
+  assert.equal(clones, 1);
+  source.innerHTML = "GBP JPY"; wrap.refreshScrollControls();
+  assert.equal(clones, 2);
+  assert.equal(titles.style.getPropertyValue("--region-count"), "2");
+  areaBottom = 80; listeners[0]();
+  assert.equal(titles.hidden, true);
+  // Currency context remains sticky even when all selected columns fit.
+  areaBottom = 1000; wrap.scrollWidth = wrap.clientWidth; wrap.scrollLeft = 0;
+  wrap.refreshScrollControls();
+  assert.equal(rail.hidden, true);
+  assert.equal(titles.hidden, false);
+});
+
+test("top regional scrollbar preserves the table range and synchronizes dragging, table scrolling and layout changes", () => {
+  const ctx = setup(), wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar");
+  const shell = new Element("div"); shell.append(rail);
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  assert.equal(shell.hidden, false);
+  assert.equal(ctx.get("wishlist-scrollbar-extent").style.width, "2180px");
+  rail.scrollLeft = 650; rail.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 650);
+  wrap.scrollLeft = 820; wrap.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 820);
+  assert.equal(rail.scrollLeft, 820);
+  // A late event from that assignment must not rewind the table.
+  rail.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 820);
+  wrap.scrollLeft = 1800; wrap.listeners.scroll();
+  assert.equal(rail.scrollLeft, 1800);
+  // Resizing/selection changes recompute the proxy range from actual overflow.
+  wrap.scrollLeft = 0; wrap.scrollWidth = wrap.clientWidth;
+  wrap.refreshScrollControls();
+  assert.equal(shell.hidden, false);
+  assert.equal(rail.hidden, true);
+  assert.equal(ctx.get("wishlist-scrollbar-extent").style.width, "380px");
+  assert.equal(rail.scrollLeft, 0);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} top scrollbar follows catalog drags and optional credit layout`, async () => {
+  const ctx = creatorSetup({}, kind, false, [], false, null, true);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const wrap = ctx.get("creator-columns-scroll"), rail = ctx.get(kind + "s-scrollbar");
+  const shell = new Element("div"); shell.append(rail);
+  wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
+  wrap.refreshScrollControls();
+  rail.scrollLeft = 340; rail.listeners.scroll(); wrap.listeners.scroll();
+  const catalog = ctx.group().children[1].children[0];
+  assert.equal(catalog.scrollLeft, 340);
+  catalog.scrollLeft = 680; catalog.listeners.scroll();
+  assert.equal(wrap.scrollLeft, 680);
+  assert.equal(rail.scrollLeft, 680);
+  ctx.get("creator-show-credits").checked = true;
+  ctx.get("creator-show-credits").listeners.change();
+  assert.equal(rail.scrollLeft, 680);
+  // A delayed proxy event remains harmless after catalog synchronization.
+  rail.listeners.scroll();
+  assert.equal(catalog.scrollLeft, 680);
 });
 
 test("uncompared default offers retain 36 separate best-offer slots and pinned difference", () => {
@@ -1768,19 +1963,50 @@ test("all-currency wishlist updates preserve the old matrix and restore pending 
   assert.equal(csv.rows[0].baseline_currency,"JPY");
 });
 
+for (const kind of ["developer", "publisher"]) test(`${kind} headers separate fixed group labels from scrolling currencies with either credit layout`, async () => {
+  const ctx = creatorSetup({}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  for (const credits of [false, true]) {
+    ctx.get("creator-show-credits").checked = credits;
+    ctx.get("creator-show-credits").listeners.change();
+    const foreignIndex = credits ? 3 : 2;
+    const head = ctx.get("creator-columns-head");
+    assert.equal(head.children.length, 2);
+    const group = head.children[0].children[foreignIndex];
+    assert.match(group.className, /storefront-group-heading/);
+    assert.equal(group.children.length, 1);
+    assert.equal(group.children[0].children[0].textContent, "OTHER STOREFRONTS");
+    assert.equal(group.children[0].children[1].textContent, "CONVERTED TO PLN");
+    const labels = head.children[1];
+    assert.equal(labels.className, "storefront-label-row");
+    assert.equal(labels.children.length, credits ? 5 : 4);
+    assert.deepEqual(labels.children[foreignIndex].children[0].children.map(el => el.textContent), ["USD", "EUR"]);
+    assert.equal(labels.children[0].attributes["aria-hidden"], "true");
+    // Each catalog keeps the same two-level accessible headings as the shared header.
+    const accessibleHead = ctx.group().children[1].children[0].children[0].children[1];
+    assert.equal(accessibleHead.children.length, 2);
+    assert.equal(accessibleHead.children[1].children.length, labels.children.length);
+    assert.equal(accessibleHead.children[1].children[foreignIndex].children[0].children.length, 2);
+  }
+});
+
 for (const kind of ["developer","publisher"]) test(`${kind} full comparisons preserve statistics, credits, scroll synchronization and exports`, async () => {
   const ctx = fullSetup({},kind); chooseCurrencies(ctx,"pl",allAlternatives("pl"));
   ctx.snapshots.push({state:"complete",message:"Done",items:["1","2","3"].map(id=>manyCurrencyGame("pl",allAlternatives("pl"),id)),rates:[],warnings:[],catalogs:{}});
   ctx.get("creators-tab").listeners.click(); await settle();
   const header = ctx.get("creator-columns-head").children[0];
-  assert.equal(header.children[2].children[1].children.length,36);
+  assert.equal(header.children[2].children.length,1);
+  assert.match(header.children[2].className,/storefront-group-heading/);
+  const currencyRow = ctx.get("creator-columns-head").children[1];
+  assert.equal(currencyRow.children[2].children[0].children.length,36);
   assert.equal(ctx.body().children[0].children[2].children[0].children.length,36);
   assert.equal(ctx.group().children[0].children[1].children[0].tagName,"details");
   assert.match(ctx.group().children[0].children[1].children[0].children[0].textContent,/36 currencies/);
   ctx.get("creator-show-credits").checked = true; ctx.get("creator-show-credits").listeners.change();
   assert.equal(ctx.body().children[0].children.length,5);
   assert.match(ctx.body().children[0].children[2].className,/pinned-home/);
-  ctx.get(kind+"s-scroll-next").listeners.click();
+  ctx.get("creator-columns-scroll").scrollLeft = 170;
+  ctx.get("creator-columns-scroll").listeners.scroll();
   assert.equal(ctx.get("creator-columns-scroll").scrollLeft,170);
   assert.equal(ctx.group().children[1].children[0].scrollLeft,170);
   // A follower event can arrive after the next animation frame advances the master.
