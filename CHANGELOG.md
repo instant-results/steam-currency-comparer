@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place the best-offers checkbox directly above each tab's comparison table,
+  keeping its help text nearby and synchronizing the shared setting across tabs.
+
 - Align best-offer labels, prices, names and following sale details across each
   game's baseline, regional and difference columns, including wrapped default
   details, original prices, unavailable offers and narrow-screen resizing.

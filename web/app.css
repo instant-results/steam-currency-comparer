@@ -1457,3 +1457,12 @@ td:first-child { min-width: 0; }
 @media (max-width: 700px) {
   .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
 }
+
+/* Keep the shared offer display choice beside the results it changes. */
+.results-panel .offer-controls {
+  margin: 0 0 16px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--blue-subtle);
+}
+.results-panel .offer-controls label { align-items: flex-start; font-size: 13px; }
+.results-panel .offer-controls input { flex: 0 0 auto; margin-top: 3px; }
+.results-panel .offer-controls .hint { margin: 6px 0 0; }

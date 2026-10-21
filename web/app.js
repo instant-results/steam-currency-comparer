@@ -738,12 +738,16 @@ $("retry").addEventListener("click", () => {
 });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
-$("show-best-offers").checked = showBestOffers;
-$("show-best-offers").addEventListener("change", () => {
-  showBestOffers = $("show-best-offers").checked;
-  try { sessionStorage.setItem("polisher-best-offers", String(showBestOffers)); } catch (_) {}
-  render(); window.creatorPane?.render(); window.libraryPane?.render();
-});
+const bestOfferControls = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"].map($);
+for (const control of bestOfferControls) {
+  control.checked = showBestOffers;
+  control.addEventListener("change", () => {
+    showBestOffers = control.checked;
+    for (const other of bestOfferControls) other.checked = showBestOffers;
+    try { sessionStorage.setItem("polisher-best-offers", String(showBestOffers)); } catch (_) {}
+    render(); window.creatorPane?.render(); window.libraryPane?.render();
+  });
+}
 $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
 document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
