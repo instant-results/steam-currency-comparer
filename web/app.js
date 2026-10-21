@@ -142,30 +142,113 @@ function comparisonRegions(values, fallbackItems = []) {
 function regionalHeadings(regions) {
   return regions.map(region => {
     const label = node("span", storefronts[region].currency, "storefront-heading");
-    label.append(node("small", storefronts[region].name)); return label;
+    label.append(node("small", `${storefronts[region].name} · ${region.toUpperCase()}`)); return label;
   });
+}
+const offerAlignmentFrames = new WeakMap(), offerAlignmentObservers = new WeakMap();
+function alignBestOffers(table) {
+  if (!showBestOffers || !table.getBoundingClientRect().width) return;
+  const rows = [...table.querySelectorAll("tbody tr")].map(row => ({row,
+    blocks: [...row.querySelectorAll(".best-offer")].filter(block => block.querySelector(".offer-label"))
+  })).filter(entry => entry.blocks.length);
+  // Reset, measure, then write in batches so wrapping can shrink as well as grow.
+  for (const {row, blocks} of rows) {
+    for (const band of ["label", "value", "name"]) row.style.setProperty(`--offer-${band}-height`, "0px");
+    for (const block of blocks) block.style.setProperty("--offer-align-offset", "0px");
+  }
+  const measured = rows.map(({row, blocks}) => {
+    const labels = blocks.map(block => block.querySelector(".offer-label").getBoundingClientRect());
+    const height = selector => Math.max(0, ...blocks.map(block => block.querySelector(selector)?.getBoundingClientRect().height || 0));
+    return {row, blocks, labels, top: Math.max(...labels.map(label => label.top)),
+      label: Math.max(...labels.map(label => label.height)), value: height(".offer-value"), name: height(".offer-name")};
+  });
+  for (const entry of measured) {
+    for (const band of ["label", "value", "name"]) entry.row.style.setProperty(`--offer-${band}-height`, `${entry[band]}px`);
+    entry.blocks.forEach((block, index) => block.style.setProperty("--offer-align-offset", `${entry.top - entry.labels[index].top}px`));
+  }
+}
+function scheduleOfferAlignment(table) {
+  if (typeof requestAnimationFrame !== "function") return;
+  if (!offerAlignmentObservers.has(table) && typeof ResizeObserver !== "undefined") {
+    let previousWidth;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0].contentRect.width;
+      if (width !== previousWidth) { previousWidth = width; scheduleOfferAlignment(table); }
+    });
+    observer.observe(table);
+    offerAlignmentObservers.set(table, observer);
+  }
+  if (offerAlignmentFrames.has(table)) return;
+  offerAlignmentFrames.set(table, requestAnimationFrame(() => {
+    offerAlignmentFrames.delete(table);
+    alignBestOffers(table);
+  }));
 }
 function setComparisonLayout(table, regions, credits = false) {
   table.classList.toggle("comparison-matrix", true);
   table.classList.toggle("matrix-with-credits", credits);
+  table.closest?.(".comparison-area")?.classList.toggle("matrix-with-credits", credits);
   table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
   table.parentElement?.refreshScrollControls?.();
+  scheduleOfferAlignment(table);
 }
 function bindComparisonScroll(prefix, wrap) {
-  const previous = $(prefix + "-scroll-previous"), next = $(prefix + "-scroll-next");
+  const rail = $(prefix + "-scrollbar"), extent = $(prefix + "-scrollbar-extent");
+  let synchronizedLeft, stickyTitles, headingSignature;
+  const refreshStickyTitles = () => {
+    // The original headings stay in the table for layout and accessibility.
+    // Show a visual copy beneath the sticky scrollbar only after reaching it.
+    if (typeof wrap.getBoundingClientRect !== "function") return;
+    const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
+    const area = wrap.closest(".comparison-area"), shell = rail.parentElement;
+    if (!source || !area) return;
+    if (!stickyTitles) {
+      stickyTitles = node("div", undefined, "sticky-storefront-titles comparison-matrix");
+      stickyTitles.setAttribute("aria-hidden", "true");
+      shell.append(stickyTitles);
+    }
+    if (headingSignature !== source.innerHTML) {
+      const copy = source.cloneNode(true);
+      copy.removeAttribute("id");
+      stickyTitles.replaceChildren(copy);
+      headingSignature = source.innerHTML;
+    }
+    stickyTitles.classList.toggle("matrix-with-credits", table.classList.contains("matrix-with-credits"));
+    stickyTitles.style.setProperty("--region-count", table.style.getPropertyValue("--region-count"));
+    stickyTitles.firstElementChild.style.transform = `translateX(${-wrap.scrollLeft}px)`;
+    const sourceBox = source.getBoundingClientRect(), top = shell.getBoundingClientRect().bottom;
+    stickyTitles.hidden = wrap.clientWidth === 0 || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
+  };
   const refresh = () => {
-    previous.disabled = wrap.scrollLeft <= 0;
-    next.disabled = wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 1;
+    const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    if (!Number.isFinite(overflow)) return;
+    rail.hidden = overflow < 1;
+    rail.parentElement.hidden = false;
+    rail.parentElement.classList.toggle("without-scrollbar", overflow < 1);
+    // The proxy covers only the visible regional columns, but has exactly the
+    // same scroll range as the table with its pinned columns at either edge.
+    extent.style.width = `${rail.clientWidth + overflow}px`;
+    if (Math.abs(rail.scrollLeft - wrap.scrollLeft) > .5) {
+      synchronizedLeft = wrap.scrollLeft;
+      rail.scrollLeft = wrap.scrollLeft;
+    }
+    refreshStickyTitles();
   };
-  const move = direction => {
-    const table = wrap.querySelector("table");
-    const step = typeof getComputedStyle === "function" ? parseFloat(getComputedStyle(table).getPropertyValue("--region-width")) || 170 : 170;
-    wrap.scrollBy({left: direction * step, behavior: "smooth"});
-  };
-  previous.addEventListener("click", () => move(-1));
-  next.addEventListener("click", () => move(1));
+  rail.addEventListener("scroll", () => {
+    // A delayed event from a programmatic update must not rewind a newer drag.
+    if (synchronizedLeft !== undefined && Math.abs(rail.scrollLeft - synchronizedLeft) < .5) return;
+    synchronizedLeft = undefined;
+    wrap.scrollLeft = rail.scrollLeft;
+    refresh();
+  });
   wrap.addEventListener("scroll", refresh);
   window.addEventListener?.("resize", refresh);
+  window.addEventListener?.("scroll", refreshStickyTitles, {passive: true});
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(refresh);
+    observer.observe(wrap);
+    observer.observe(wrap.querySelector("table"));
+  }
   wrap.refreshScrollControls = refresh;
   refresh();
 }
@@ -309,14 +392,25 @@ let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 let showBestOffers = false;
 try { showBestOffers = sessionStorage.getItem("polisher-best-offers") === "true"; } catch (_) {}
-function offerPriceBlock(offer, converted, currency) {
+function regionalPriceLine(converted, currency, original, originalCurrency) {
+  const line = node("span", undefined, "regional-price-line");
+  line.append(node("span", `${money(converted)} ${currency}`, "converted-price"));
+  const native = node("small", undefined, "original-price");
+  native.append(node("span", money(original), "original-price-amount"), node("span", originalCurrency, "original-price-currency"));
+  line.append(native);
+  return line;
+}
+function offerPriceBlock(offer, converted, currency, originalPrice = null) {
   const block = node("div", undefined, "best-offer");
   block.append(node("small", "Steam best offer", "offer-label"));
   if (!offer?.price) {
-    block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable"));
+    block.append(node("small", offer?.status === "subscription_unsupported" ? "Subscription offer not compared" : "Offer unavailable", "offer-value offer-unavailable"));
     return block;
   }
-  block.append(node("span", `${money(converted)} ${currency}`, "offer-price"));
+  const value = originalPrice ? regionalPriceLine(converted, currency, originalPrice.amount, originalPrice.currency)
+    : node("span", `${money(converted)} ${currency}`, "offer-price");
+  value.className += " offer-value";
+  block.append(value);
   const link = node("a", `${offer.name} (${offer.kind})`, "offer-name");
   if (["bundle", "package"].includes(offer.kind) && Number.isSafeInteger(offer.id) && offer.id > 0) {
     link.href = `https://store.steampowered.com/${offer.kind === "bundle" ? "bundle" : "sub"}/${offer.id}/`;
@@ -338,8 +432,9 @@ function appendBestOffers(tr, item, home, regions) {
   for (const region of regions) {
     const offer = offers[region];
     const converted = best?.alternatives.find(p => p.region === region);
-    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount, (offer?.amount_in_home != null || converted) ? currency : offer?.price?.currency);
-    block.insertBefore(node("small", region.toUpperCase()), block.children[0]);
+    const hasConversion = offer?.amount_in_home != null || converted != null;
+    const block = offerPriceBlock(offer, offer?.amount_in_home ?? converted?.amount_in_home ?? offer?.price?.amount,
+      hasConversion ? currency : offer?.price?.currency, hasConversion ? offer?.price : null);
     alternatives.append(block);
   }
   tr.children[2].append(alternatives);
@@ -347,10 +442,10 @@ function appendBestOffers(tr, item, home, regions) {
   delta.append(node("small", "Steam best offers", "offer-label"));
   if (best) {
     const amount = best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home));
-    delta.append(node("span", `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${money(Math.abs(amount))} ${currency}`));
+    delta.append(node("span", `${amount > 0 ? "+" : amount < 0 ? "−" : ""}${money(Math.abs(amount))} ${currency}`, "offer-value"));
     delta.append(node("small", percentageLabel(percentageDifference(best))));
     delta.append(node("small", "Offers may include different editions or bundles"));
-  } else delta.append(node("small", "Not all storefront offers could be compared"));
+  } else delta.append(node("small", "Not all storefront offers could be compared", "offer-value offer-unavailable"));
   tr.children[3].append(delta);
 }
 function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null) {
@@ -391,7 +486,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
       const p = c.alternatives.find(value => value.region === region);
       if (!p) { alternatives.append(node("span", "Price unavailable")); continue; }
       const price = node("span");
-      price.append(node("small", p.region.toUpperCase()), node("span", money(p.amount_in_home) + " " + unit()));
+      price.append(regionalPriceLine(p.amount_in_home, unit(), p.original_amount, p.currency));
       const altProvenance = formatProvenance(p.source);
       price.title = `${money(p.original_amount)} ${p.currency} × ${p.rate_to_home}${altProvenance ? ` · ${altProvenance}` : ""}`;
       price.append(saleNote(p, p.currency));
@@ -643,12 +738,16 @@ $("retry").addEventListener("click", () => {
 });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
-$("show-best-offers").checked = showBestOffers;
-$("show-best-offers").addEventListener("change", () => {
-  showBestOffers = $("show-best-offers").checked;
-  try { sessionStorage.setItem("polisher-best-offers", String(showBestOffers)); } catch (_) {}
-  render(); window.creatorPane?.render(); window.libraryPane?.render();
-});
+const bestOfferControls = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"].map($);
+for (const control of bestOfferControls) {
+  control.checked = showBestOffers;
+  control.addEventListener("change", () => {
+    showBestOffers = control.checked;
+    for (const other of bestOfferControls) other.checked = showBestOffers;
+    try { sessionStorage.setItem("polisher-best-offers", String(showBestOffers)); } catch (_) {}
+    render(); window.creatorPane?.render(); window.libraryPane?.render();
+  });
+}
 $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
 document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));

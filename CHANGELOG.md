@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Place the best-offers checkbox directly above each tab's comparison table,
+  keeping its help text nearby and synchronizing the shared setting across tabs.
+
+- Align best-offer labels, prices, names and following sale details across each
+  game's baseline, regional and difference columns, including wrapped default
+  details, original prices, unavailable offers and narrow-screen resizing.
+
+- Keep currency/country column titles visible beneath the sticky scrollbar while
+  scrolling through results, synchronized with regional prices and catalog tables.
+  Move country codes to the country labels with a middle-dot separator. Show
+  converted prices on the left and muted original prices on the right, with
+  original-currency codes aligned across rows.
+
+- Move horizontal comparison scrollbars above results, limit their tracks to the
+  visible regional columns, and keep them sticky within each comparison section.
+  Keep synchronized developer/publisher catalog scrolling. Remove the redundant
+  scrolling-arrow buttons and their caption in favor of the top scrollbar.
+- Apply a subtle blue treatment to comparison and currency-picker scrollbars.
+- Align baseline and converted regional game prices and sale details, using
+  matching amount typography on desktop and narrow screens.
+- Align the main comparison headings on one level. Keep OTHER STOREFRONTS and
+  its conversion caption fixed horizontally, with currency/country labels on a
+  separate row below that scrolls together with regional prices.
+
 ## 0.7.0-beta — 2026-10-21
 
 - Support 37 live Steam currencies with one representative storefront each and

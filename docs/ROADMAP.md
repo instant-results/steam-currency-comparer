@@ -1,12 +1,22 @@
 # Development roadmap
 
-Updated: 2026-10-21. Completed work is marked below; remaining targets are planned.
+Updated: 2026-10-22. Completed work is marked below; remaining targets are planned.
 See [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the current application state
 and [USAGE.md](USAGE.md) for implemented behavior.
 
-The developer/publisher feature branch and the export/wishlist-credit stage are
-complete. Owned-library code is retained in 0.5.0-beta, hidden behind an internal
-flag while authenticated live testing is deferred.
+Version `0.7.0-beta` is integrated into `main` through
+[PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1), merge
+`c9e283d`. Post-load updates, NBP table preparation and 37-currency comparisons
+are complete. The feature branch was deleted remotely and locally after merge
+verification. Remaining items below are separate work; no subsequent implementation
+task has been selected. The completed scrolling/alignment refinements are described
+in [PR #2](https://github.com/instant-results/steam-currency-comparer/pull/2):
+a blue top scrollbar limited to regional columns, sticky scrolling access, and
+matching baseline/regional game-price alignment and typography. Its follow-up
+two-level header is also implemented: OTHER STOREFRONTS stays fixed horizontally
+beside the other main headings; currency/country labels scroll on a row below.
+Owned-library code remains hidden behind an internal flag
+while authenticated live testing is deferred.
 
 ## Completed implementation: Steam price batching and separate offers
 
@@ -16,8 +26,8 @@ Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
   per country, using one pipeline for all list sizes. Default 100 items, encoded
   URL limits, completeness validation, bounded recovery and shared pacing remain.
 - Implemented independent cache ages, ordered progress, cancellation and request
-  accounting. Retrieval accepts more than three storefronts; the current UI/API
-  selection limit remains unchanged.
+  accounting. The batching stage removed the retrieval-layer restriction;
+  0.7.0-beta also expands UI/API selection to 37 storefronts in total.
 - Added the user-approved checkbox showing Steam-selected purchase options beside
   default game prices. Bundles/packages retain their identities; discounts never
   use a different product's base price or a compliance-only reference price.
@@ -25,6 +35,14 @@ Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
   [performance report](STEAM_PRICE_PERFORMANCE.md). No concurrency was introduced.
 - Research and observed optimization ceiling: [investigation](STEAM_PRICE_BATCHING.md).
   Implemented architecture and acceptance checks: [plan](STEAM_PRICE_BATCHING_PLAN.md).
+
+## Deferred: game-title and artwork layout
+
+Long desktop titles can wrap excessively beside artwork in the pinned game
+column. Evaluate smaller thumbnails with a modestly wider identity column,
+artwork above the title, or an adaptive arrangement as a separate task. No option
+has been selected or implemented. This work is outside the scope of
+`codex/sticky-regional-scrollbar`; it is not a prerequisite for that branch.
 
 ## TODO: loading performance research
 
@@ -82,9 +100,9 @@ Completed in `0.6.2-beta` and merged from `codex/automatic-example-loading` into
   until the wishlist is visible; active catalog work takes priority.
 - Failures and cancellations retain the existing explicit retry behavior.
 
-### Implemented: change currencies after loading without reloading the game list
+### Completed: change currencies after loading without reloading the game list
 
-Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
+Integrated into `main` in `0.7.0-beta` through PR #1. Mid-load changes remain deferred.
 
 - Enable currency changes after loading finishes; changes during loading remain
   deferred. Preserve games, search, filters, sorting and catalog positions.
@@ -101,7 +119,7 @@ Branch: `feature/post-load-currency-switching`. Scope narrowed on 2026-10-20.
 - Separate supported storefronts from the set fetched for a comparison. Additional
   Steam countries require validation; worldwide preloading is not the default.
 
-Current backend stage: NBP preparation and Steam currency-change jobs are implemented on the feature branch.
+NBP preparation and Steam currency-change jobs are implemented on `main`.
 Complete tables A and B are fetched upfront for foreign-currency comparisons;
 fresh tables are reused independently for 24 hours. All rates are cached, including
 unselected currencies. A failed table does not block available requested rates.
@@ -145,9 +163,12 @@ Implemented in `web/app.js`, `web/creators.js`, shared controls and rendering:
   Browser QA uses the production worker with labeled synthetic upstream data;
   previous backend live Steam/NBP checks remain separate evidence.
 
-Mid-load changes and the loading-order dropdown adjustment remain separate work. Retain the current version until a version change is requested.
+Mid-load changes and the loading-order dropdown adjustment remain separate work.
 
-### Implemented: many-currency selection and scrolling comparisons
+### Completed: many-currency selection and scrolling comparisons
+
+Integrated into `main` in `0.7.0-beta` through PR #1. Validation: 208 Python and
+110 frontend tests passed, plus syntax/diff checks and desktop/mobile browser QA.
 
 Support one representative country for each of 37 live currencies (US for USD,
 Germany for EUR), up to 36 alternatives, with a searchable picker and Select all /
