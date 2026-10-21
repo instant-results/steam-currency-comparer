@@ -4,7 +4,8 @@
 
 - Move horizontal comparison scrollbars above results, limit their tracks to the
   visible regional columns, and keep them sticky within each comparison section.
-  Retain arrow navigation and synchronized developer/publisher catalog scrolling.
+  Keep synchronized developer/publisher catalog scrolling. Remove the redundant
+  scrolling-arrow buttons and their caption in favor of the top scrollbar.
 - Apply a subtle blue treatment to comparison and currency-picker scrollbars.
 - Align baseline and converted regional game prices and sale details, using
   matching amount typography on desktop and narrow screens.

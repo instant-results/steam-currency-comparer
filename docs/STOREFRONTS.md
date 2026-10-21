@@ -22,7 +22,7 @@ fixed-width slots between them. The blue horizontal scrollbar sits above the lis
 spans only the visible regional columns, and stays at the viewport top while
 scrolling through the comparison. It stops following at the section's end.
 Currency-picker scrollbars use the same blue treatment. Scroll with the top
-scrollbar, the arrow controls, a trackpad, or arrow keys after focusing the table.
+scrollbar, a trackpad, or arrow keys after focusing the table or scrollbar.
 Catalog headings
 and all catalog tables synchronize their horizontal position. Filters, sorts,
 per-tab completed/pending snapshots and CSV keep their existing behavior.

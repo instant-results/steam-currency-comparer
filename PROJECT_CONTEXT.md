@@ -5,7 +5,7 @@ Updated: 2026-10-21. Current state, not a change log.
 ## Start here
 
 Read README.md and docs/USAGE.md, then inspect code and Git status.
-Current branch: `codex/sticky-regional-scrollbar` (uncommitted frontend work).
+Current branch: `codex/sticky-regional-scrollbar`.
 Version remains **0.7.0-beta** in
 steam_price_polisher/version.py. NBP preparation, post-load currency switching and
 37-currency comparisons are complete and integrated through
@@ -25,11 +25,14 @@ Current frontend work adds a blue horizontal scrollbar above each comparison,
 limited to the visible regional columns and sticky within its comparison section.
 Currency-picker scrollbars use the same blue treatment. Default baseline/regional
 amounts and sale details align vertically, with matching font metrics, including
-narrow screens. Existing arrows and catalog synchronization remain. The separate
+narrow screens. Catalog synchronization remains; the redundant scrolling-arrow
+buttons and caption have been removed. The separate
 stationary-heading redesign has not been implemented. Frontend checks: 113 tests
 passed; isolated browser QA at 1440px/390px verified scrollbar geometry, sticky
 bounds, bidirectional synchronization and default-price alignment/typography.
-Earlier documentation closeout edits remain uncommitted alongside this work.
+Approved implementation/docs and earlier documentation closeout are committed as
+`57e0861`; regression tests are committed separately as `57a384e`.
+The subsequent scrolling-arrow removal is implemented on the same branch.
 
 Steam batching, separate best offers, whole-percent calculated discounts and origin
 tooltips are complete on main. Keep future feature and added test changes in

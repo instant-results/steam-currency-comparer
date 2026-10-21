@@ -68,8 +68,9 @@ alignment, horizontal table scrolling and both compact and separate credit layou
 
 ## Many-currency comparisons
 
-Use **Find a currency or country**, **Select all**, **Clear**, **Previous storefront**
-and **Next storefront** for selection and scrolling. Headings pair a currency code
+Use **Find a currency or country**, **Select all**, and **Clear** for selection.
+Use **Scroll other storefronts horizontally** as the top scrollbar's accessible
+label. Headings pair a currency code
 with its representative country; USD means United States and EUR means Germany.
 For more than four alternatives the compact displayed caption gives the baseline
 and storefront count; actual column headings and CSV retain every selected code.
@@ -85,7 +86,8 @@ The horizontal scrollbar sits above each comparison and spans only the visible
 regional columns, excluding pinned identity, optional credits, baseline and
 DIFFERENCE. Keep it sticky at the viewport top within that comparison section.
 Use a muted blue thumb and dark blue track for this scrollbar and the vertical
-currency pickers. Existing arrow controls retain their wording and styling.
+currency pickers. The redundant scrolling-arrow buttons and caption are removed;
+the native scrollbar and table retain keyboard navigation.
 Baseline and converted regional game amounts share font family, size, weight,
 line height and vertical starting position; their sale notes start together too.
 Keep compact country labels inline with amounts on narrow screens.
