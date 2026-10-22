@@ -1358,6 +1358,28 @@ td:first-child { min-width: 0; }
 .comparison-matrix .header-stack-right { display: block; }
 .comparison-matrix .header-stack-right > small { left: 0; right: 0; text-align: center; }
 .comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: center; gap: 12px; left: 0; right: 0; }
+
+/* Use the spare game cell alongside currency labels for wishlist search. */
+#wishlist-table .storefront-label-row > .wishlist-search-cell { padding: 8px 12px; }
+.wishlist-table-search {
+  width: 100%; max-width: none; min-height: 44px; gap: 10px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+  font-weight: 400; letter-spacing: normal;
+}
+.wishlist-table-search:focus-within { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: 2px; }
+.wishlist-table-search input:focus-visible { outline: none; }
+.wishlist-table-search input:not([type=checkbox]) {
+  min-width: 0; min-height: 42px; padding: 10px 0; font-size: 14px; line-height: 1.5;
+}
+@media (max-width: 1000px) {
+  #wishlist-table thead tr:first-child > th:not(:first-child) {
+    display: flex; align-items: center; justify-content: center; padding-bottom: 40px;
+  }
+  #wishlist-table .storefront-label-row > .wishlist-search-cell {
+    display: block; grid-row: 1; grid-column: 1 / -1; width: 100cqw; max-width: 100cqw; padding: 8px;
+  }
+  #wishlist-table .storefront-label-row > :not(.wishlist-search-cell) { grid-row: 2; }
+}
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
   display: grid; grid-template-columns: repeat(var(--region-count), min(var(--region-width), 255px));
   justify-content: center; gap: 0;

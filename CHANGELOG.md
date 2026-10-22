@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Move wishlist title search to the spare cell beside currency labels in the
+  second table-header row, with a
+  wider bordered field, larger text and a full-width layout on narrow screens.
+
 - Add 6px of right-edge breathing room to difference values and storefront
   captions, retaining readable long country labels on desktop and phones.
 

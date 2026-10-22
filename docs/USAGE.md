@@ -593,6 +593,13 @@ that external host.
 
 ## Readability and sorting
 
+Wishlist title search sits in the second table-header row, below **Game name**
+and beside the individual currency labels. Its bordered
+field fills the game column on desktop and the visible table width on narrow
+screens. It filters loaded titles without fetching more data; clear it to restore
+matching results under the current filters and sorting. Name sorting remains a
+separate button above search.
+
 Foreign final prices use 16px text. Column headings identify Game name and
 the baseline storefront. Difference offers independent absolute and percentage sort buttons;
 repeated clicks reverse direction, with unavailable percentages last. Uncompared

@@ -36,6 +36,25 @@ active-job locking, long titles and both catalog credit modes. Check widths on
 both sides of breakpoints and 1/2/3/36 alternatives, including best and missing
 offers, horizontal scroll extremes and sticky titles.
 
+## Wishlist title search
+
+Place wishlist search in the spare game cell of the second header row, beside
+the individual currency/country labels. Keep Game name sorting in the main
+heading row above. Use the game column's available width, a visible
+border, 14px input text and a 44px field height. The input keeps its accessible
+filter label and a single focus outline around the whole field, including its
+magnifying glass.
+
+Keep desktop primary column headings vertically aligned at their compact
+height. In the narrow stacked layout, search spans the visible table width
+below the main price headings and above currency labels. Price headings align even when storefront
+names wrap. Horizontal regional scrolling must leave search pinned with identity.
+
+Typing and clearing filter loaded rows only; they do not start requests, change
+sorting or discard results. Keep the input available when no titles match and
+retain keyboard focus while rows rerender. Library and catalog controls retain
+their existing layouts.
+
 ## Small labels above input fields
 
 Accepted: 2026-10-22.
