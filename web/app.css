@@ -159,9 +159,10 @@ h1 > span { color: var(--muted); }
 .profile-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
+  grid-template-columns: minmax(280px, 760px) auto;
+  justify-content: start;
   align-items: end;
-  gap: 36px;
+  gap: 12px;
   padding: 22px 24px;
   background: #0f1523;
   border-bottom: 1px solid var(--line);
@@ -800,7 +801,7 @@ progress::-webkit-progress-value {
   main { padding: 0 3%; }
   .topbar { padding: 0 3%; }
   .workspace { grid-template-columns: 270px 1fr; }
-  .profile-row { padding: 20px 18px; gap: 22px; }
+  .profile-row { padding: 20px 18px; gap: 12px; }
   .profile-actions { gap: 16px; }
   .setup { padding: 22px 18px; }
   .results-panel { padding: 23px 18px 0; }
