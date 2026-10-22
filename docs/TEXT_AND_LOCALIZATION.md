@@ -97,6 +97,11 @@ alignment, horizontal table scrolling and both compact and separate credit layou
 
 ## Many-currency comparisons
 
+Currency selection cards include decorative circular flags near their right edge.
+Keep the currency code, currency name and representative country visible as text.
+EUR uses the EU flag, while its country caption remains Germany; the flag does
+not imply an EU-wide price. See [picker flag design](DESIGN_DECISIONS.md#currency-picker-flags).
+
 Use **Find a currency or country**, **Select all**, and **Clear** for selection.
 Place currency controls above the comparison, with **Selected:** identifying
 the current choices. Put **Change currencies** beside the summary; it reopens
@@ -111,6 +116,9 @@ label. Headings pair a currency code
 with its representative country; USD means United States and EUR means Germany.
 For more than four alternatives the compact displayed caption gives the baseline
 and storefront count; actual column headings and CSV retain every selected code.
+For named currency lists, use "USD and EUR" for two alternatives and
+"USD, EUR, and AUD" for three or more, with a comma before the final "and".
+Apply the same formatting to selection, displayed-comparison and update captions.
 
 On desktop, keep the regional area at least 510px wide. One selected currency
 uses a centered 255px content slot, matching each slot in the two-currency view;

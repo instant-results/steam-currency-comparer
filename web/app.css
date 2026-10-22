@@ -1325,7 +1325,12 @@ td:first-child { min-width: 0; }
 .currency-picker .storefront-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-content: start; gap: 8px; margin-top: auto; }
 .currency-picker .storefront-list .region { margin: 0; align-items: flex-start; }
 .currency-picker .region input { flex: 0 0 auto; margin-top: 4px; }
-.currency-picker .region > span { min-width: 0; overflow-wrap: anywhere; }
+.currency-picker .region > span { min-width: 0; flex: 1 1 0; overflow-wrap: anywhere; }
+.currency-picker .currency-flag {
+  flex: 0 0 24px; width: 24px; height: 24px; align-self: center;
+  margin-inline-start: auto; border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line);
+}
 .setup .currency-update-action { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 0; }
 .setup .currency-update-action:has(> :not([hidden])) { margin-top: 18px; }
 .setup .currency-update-action .primary { width: auto; min-height: 44px; align-items: center; gap: 12px; }

@@ -13,7 +13,13 @@ function buildStorefrontControls() {
       input.type = type; input.name = name; input.value = region;
       input.checked = name === "home" ? region === "pl" : ["us", "de"].includes(region);
       caption.append(node("small", `${value.currency_name} · ${value.name}`));
-      label.dataset.storefront = region; label.append(input, caption); $(target).append(label);
+      const flag = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      flag.setAttribute("class", "currency-flag"); flag.setAttribute("aria-hidden", "true");
+      flag.setAttribute("focusable", "false"); flag.setAttribute("width", "24"); flag.setAttribute("height", "24");
+      const artwork = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      artwork.setAttribute("href", `/flags.svg#${value.currency === "EUR" ? "eu" : region}`);
+      flag.append(artwork);
+      label.dataset.storefront = region; label.append(input, caption, flag); $(target).append(label);
     }
   }
 }
@@ -75,7 +81,10 @@ function currencySelection() {
   return {home: selectedHome(), regions: [...document.querySelectorAll('[name="region"]')].filter(el => el.checked).map(el => el.value)};
 }
 function currencyLabel(selection) {
-  return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
+  const currencies = selection.regions.map(id => storefronts[id].currency);
+  const alternatives = currencies.length > 4 ? `${currencies.length} storefronts`
+    : new Intl.ListFormat("en", {style: "long", type: "conjunction"}).format(currencies);
+  return `${storefronts[selection.home].currency} against ${alternatives}`;
 }
 function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
 let currencyPanelWasActive = false, currencyPanelUsed = false, currencyPanelRestoreSelection = null;

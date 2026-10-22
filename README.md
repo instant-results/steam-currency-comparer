@@ -28,6 +28,8 @@ change over time. No personal Steam profile is used.
 - Compares 37 currencies using one representative Steam storefront per currency.
   Any can be the baseline, with up to 36 alternatives. Search the currency picker
   or choose Select all; the default is PLN against USD and EUR.
+  Selection cards include circular flags; EUR uses the EU flag while Germany
+  remains its representative storefront.
   See the [supported storefronts](docs/STOREFRONTS.md).
 - Keeps currency selection above the full-width comparison. The selectors collapse
   when a comparison starts; **Change currencies** reopens them. The selection

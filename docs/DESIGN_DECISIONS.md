@@ -54,6 +54,22 @@ usual identity widths when regional columns overflow, and retain fixed baseline,
 storefront and Difference widths. Share the region count with the scrollbar
 surface so pinned offsets and scrollbar padding follow the expanded identity.
 
+## Currency picker flags
+
+Display a 24px circular flag at the end of every baseline and comparison card,
+vertically centered with 12px of space to the right border. Reserve its width in
+the flex layout so long currency/country captions wrap without overlapping it.
+Use the same size and placement across desktop and narrow layouts.
+
+EUR uses the EU flag; the visible Euro / Germany caption continues to identify
+Germany as the representative storefront. Other flags follow the representative
+country. Flags are decorative SVGs, hidden from assistive technology and excluded
+from keyboard focus. The native radio/checkbox and the full clickable label
+retain their existing behavior. Bundle one local SVG sprite to avoid a request
+per flag. Keep the original SVGs, source revision and MIT license in web/flags/;
+no flag CDN is needed at runtime. Rebuild web/flags.svg with
+`python tools/build_currency_flags.py` after changing the source artwork.
+
 ## Result filters and display controls
 
 Wishlist Retry comparison belongs beside Compare regional prices in the setup
