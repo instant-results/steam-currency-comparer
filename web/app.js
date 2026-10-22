@@ -78,14 +78,29 @@ function currencyLabel(selection) {
   return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
 }
 function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
-let currencyPanelWasActive = false, currencyPanelUsed = false;
-function setCurrencyPanelExpanded(expanded) {
+let currencyPanelWasActive = false, currencyPanelUsed = false, currencyPanelRestoreSelection = null;
+function displayedCurrencySelection() {
+  return window.creatorPane?.active ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
+}
+function setCurrencyPanelExpanded(expanded, discardChanges = false) {
   const body = $("currency-panel-body"), toggle = $("currency-panel-toggle");
   // Return focus before hiding a control used to start a currency update.
   if (!expanded && body.contains(document.activeElement)) toggle.focus();
   body.hidden = !expanded;
   toggle.setAttribute("aria-expanded", String(expanded));
   toggle.textContent = expanded ? "Hide currencies" : "Change currencies";
+  if (expanded) {
+    const selection = currencySelection();
+    currencyPanelRestoreSelection = {home: selection.home, regions: [...selection.regions]};
+  } else if (discardChanges && !comparisonCoordinator.busy) {
+    const selection = displayedCurrencySelection() || currencyPanelRestoreSelection;
+    if (selection) {
+      preferredComparisons = [...selection.regions];
+      document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === selection.home);
+      document.querySelectorAll('[name="region"]').forEach(el => el.checked = selection.regions.includes(el.value));
+      updateSelections();
+    }
+  }
 }
 function syncCurrencyPanel(hasComparison) {
   const active = comparisonCoordinator.active;
@@ -107,13 +122,14 @@ function validCurrencies(value) {
 }
 function refreshCurrencyAction() {
   const catalog = window.creatorPane?.active;
-  const displayed = catalog ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
+  const displayed = displayedCurrencySelection();
   const selected = currencySelection(), button = $("update-currencies");
-  button.hidden = !displayed;
   button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed);
   $("currency-update-help").hidden = !displayed;
+  $("currency-edit-help").hidden = !displayed;
   $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " Updating currencies will reload this saved comparison." : ""}` : "";
   syncCurrencyPanel(Boolean(displayed));
+  button.hidden = !displayed || $("currency-panel-body").hidden;
 }
 function updateSelections(event) {
   const home = selectedHome();
@@ -125,6 +141,7 @@ function updateSelections(event) {
   for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
   const count = selected.length;
+  if (currencyPanelRestoreSelection === null) currencyPanelRestoreSelection = {home, regions: selected.map(el => el.value)};
   for (const caption of [$("welcome-currencies"), $("library-welcome-currencies")].filter(Boolean)) {
     caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
     for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
@@ -755,7 +772,11 @@ function downloadCsv(contents, filename) {
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 buildStorefrontControls();
-$("currency-panel-toggle").addEventListener("click", () => setCurrencyPanelExpanded($("currency-panel-body").hidden));
+$("currency-panel-toggle").addEventListener("click", () => {
+  const expanded = $("currency-panel-body").hidden;
+  setCurrencyPanelExpanded(expanded, !expanded);
+  refreshCurrencyAction();
+});
 bindComparisonScroll("wishlist", $("wishlist-table").parentElement || $("wishlist-scroll"));
 bindComparisonScroll("library", $("library-table").parentElement || $("library-scroll"));
 $("currency-search").addEventListener("input", filterStorefrontControls);

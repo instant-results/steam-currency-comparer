@@ -80,9 +80,11 @@ alignment, horizontal table scrolling and both compact and separate credit layou
 
 Use **Find a currency or country**, **Select all**, and **Clear** for selection.
 Place currency controls above the comparison, with **Selected:** identifying
-the current choices. **Hide currencies** collapses only the selectors;
-**Change currencies** reopens them. Keep the summary and Update currencies
-action available in either state. See [layout decisions](DESIGN_DECISIONS.md#currency-setup-and-comparison-width).
+the current choices. Put **Change currencies** beside the summary; it reopens
+the selectors. **Update currencies** is available only while they are expanded.
+**Hide currencies** discards unapplied edits, restores the active tab's displayed
+currencies and closes setup. Explain this beside the expanded controls. Automatic
+collapse during submission preserves that request. See [layout decisions](DESIGN_DECISIONS.md#currency-setup-and-comparison-width).
 The currencies panel contains selection/update guidance without a repeated app
 description or decorative footer icon.
 Use **Scroll other storefronts horizontally** as the top scrollbar's accessible

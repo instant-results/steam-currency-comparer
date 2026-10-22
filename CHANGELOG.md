@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Place Change currencies beside the selected-currency summary and show Update
+  currencies only inside expanded setup. Hiding setup discards unapplied edits
+  and restores displayed currencies without starting a job or changing results;
+  automatic collapse and locked controls preserve submitted selections.
+
 - Place wishlist completion beside the Games checked count as number · Complete,
   removing the detached status and empty progress space once processing finishes.
 

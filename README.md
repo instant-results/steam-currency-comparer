@@ -31,7 +31,9 @@ change over time. No personal Steam profile is used.
   See the [supported storefronts](docs/STOREFRONTS.md).
 - Keeps currency selection above the full-width comparison. The selectors collapse
   when a comparison starts; **Change currencies** reopens them. The selection
-  summary and **Update currencies** remain accessible while browsing results.
+  summary and its reopen button remain visible while browsing results.
+  **Update currencies** appears inside the expanded panel; **Hide currencies**
+  discards unapplied edits and restores the displayed selection.
   Desktop tables give artwork and long game titles more room; narrow screens keep
   game identity above the price row.
 - Keeps game/title, baseline and DIFFERENCE visible while regional price columns

@@ -9,7 +9,10 @@ Available in `0.7.0-beta`, integrated into `main` through
 
 Use the searchable currency panel above the comparison to find a currency or
 country. Selectors collapse when a comparison starts or saved results are restored;
-Change currencies reopens them. The summary and Update currencies stay available.
+Change currencies reopens them from beside the selection summary. Update currencies
+appears only while expanded. Hide currencies discards unapplied edits and restores
+the active tab's displayed currencies; automatic collapse during a run preserves
+the submitted selection.
 The picker lists sit side by side above 600px and stack on smaller screens. Select all
 chooses every alternative to the current baseline; Clear removes alternatives.
 Searching hides choices without changing their selection. Changing the baseline

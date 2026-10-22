@@ -62,9 +62,13 @@ The server's shared worker, request pacing and job limits still apply.
 
 Currency selection sits above the full-width comparison. The selectors collapse
 when a run starts or saved results are restored; **Change currencies** reopens
-them without changing selections or results. The summary and update action remain
-available while collapsed. Picker lists sit side by side on wider screens and
-stack on phones. During loading, reopening is allowed but selection stays locked.
+them without changing results. The button sits beside the selection summary;
+**Update currencies** appears only in the expanded panel. **Hide currencies**
+discards unapplied changes and restores the active tab's displayed currencies.
+Before any results exist, hiding restores the choices from opening setup instead.
+Automatic collapse when submitting preserves the requested currencies. Picker
+lists sit side by side on wider screens and stack on phones. During loading,
+reopening is allowed but selection stays locked.
 
 After a wishlist/example or catalog comparison finishes, select a baseline and
 one or more other storefronts, then click **Update currencies** in the currency panel.
