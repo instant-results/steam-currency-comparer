@@ -1328,6 +1328,7 @@ td:first-child { min-width: 0; }
   --game-width: clamp(300px, calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - 510px), 480px);
   --credit-width: 0px; --home-width: 125px;
   --region-width: max(170px, calc(510px / var(--region-count, 3))); --difference-width: 165px;
+  --difference-content-inset: 18px;
 }
 .comparison-area.matrix-with-credits { --credit-width: 125px; }
 .regional-scrollbar-shell {
@@ -1389,6 +1390,7 @@ td:first-child { min-width: 0; }
 }
 .comparison-matrix .pinned-difference, .comparison-matrix th:last-child {
   position: sticky; right: 0; z-index: 3; background: var(--panel); box-shadow: -2px 0 0 var(--line);
+  padding-inline-end: var(--difference-content-inset);
 }
 .comparison-matrix.matrix-with-credits .catalog-credit-cell,
 .comparison-matrix.matrix-with-credits th:nth-child(2) { position: sticky; left: var(--game-width); z-index: 2; background: var(--panel); box-shadow: none; }
@@ -1409,7 +1411,7 @@ td:first-child { min-width: 0; }
 
 /* On phones the pinned identity occupies a row above the pinned price edges. */
 @media (max-width: 1000px) {
-  .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
+  .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; --difference-content-inset: 14px; }
   .comparison-area.matrix-with-credits, .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
   .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
   .comparison-matrix colgroup { display: none; }

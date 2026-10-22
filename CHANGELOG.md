@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add 6px of right-edge breathing room to difference values and storefront
+  captions, retaining readable long country labels on desktop and phones.
+
 - Move currency selection above the full-width comparison, collapse selectors
   when work starts or results are restored, and retain a summary and disclosure.
   Adapt picker lists to screen width and give desktop game titles more room while

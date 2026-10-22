@@ -97,6 +97,10 @@ slot rather than shifting other prices. The overall difference identifies the
 cheapest selected storefront. Put **Cheapest:** on its own line, with the currency
 and country beneath; allow natural wrapping on narrow screens. Large catalog
 metrics use **Regional statistics**.
+Keep difference values and their captions 18px from the right cell edge on
+desktop and 14px on narrow screens. This adds 6px of breathing room at the
+background boundary. Long storefront labels stay on one desktop line where
+space permits and wrap naturally on phones.
 
 Use two header levels. On desktop, vertically centre GAME NAME, the baseline
 heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTHER
