@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Remove the redundant final-price caption from wishlist and library footers.
+
 - Group availability and best-offer checkboxes with wishlist filters in a wrapping
   row. Replace permanent offer help panels with blue information buttons and
   pale-blue, rounded popups with spaced text, an overlapping circular close button
