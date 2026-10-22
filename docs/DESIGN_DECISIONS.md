@@ -47,6 +47,12 @@ the original track sizing and scroll offset, and draw matching 2px side dividers
 inside the clipped strip. The surrounding scroll surface can be wider than the
 table, so its outer edge is not a reliable endpoint for the sticky labels.
 
+When all selected storefronts fit on desktop, let the Game name column grow
+beyond its normal 480px limit to fill unused comparison width. Preserve the
+usual identity widths when regional columns overflow, and retain fixed baseline,
+storefront and Difference widths. Share the region count with the scrollbar
+surface so pinned offsets and scrollbar padding follow the expanded identity.
+
 ## Result filters and display controls
 
 Wishlist Retry comparison belongs beside Compare regional prices in the setup

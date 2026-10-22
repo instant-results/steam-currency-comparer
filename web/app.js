@@ -224,8 +224,11 @@ function scheduleOfferAlignment(table) {
 function setComparisonLayout(table, regions, credits = false) {
   table.classList.toggle("comparison-matrix", true);
   table.classList.toggle("matrix-with-credits", credits);
-  table.closest?.(".comparison-area")?.classList.toggle("matrix-with-credits", credits);
-  table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
+  const count = String(Math.max(regions.length, 1));
+  const area = table.closest?.(".comparison-area");
+  area?.classList.toggle("matrix-with-credits", credits);
+  area?.style.setProperty("--region-count", count);
+  table.style.setProperty("--region-count", count);
   table.parentElement?.refreshScrollControls?.();
   scheduleOfferAlignment(table);
 }

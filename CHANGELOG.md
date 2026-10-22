@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Let Game name absorb unused desktop comparison width so the table reaches
+  the right content edge without widening price columns or their padding.
+
 - Remove the redundant Regional Steam Pricing label and decorative dot above
   the headline, with tighter introductory spacing.
 

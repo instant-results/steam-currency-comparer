@@ -1343,7 +1343,12 @@ td:first-child { min-width: 0; }
 .comparison-scroll::-webkit-scrollbar { display: none; }
 .comparison-area { min-width: 0; position: relative; }
 .comparison-area, .comparison-matrix {
-  --game-width: clamp(300px, calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - 510px), 480px);
+  /* Keep the usual identity width for scrolling tables; absorb unused space
+     when the complete set of regional columns fits inside the surface. */
+  --game-width: max(
+    clamp(300px, calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - 510px), 480px),
+    calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - var(--region-count, 3) * var(--region-width))
+  );
   --credit-width: 0px; --home-width: 125px;
   --region-width: max(170px, calc(510px / var(--region-count, 3))); --difference-width: 165px;
   --difference-content-inset: 18px;
