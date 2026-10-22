@@ -355,21 +355,6 @@ legend {
   white-space: nowrap;
 }
 #demo span { margin-left: 5px; }
-.setup-foot {
-  display: flex;
-  gap: 13px;
-  align-items: center;
-  margin-top: auto;
-  padding-top: 45px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.mini-icon {
-  font-size: 27px;
-  color: #486581;
-}
-.setup-foot p { margin: 0; }
 .currency-update-action { margin: 0 0 22px; }
 .currency-update-action .hint { margin: 10px 0 0; overflow-wrap: anywhere; }
 .currency-update-action button:disabled { cursor: default; opacity: .55; }
@@ -839,7 +824,6 @@ progress::-webkit-progress-value {
   }
   .setup h2 { margin: 15px 0 20px; }
   .setup h2 br { display: none; }
-  .setup-foot { display: none; }
   fieldset {
     display: flex;
     gap: 10px;
