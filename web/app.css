@@ -479,8 +479,11 @@ h2 {
   gap: 5px;
   max-width: 160px;
 }
-.search > span {
-  font-size: 23px;
+.search > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
   color: var(--muted);
 }
 .search input:not([type=checkbox]) {
