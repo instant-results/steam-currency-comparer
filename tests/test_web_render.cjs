@@ -114,7 +114,7 @@ test("currency panel reopens without changing selections, displayed prices or st
   assert.equal(ctx.run("JSON.stringify(items)"), prices);
   assert.equal(ctx.run("JSON.stringify(currencySelection())"), selected);
   assert.equal(ctx.calls.length, calls);
-  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").hidden, true);
 });
 
 test("initialization holds leave setup open; each new run collapses once and can be reopened while locked", () => {
@@ -1620,6 +1620,7 @@ test("calculated discounts display whole percentages and approximation without c
 });
 
 function chooseCurrencies(ctx, home, regions) {
+  if (ctx.get("currency-panel-body").hidden) ctx.get("currency-panel-toggle").listeners.click();
   ctx.radios.forEach(el => el.checked = el.value === home);
   ctx.regions.forEach(el => el.checked = regions.includes(el.value));
   ctx.run("preferredComparisons = null; updateSelections();");
@@ -1633,6 +1634,8 @@ const switchedWishlist = (state = "complete", extra = {}) => wishlistSnapshot(st
 
 test("currency action is explicit, follows the active tab, and requires a valid changed selection", async () => {
   const ctx = await loadedWishlist();
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  ctx.get("currency-panel-toggle").listeners.click();
   assert.equal(ctx.get("update-currencies").hidden, false);
   assert.equal(ctx.get("update-currencies").disabled, true);
   chooseCurrencies(ctx,"gb",["us"]);
@@ -1646,6 +1649,60 @@ test("currency action is explicit, follows the active tab, and requires a valid 
   assert.match(ctx.get("currency-update-help").textContent,/Displayed: GBP/);
   ctx.get("wishlist-tab").listeners.click();
   assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+});
+
+test("hiding wishlist currency edits restores displayed selection without requests or result changes", async () => {
+  const ctx = await loadedWishlist();
+  const calls = ctx.calls.length, csv = ctx.run('buildCsv(false,"fixed")');
+  chooseCurrencies(ctx,"gb",["no"]);
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), JSON.stringify({home:"pl",regions:["us","de"]}));
+  assert.equal(ctx.run('buildCsv(false,"fixed")'),csv);
+  assert.equal(ctx.calls.length,calls);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, true);
+  assert.equal(ctx.run("JSON.stringify(preferredComparisons)"),JSON.stringify(["us","de"]));
+});
+
+for (const kind of ["developer","publisher"]) test(`hiding ${kind} currency edits restores that tab's displayed selection`, async () => {
+  const ctx = creatorSetup({},kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const displayed = ctx.run("JSON.stringify(window.creatorPane.currencyState())");
+  const calls = ctx.calls.length;
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), displayed);
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  assert.equal(ctx.calls.length,calls);
+});
+
+test("hiding currency setup before any results restores its initial choices", () => {
+  const ctx = creatorSetup();
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),JSON.stringify({home:"pl",regions:["us","de"]}));
+  assert.equal(ctx.calls.length,0);
+});
+
+test("automatic currency-update collapse and hiding locked selectors retain the submitted selection", async () => {
+  const ctx = await loadedWishlist();
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const expected = JSON.stringify({home:"gb",regions:["no"]});
+  assert.equal(ctx.get("currency-panel-body").hidden,true);
+  assert.equal(ctx.get("update-currencies").hidden,true);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),expected);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("update-currencies").disabled,true);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),expected);
+  assert.equal(JSON.stringify(ctx.calls.find(call=>call.path.endsWith("/currencies")).body),expected);
 });
 
 test("wishlist switch preserves rows, rates, view and CSV while pending, then publishes one snapshot", async () => {
