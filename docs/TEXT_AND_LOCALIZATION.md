@@ -196,7 +196,9 @@ paragraphs. Emphasize the opening sentence. A contrasting-blue circular X overla
 the top-right corner, with enough viewport clearance to keep it accessible;
 focus the X on opening and return focus to the i when closing with X or Escape.
 Outside clicks and focus changes leave help open. Center it on the trigger,
-clamp to viewport edges on opening/resize, and let it scroll with the page.
+clamp to viewport edges on opening or resizing a visible trigger, and let it
+scroll with the page. Preserve its attachment during layout shifts such as
+opening currency setup; do not pull it onto the screen when its trigger moves offscreen.
 Only one explanation is open at a time; reading help fetches nothing.
 Use a labelled checkbox, a unique help-text association and the local table/list
 as its controlled region. All copies reflect the same saved display setting;

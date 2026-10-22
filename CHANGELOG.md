@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep offer-help bubbles attached to their information buttons when expanding
+  or hiding currency setup, including when the results move offscreen.
+
 - Let Game name absorb unused desktop comparison width so the table reaches
   the right content edge without widening price columns or their padding.
 

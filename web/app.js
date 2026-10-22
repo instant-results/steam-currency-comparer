@@ -837,23 +837,30 @@ function toggleOfferHelp(button, popup) {
   if (wasOpen) return;
   popup.hidden = false; button.setAttribute("aria-expanded", "true");
   openOfferHelp = {button, popup};
-  positionOfferHelp(button, popup);
+  positionOfferHelp(button, popup, true);
   if (typeof ResizeObserver !== "undefined") {
     offerHelpObserver = new ResizeObserver(() => positionOfferHelp(button, popup));
     offerHelpObserver.observe(document.body);
   }
   $(popup.id + "-close").focus({preventScroll: true});
 }
-function positionOfferHelp(button, popup) {
+function positionOfferHelp(button, popup, fitViewport = false) {
+  if (openOfferHelp?.button !== button) return;
   // Reserve room for the close circle extending beyond the bubble's corner.
   const edge = 24, gap = 16, viewportWidth = document.documentElement.clientWidth || window.innerWidth;
   popup.style.width = `${Math.min(380, viewportWidth - edge * 2)}px`;
   const anchor = button.getBoundingClientRect(), box = popup.getBoundingClientRect();
   const centeredLeft = anchor.left + anchor.width / 2 - box.width / 2;
   const left = Math.max(edge, Math.min(centeredLeft, viewportWidth - box.width - edge));
-  const below = anchor.bottom + gap;
-  const preferredTop = below + box.height <= window.innerHeight - edge ? below : anchor.top - box.height - gap;
-  const top = Math.max(edge, Math.min(preferredTop, window.innerHeight - box.height - edge));
+  const help = openOfferHelp;
+  // Fit when opening or resizing a visible anchor. Layout shifts should carry
+  // the bubble with its button, including when that button moves offscreen.
+  if (!help.placement || (fitViewport && anchor.bottom > 0 && anchor.top < window.innerHeight)) {
+    help.placement = anchor.bottom + gap + box.height <= window.innerHeight - edge ? "below" : "above";
+    const preferredTop = help.placement === "below" ? anchor.bottom + gap : anchor.top - box.height - gap;
+    help.verticalShift = Math.max(edge, Math.min(preferredTop, window.innerHeight - box.height - edge)) - preferredTop;
+  }
+  const top = (help.placement === "below" ? anchor.bottom + gap : anchor.top - box.height - gap) + help.verticalShift;
   popup.style.left = `${left + (window.scrollX || 0)}px`;
   popup.style.top = `${top + (window.scrollY || 0)}px`;
 }
@@ -861,7 +868,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape" && openOfferHelp) { closeOfferHelp(true); event.preventDefault(); }
 });
 function refreshOfferHelpPosition() {
-  if (openOfferHelp) positionOfferHelp(openOfferHelp.button, openOfferHelp.popup);
+  if (openOfferHelp) positionOfferHelp(openOfferHelp.button, openOfferHelp.popup, true);
 }
 window.addEventListener?.("resize", refreshOfferHelpPosition);
 const bestOfferControls = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"].map($);

@@ -90,6 +90,11 @@ focus to the i button. Keep the same help interaction
 for each tab's shared best-offer setting. The owned-library controls remain hidden
 under their existing feature flag.
 
+Choose the bubble's side and viewport clearance when opening. Preserve that
+placement relative to the information button during layout changes, including
+currency-panel expansion/collapse. Refit on viewport resize only when the button
+is visible; an offscreen button carries the bubble offscreen with the results.
+
 ## Wishlist title search
 
 Place wishlist search in the spare game cell of the second header row, beside
