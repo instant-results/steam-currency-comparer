@@ -24,6 +24,7 @@ function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const elements = new Map(), documentEvents = new Map();
   const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
   const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  context.document.createElementNS = (namespace, tag) => { const element = new Element(tag); element.namespaceURI = namespace; return element; };
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, dispatchDocument: (name, event) => documentEvents.get(name)?.(event), ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
@@ -311,6 +312,26 @@ test("collapsed setup summarizes the selection separately from the displayed com
   assert.equal(ctx.get("currency-selection-summary").textContent, "Selected: PLN against 36 storefronts");
   assert.equal(ctx.get("update-currencies").disabled, false);
   assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
+
+test("currency summaries use conjunctions for pairs and commas with a final conjunction for longer named lists", () => {
+  const ctx = creatorSetup({}, "developer", false, [], false, null, true);
+  for (const [regions, expected] of [
+    [[], "Selected: PLN · no comparison currencies"],
+    [["us"], "Selected: PLN against USD"],
+    [["us", "de"], "Selected: PLN against USD and EUR"],
+    [["us", "de", "au"], "Selected: PLN against USD, EUR, and AUD"],
+    [["us", "de", "au", "ca"], "Selected: PLN against USD, EUR, AUD, and CAD"],
+    [["us", "de", "no", "au", "ca"], "Selected: PLN against 5 storefronts"],
+  ]) {
+    ctx.regions.forEach(el => el.checked = regions.includes(el.value));
+    ctx.run('updateSelections({target:{name:"region"}})');
+    assert.equal(ctx.get("currency-selection-summary").textContent, expected);
+    if (regions.length) {
+      assert.equal(ctx.run(`currencyLabel({home:"pl",regions:${JSON.stringify(regions)}})`), expected.replace("Selected: ", ""));
+    }
+  }
+  assert.equal(ctx.calls.length, 0);
 });
 
 test("automatic currency collapse returns focus from hidden controls to its disclosure button", () => {
@@ -2171,6 +2192,31 @@ function manyCurrencyGame(home = "pl", regions = allAlternatives(home), id = "1"
   return row;
 }
 const fullSetup = (storage = {}, kind = "developer", snapshots = []) => creatorSetup(storage,kind,false,snapshots,false,null,true);
+
+test("both currency pickers show decorative local flags while retaining storefront text and native controls", () => {
+  const ctx = setup();
+  for (const [target, type] of [["baseline-options", "radio"], ["comparison-options", "checkbox"]]) {
+    const cards = ctx.get(target).children;
+    assert.equal(cards.length, Object.keys(storefrontRegistry).length);
+    for (const card of cards) {
+      const region = card.dataset.storefront, value = storefrontRegistry[region];
+      const [input, caption, flag] = card.children;
+      assert.equal(input.type, type);
+      assert.equal(input.value, region);
+      assert.equal(caption.textContent, value.currency);
+      assert.ok(caption.children[0].textContent.includes(value.currency_name));
+      assert.ok(caption.children[0].textContent.includes(value.name));
+      assert.equal(flag.tagName, "svg");
+      assert.equal(flag.namespaceURI, "http://www.w3.org/2000/svg");
+      assert.equal(flag.children[0].attributes.href, `/flags.svg#${value.currency === "EUR" ? "eu" : region}`);
+      assert.equal(flag.attributes["aria-hidden"], "true");
+      assert.equal(flag.attributes.focusable, "false");
+      assert.equal(flag.attributes.width, "24"); assert.equal(flag.attributes.height, "24");
+    }
+  }
+  assert.equal(ctx.get("baseline-options").children.find(card => card.dataset.storefront === "pl").children[0].checked, true);
+  assert.deepEqual(ctx.get("comparison-options").children.filter(card => card.children[0].checked).map(card => card.dataset.storefront), ["us", "de"]);
+});
 
 test("the full picker selects all 36 alternatives, searches without deselecting, and clears explicitly", () => {
   const ctx = fullSetup();
