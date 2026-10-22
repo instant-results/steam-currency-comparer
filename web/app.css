@@ -336,6 +336,8 @@ legend {
   padding: 13px 15px;
   transition: background .15s;
 }
+.rate-source-link { display: inline-flex; align-items: center; gap: .3em; }
+.rate-source-link .external-link-arrow { line-height: 1; }
 .primary:hover {
   background: var(--blue-hover);
 }
