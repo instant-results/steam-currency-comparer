@@ -194,6 +194,7 @@ h1 > span { color: var(--muted); }
 .wishlist-order > span {
   display: block;
   margin-bottom: 6px;
+  padding-inline-start: 13px;
   color: var(--muted);
   font-size: 12px;
 }
