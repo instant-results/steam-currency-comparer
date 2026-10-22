@@ -243,7 +243,7 @@ Keep feature and test changes in separate commits, per `AGENTS.md`.
   explicit reject-or-ignore policy.
 - Each product label maps to the expected Steam enum value.
 - Response order survives deduplication, analysis, job snapshots, rendering,
-  refresh, retry, and Reset sorting.
+  refresh, retry, and restoring original loading order via the header sort cycle.
 - Name ordering no longer duplicates baseline price requests.
 - Top Selling, Release Date, and Review Score never silently fall back to a
   semantically different local order.

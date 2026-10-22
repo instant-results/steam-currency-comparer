@@ -30,7 +30,8 @@ baseline conflicts. Preserve submitted selections during automatic collapse and
 while jobs lock controls. Disclosure and discarded drafts start no requests and
 never change displayed rows, rates or CSV. Search text survives collapse.
 
-Desktop game identity is 300–480px wide, using spare comparison width after
+Desktop game identity normally uses 300–480px, expanding beyond that range to
+fill spare width when all selected storefronts fit. Calculate its width after
 reserving the baseline, optional credit column, difference and 510px regional
 area. At 1000px and below retain the stacked identity/price layout and existing
 regional slots. Use the same widths for table headers, rows, sticky copies and
@@ -65,9 +66,8 @@ best-offers checkbox in the same left-aligned row. Allow the row to wrap as spac
 narrows; preserve readable labels, checkbox states and accessible associations.
 Remove the separate sorting toolbar, including its loading-order note. Headers cycle
 ascending, descending and original loading order; no separate Reset sorting
-button is needed. Switching columns starts ascending. Use geometric arrows
-(12x18px across screen sizes):
-arrows: ascending lights the top 40% with a light-blue gradient; descending
+button is needed. Switching columns starts ascending. Use 12x18px geometric
+arrows across screen sizes: ascending lights the top 40% with a light-blue gradient; descending
 lights the bottom 40%; unsorted stays muted. Reflect state in aria-sort and each
 button's direction attribute, including the two Difference controls sharing a
 header. Center the Game name and baseline-price arrows on the same desktop

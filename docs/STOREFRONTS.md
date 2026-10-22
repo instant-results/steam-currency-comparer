@@ -24,7 +24,9 @@ Update currencies applies the choices to the current tab.
 
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
 the right. The comparison uses the workspace's full width. Desktop identity
-columns adapt between 300px and 480px; narrow screens keep identity above prices.
+columns normally adapt between 300px and 480px, growing further when needed to
+fill unused space if all selected storefronts fit. Narrow screens keep identity
+above prices.
 The main column headings share a vertical centre on desktop. OTHER
 STOREFRONTS and its conversion caption remain fixed horizontally; the individual
 currency/country labels occupy a separate row below and scroll with the prices.

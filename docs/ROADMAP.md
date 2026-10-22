@@ -5,6 +5,16 @@ release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
 
+## Completed in 0.7.2
+
+Currency setup now sits above the full-width results, with draft discard on hide.
+Wishlist search occupies the second header row. Filters and display choices share
+a wrapping toolbar, with persistent, anchored best-offer help. Completion status
+matches the checked-game count. Retry sits beside Compare regional prices, and
+sorting headers cycle ascending, descending and original loading order with
+compact directional indicators. Sticky storefront borders and spare desktop
+identity width are aligned with the price columns. See the changelog for details.
+
 ## Planned improvements
 
 ### Game titles and artwork

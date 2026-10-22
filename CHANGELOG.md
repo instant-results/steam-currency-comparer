@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.2 — 2026-10-22
 
 - Keep offer-help bubbles attached to their information buttons when expanding
   or hiding currency setup, including when the results move offscreen.
@@ -12,8 +12,9 @@
   the headline, with tighter introductory spacing.
 
 - Cycle table-header sorting through ascending, descending and original loading
-  order. Remove Reset sorting and its description; use larger arrows showing directional blue
-  gradients, and align the Game name and baseline-price arrows vertically.
+  order. Remove Reset sorting and its description; use compact arrows with blue
+  gradients on the top for ascending and bottom for descending, and align the
+  Game name and baseline-price arrows vertically.
 
 - Place wishlist Retry comparison beside Compare regional prices, with matching
   button dimensions and typography; wrap the actions on narrow screens.
@@ -42,8 +43,8 @@
   Remove the detached status and empty progress space once processing finishes.
 
 - Move wishlist title search to the spare cell beside currency labels in the
-  second table-header row, with a
-  wider bordered field, larger text and a full-width layout on narrow screens.
+  second table-header row, with a wider bordered field, larger text and a
+  full-width layout on narrow screens.
 
 - Add 6px of right-edge breathing room to difference values and storefront
   captions, retaining readable long country labels on desktop and phones.
