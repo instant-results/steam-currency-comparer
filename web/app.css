@@ -191,7 +191,7 @@ h1 > span { color: var(--muted); }
 .wishlist-order {
   min-width: 0;
 }
-.wishlist-order > span {
+.wishlist-order > span:first-child {
   display: block;
   margin-bottom: 6px;
   padding-inline-start: 13px;
@@ -204,7 +204,18 @@ h1 > span { color: var(--muted); }
   border: 1px solid #232f46;
   padding: 0 34px 0 12px;
   background: #0c101c;
+  appearance: none;
   color: var(--text);
+}
+.order-select-field { position: relative; display: block; }
+.order-select-field::after {
+  content: ""; position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; border: solid var(--text); border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-75%) rotate(45deg); pointer-events: none;
+}
+@media (forced-colors: active) {
+  .wishlist-order select { appearance: auto; }
+  .order-select-field::after { display: none; }
 }
 .profile-actions {
   display: flex;
