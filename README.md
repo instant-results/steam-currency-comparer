@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.7.2** · Beta for local use.
+**Version: 0.7.3** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -28,6 +28,8 @@ change over time. No personal Steam profile is used.
 - Compares 37 currencies using one representative Steam storefront per currency.
   Any can be the baseline, with up to 36 alternatives. Search the currency picker
   or choose Select all; the default is PLN against USD and EUR.
+  Selection cards include circular flags; EUR uses the EU flag while Germany
+  remains its representative storefront.
   See the [supported storefronts](docs/STOREFRONTS.md).
 - Keeps currency selection above the full-width comparison. The selectors collapse
   when a comparison starts; **Change currencies** reopens them. The selection
@@ -229,9 +231,9 @@ Current releases use **0.MINOR.PATCH**; beta status is documented separately
 until the stable release:
 
 - Increment **MINOR** for a substantial new feature and reset PATCH to zero:
-  `0.7.2` → `0.8.0`.
+  `0.7.3` → `0.8.0`.
 - Increment **PATCH** for fixes and refinements within the current feature
-  milestone: `0.7.1` → `0.7.2`.
+  milestone: `0.7.2` → `0.7.3`.
 - Releases through `0.7.0-beta` used a beta suffix. From `0.7.1`, version numbers
   omit that suffix; earlier release names remain unchanged.
 - Use **1.0.0** when the app reaches the intended stable

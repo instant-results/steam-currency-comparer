@@ -625,6 +625,12 @@ hidden choices. The browser and API use the same 37-currency registry. See
 [supported storefronts and table behavior](STOREFRONTS.md) for the complete mapping,
 pinned columns, synchronized horizontal scrolling and amount-unit validation.
 
+Selection cards show circular flags alongside currency/country text. EUR uses
+the EU flag; its prices still come from Germany. The flags load from one locally
+bundled SVG sprite and need no external flag service. Named summaries use
+"USD and EUR" for two alternatives and "USD, EUR, AUD, and CAD" for four;
+more than four alternatives use the existing storefront-count summary.
+
 NBP reports PLN per currency unit. The conversion into baseline currency B is
 `rate_to_pln[A] / rate_to_pln[B]`; PLN has an identity rate of 1. The rate notebook
 retains the underlying PLN quotes and dates. CSV additionally includes the

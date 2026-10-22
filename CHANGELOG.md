@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.3 — 2026-10-23
+
+- Format currency summaries with commas and a final ", and" for three or four
+  alternatives, retaining "and" for two and the storefront count for longer lists.
+
+- Add circular flags near the right edge of baseline and comparison currency
+  selection cards. EUR uses the EU flag; its prices still come from Germany.
+  Bundle the SVG artwork locally and retain text labels and native selection controls.
+
 ## 0.7.2 — 2026-10-22
 
 - Keep offer-help bubbles attached to their information buttons when expanding

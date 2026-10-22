@@ -22,6 +22,11 @@ Update currencies applies the choices to the current tab.
 
 ## Table behavior
 
+Baseline and comparison selection cards show locally bundled circular flags.
+EUR uses the EU flag as a currency cue; Germany remains its price source and
+visible country label. Other flags identify the representative country.
+Currency/country text remains available independently of the decorative flags.
+
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
 the right. The comparison uses the workspace's full width. Desktop identity
 columns normally adapt between 300px and 480px, growing further when needed to

@@ -45,7 +45,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml"),
           "/creators.js": ("creators.js", "text/javascript; charset=utf-8"),
           "/library.js": ("library.js", "text/javascript; charset=utf-8"),
-          "/steam-logo.svg": ("steam-logo.svg", "image/svg+xml")}
+          "/steam-logo.svg": ("steam-logo.svg", "image/svg+xml"),
+          "/flags.svg": ("flags.svg", "image/svg+xml")}
 
 EXAMPLE_WISHLIST = (
     WishlistItem("413150", "Stardew Valley"),

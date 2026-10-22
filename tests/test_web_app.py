@@ -93,6 +93,33 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(self.request(path)["status"], 404)
         self.assertEqual(self.request("/", HTTP_HOST="evil.test")["status"], 400)
 
+    def test_currency_flag_assets_cover_picker_currencies_and_remain_allowlisted(self):
+        import re
+        import xml.etree.ElementTree as ET
+        from steam_price_polisher.configuration import STOREFRONTS
+
+        response = self.request("/flags.svg")
+        self.assertEqual(response["status"], 200)
+        self.assertEqual(response["headers"]["Content-Type"], "image/svg+xml")
+        sprite = ET.fromstring(response["body"])
+        self.assertEqual(sprite.tag, "{http://www.w3.org/2000/svg}svg")
+        self.assertEqual({symbol.attrib["id"] for symbol in sprite},
+                         {"eu" if value["currency"] == "EUR" else region
+                          for region, value in STOREFRONTS.items()})
+        identifiers = [element.attrib["id"] for element in sprite.iter() if "id" in element.attrib]
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        for reference in re.findall(rb"url\(#([^)]+)\)", response["body"]):
+            self.assertIn(reference.decode(), identifiers)
+        self.assertIn("default-src 'self'", response["headers"]["Content-Security-Policy"])
+        head = self.request("/flags.svg", method="HEAD")
+        self.assertEqual(head["status"], 200)
+        self.assertEqual(head["body"], b"")
+        self.assertEqual(self.request("/flags.svg", method="POST", body={})["status"], 404)
+        for path in ("/flags/zz.svg", "/flags/eu.svg", "/flags/README.md",
+                     "/flags/LICENSE.md", "/flags/../app.js", "/flags/../../.env"):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)["status"], 404)
+
     def test_release_version_is_consistent_in_page_and_health(self):
         from steam_price_polisher.version import __version__
 
