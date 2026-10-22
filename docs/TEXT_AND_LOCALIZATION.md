@@ -56,9 +56,10 @@ Implementation: web/app.js (comparisonRow) and web/app.css
 ## Wishlist completion
 
 Show number · Complete inside the Games checked card when wishlist/example
-processing finishes with complete status. Keep Complete smaller than the number;
-allow it to wrap together with its separator on narrow screens. Hide the now-empty
-progress area. Active, partial, failed, cancelled and expired states retain their
+processing finishes with complete status. Match Complete and its separator to
+the number's font size and weight. Allow wrapping between number and status;
+on narrow screens, give Games checked its own row above the other two cards.
+Hide the now-empty progress area. Active, partial, failed, cancelled and expired states retain their
 progress/status presentation. Complete describes finished processing, including
 checked products with unavailable prices; it does not promise full price coverage.
 

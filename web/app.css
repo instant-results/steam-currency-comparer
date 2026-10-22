@@ -420,14 +420,21 @@ h2 {
   font-size: 14px;
   color: var(--muted);
 }
-.summary strong {
+.summary strong, .summary .count-completion {
   font-size: 31px;
   font-weight: 500;
   letter-spacing: -1px;
   font-variant-numeric: tabular-nums;
 }
 .summary-count-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
-.summary .count-completion { font-size: 12px; font-weight: 400; white-space: nowrap; }
+.summary .count-completion { white-space: nowrap; }
+.summary .count-completion > span { font-size: inherit; }
+@media (max-width: 600px) {
+  #wishlist-panel .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #wishlist-panel .summary > div:first-child { grid-column: 1 / -1; }
+  #wishlist-panel .summary > div + div { border-top: 1px solid var(--line); }
+  #wishlist-panel .summary > div:nth-child(2) { border-left: 0; }
+}
 .summary > div:nth-child(2) strong {
   color: var(--green);
 }
@@ -874,7 +881,7 @@ progress::-webkit-progress-value {
   }
   .summary span { font-size: 14px; }
   .summary > div { padding: 12px 8px; }
-  .summary strong { font-size: 26px; }
+  .summary strong, .summary .count-completion { font-size: 26px; }
   .filter { font-size: 14px; padding: 6px; }
   .results-panel { padding: 20px 14px 0; }
   .foreign { display: block; }

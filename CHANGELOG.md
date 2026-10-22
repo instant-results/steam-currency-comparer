@@ -15,7 +15,9 @@
   automatic collapse and locked controls preserve submitted selections.
 
 - Place wishlist completion beside the Games checked count as number · Complete,
-  removing the detached status and empty progress space once processing finishes.
+  with matching number/status typography. On narrow screens, give Games checked
+  its own summary row so the enlarged status stays readable.
+  Remove the detached status and empty progress space once processing finishes.
 
 - Move wishlist title search to the spare cell beside currency labels in the
   second table-header row, with a
