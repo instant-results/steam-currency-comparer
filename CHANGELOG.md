@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place wishlist Retry comparison beside Compare regional prices, with matching
+  button dimensions and typography; wrap the actions on narrow screens.
+
 - Align sticky storefront labels to the rendered currency-column boundaries,
   preserving both side dividers and preventing overlap into Difference when
   selected currencies fit within a wider comparison surface.

@@ -49,6 +49,11 @@ table, so its outer edge is not a reliable endpoint for the sticky labels.
 
 ## Result filters and display controls
 
+Wishlist Retry comparison belongs beside Compare regional prices in the setup
+form, with the same button dimensions and typography and a secondary blue style.
+Keep it a non-submit button with its existing retry behavior and visibility rules.
+Wrap the pair on narrow screens; the results footer retains the result count.
+
 On wide layouts, place result filters, Show unavailable products and the Steam
 best-offers checkbox in the same left-aligned row. Allow the row to wrap as space
 narrows; preserve readable labels, checkbox states and accessible associations.

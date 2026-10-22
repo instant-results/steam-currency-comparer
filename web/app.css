@@ -951,6 +951,16 @@ td:first-child { min-width: 0; }
 
 /* Starting and stopping share one action slot; status belongs to progress. */
 .comparison-action .primary { min-height: 48px; align-items: center; }
+#compare-form .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
+#compare-form, #compare-form .profile-field { min-width: 0; }
+#compare-form .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
+#compare-form .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
+#compare-form #analyze { border-color: transparent; }
+#compare-form .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
+#compare-form .retry-button:hover { background: #203654; border-color: var(--blue); }
+@media (max-width: 800px) {
+  #compare-form { grid-template-columns: minmax(0, 1fr); }
+}
 .cancel-button {
   background: #38291f;
   color: #ffd0ad;
