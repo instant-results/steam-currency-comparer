@@ -65,7 +65,7 @@ test("offer information persists through outside clicks and focus changes until 
   assert.equal(popup.hidden,false);
   ctx.dispatchDocument("click",{target:ctx.get("search")});
   assert.equal(popup.hidden,false);
-  ctx.dispatchDocument("focusin",{target:ctx.get("arrival-order")});
+  ctx.dispatchDocument("focusin",{target:ctx.get("search")});
   assert.equal(popup.hidden,false);
   let prevented=false;
   ctx.dispatchDocument("keydown",{key:"Escape",preventDefault(){prevented=true;}});
@@ -173,6 +173,57 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
 const savedWishlist = (identifier = "76561198000000000") => JSON.stringify({id:"w".repeat(32),token:"t".repeat(43),
   request:{identifier,home:"gb",regions:["us"],order:"date_added"}});
+
+for (const column of ["name","home","difference","percentage"]) test(`wishlist ${column} sorting cycles ascending, descending and original order`, () => {
+  const differenceHead = new Element("th");
+  const sorts = ["name","home","difference","percentage"].map(key => {
+    const button = new Element("button"), head = ["difference","percentage"].includes(key) ? differenceHead : new Element("th");
+    button.dataset.sort = key; button.closest = () => head; return button;
+  });
+  const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta"),skipped("4","request_failure")];
+  data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
+  const ctx = setup({'.sort:not(.library-sort)':sorts});
+  ctx.run(`items = ${JSON.stringify(data)}; render()`);
+  const button = sorts.find(value => value.dataset.sort === column), ids = () => ctx.get("rows").children.map(row => row.dataset.appId);
+  button.listeners.click();
+  assert.deepEqual(ids(), column === "name" ? ["4","2","3","1"] : ["1","3","2","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"ascending");
+  assert.equal(button.closest().attributes["aria-sort"],"ascending");
+  button.listeners.click();
+  assert.deepEqual(ids(), column === "name" ? ["1","3","2","4"] : ["2","3","1","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"descending");
+  assert.equal(button.closest().attributes["aria-sort"],"descending");
+  button.listeners.click();
+  assert.deepEqual(ids(),["1","2","3","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"none");
+  assert.ok(sorts.every(value => value.attributes["aria-pressed"] === "false" && value.attributes["data-sort-direction"] === "none"));
+  assert.equal(button.closest().attributes["aria-sort"],undefined);
+  assert.equal(ctx.run("direction"),1);
+  // A different header starts ascending even after descending on this one.
+  button.listeners.click(); button.listeners.click();
+  const other = sorts.find(value => value !== button);
+  other.listeners.click();
+  assert.equal(other.attributes["data-sort-direction"],"ascending");
+  assert.equal(button.attributes["data-sort-direction"],"none");
+});
+
+for (const column of ["name","home","difference","percentage"]) test(`library ${column} sorting restores loading order and persists the unsorted state`, () => {
+  const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta")];
+  data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
+  const ctx = creatorSetup({"polisher-library-job":JSON.stringify(savedLibrary(data))},"developer",true);
+  const button = ctx.librarySorts.find(value => value.dataset.sort === column), ids = () => ctx.get("library-rows").children.map(row => row.dataset.appId);
+  button.listeners.click();
+  assert.deepEqual(ids(),column === "name" ? ["2","3","1"] : ["1","3","2"]);
+  assert.equal(button.attributes["data-sort-direction"],"ascending");
+  button.listeners.click();
+  assert.deepEqual(ids(),column === "name" ? ["1","3","2"] : ["2","3","1"]);
+  assert.equal(button.attributes["data-sort-direction"],"descending");
+  button.listeners.click();
+  assert.deepEqual(ids(),["1","2","3"]);
+  assert.equal(button.attributes["data-sort-direction"],"none");
+  const saved = JSON.parse(ctx.storage.get("polisher-library-job"));
+  assert.equal(saved.sort,"arrival"); assert.equal(saved.direction,1);
+});
 
 test("currency panel reopens without changing selections, displayed prices or starting work", async () => {
   const ctx = creatorSetup();
@@ -882,7 +933,9 @@ test("library results restore with independent filters, sorting, rows, and opt-i
   const retained = ctx.get("library-rows").children[0];
   ctx.librarySorts[0].listeners.click();
   assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4","2","1"]);
-  ctx.get("library-arrival-order").listeners.click();
+  ctx.librarySorts[0].listeners.click();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["1","2","4"]);
+  ctx.librarySorts[0].listeners.click();
   assert.equal(ctx.get("library-rows").children[0],retained);
   ctx.libraryFilters.at(-1).listeners.click();
   assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4"]);
