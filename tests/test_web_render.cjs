@@ -8,6 +8,7 @@ class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
   get parentElement() { return this.parent; }
   get firstElementChild() { return this.children[0] || null; }
+  contains(element) { return this === element || this.children.some(child => child.contains(element)); }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
@@ -97,6 +98,63 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
 const savedWishlist = (identifier = "76561198000000000") => JSON.stringify({id:"w".repeat(32),token:"t".repeat(43),
   request:{identifier,home:"gb",regions:["us"],order:"date_added"}});
+
+test("currency panel reopens without changing selections, displayed prices or starting work", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").attributes["aria-expanded"], "false");
+  const calls = ctx.calls.length, prices = ctx.run("JSON.stringify(items)"), selected = ctx.run("JSON.stringify(currencySelection())");
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.equal(ctx.get("currency-panel-toggle").textContent, "Hide currencies");
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").textContent, "Change currencies");
+  assert.equal(ctx.run("JSON.stringify(items)"), prices);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), selected);
+  assert.equal(ctx.calls.length, calls);
+  assert.equal(ctx.get("update-currencies").hidden, false);
+});
+
+test("initialization holds leave setup open; each new run collapses once and can be reopened while locked", () => {
+  const ctx = creatorSetup();
+  ctx.get("currency-panel-body").hidden = false;
+  ctx.run('const releasePanelHold = comparisonCoordinator.hold("setup-test")');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  ctx.run('releasePanelHold(); comparisonCoordinator.setBusy("publisher", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  ctx.get("currency-panel-toggle").listeners.click();
+  ctx.run('comparisonCoordinator.setBusy("publisher", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.ok(ctx.regions.every(el => el.disabled));
+  assert.ok(ctx.radios.every(el => el.disabled));
+  ctx.run('comparisonCoordinator.setBusy("publisher", false)');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  ctx.run('comparisonCoordinator.setBusy("wishlist", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
+
+test("collapsed setup summarizes the selection separately from the displayed comparison, including empty/all choices", async () => {
+  const ctx = creatorSetup({}, "developer", false, [], false, null, true);
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  ctx.regions.forEach(el => el.checked = false);
+  ctx.run('updateSelections({target:{name:"region"}})');
+  assert.match(ctx.get("currency-selection-summary").textContent, /Selected: PLN · no comparison currencies/);
+  assert.match(ctx.get("currency-update-help").textContent, /Displayed: PLN against USD and EUR/);
+  ctx.get("select-all-currencies").listeners.click();
+  assert.equal(ctx.get("currency-selection-summary").textContent, "Selected: PLN against 36 storefronts");
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
+
+test("automatic currency collapse returns focus from hidden controls to its disclosure button", () => {
+  const ctx = creatorSetup();
+  ctx.get("currency-panel-body").append(ctx.get("currency-search"));
+  ctx.run('document.activeElement = document.getElementById("currency-search"); comparisonCoordinator.setBusy("wishlist", true)');
+  assert.equal(ctx.get("currency-panel-toggle").focused, true);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
 
 test("a fresh page automatically compares the example once using current selections", async () => {
   const ctx = creatorSetup();
@@ -1626,6 +1684,19 @@ function restoredWishlist(identifier = "example", expired = false, extra = {}) {
   const saved = {id:"w".repeat(32),token:"t".repeat(43),request,displayed,expired,...extra};
   return creatorSetup({"polisher-job":JSON.stringify(saved)});
 }
+
+test("restoring a completed comparison collapses setup without starting work or losing its snapshot", async () => {
+  const ctx = restoredWishlist("example", true); await settle();
+  assert.equal(ctx.run("comparisonCoordinator.active"), false);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").attributes["aria-expanded"], "false");
+  assert.equal(ctx.calls.length, 0);
+  const csv = ctx.run('buildCsv(false,"fixed")');
+  ctx.get("currency-panel-toggle").listeners.click();
+  ctx.run("refreshCurrencyAction(); updateSelections()");
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.equal(ctx.run('buildCsv(false,"fixed")'), csv);
+});
 
 for (const identifier of ["example","76561198000000000"]) test(`expired restored ${identifier === "example" ? "example" : "wishlist"} recreates on currency update without discarding the snapshot`, async () => {
   const ctx = restoredWishlist(identifier); await settle();
