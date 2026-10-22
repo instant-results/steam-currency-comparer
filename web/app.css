@@ -1311,7 +1311,7 @@ td:first-child { min-width: 0; }
 .comparison-area { min-width: 0; position: relative; }
 .comparison-area, .comparison-matrix {
   --game-width: 230px; --credit-width: 0px; --home-width: 125px;
-  --region-width: 170px; --difference-width: 165px;
+  --region-width: max(170px, calc(510px / var(--region-count, 3))); --difference-width: 165px;
 }
 .comparison-area.matrix-with-credits { --credit-width: 125px; }
 .regional-scrollbar-shell {
@@ -1386,7 +1386,7 @@ td:first-child { min-width: 0; }
 .regional-statistics-grid .creator-statistic-value { font-size: 20px; }
 
 /* On phones the pinned identity occupies a row above the pinned price edges. */
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
   .comparison-area.matrix-with-credits, .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
   .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
@@ -1424,7 +1424,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix .foreign > span > span { display: inline; }
 .comparison-matrix .sale-note { line-height: 1.5; }
 .creator-catalog .comparison-matrix .foreign > span > span { white-space: normal; }
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .price, .comparison-matrix .difference,
   .comparison-matrix .foreign > span, .comparison-matrix .foreign > span > span,
   .comparison-matrix .offer-price { font-size: 12px; }
@@ -1455,7 +1455,7 @@ td:first-child { min-width: 0; }
 }
 .original-price-currency { min-width: 3ch; text-align: right; }
 
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .foreign .regional-price-line { font-size: 12px; }
 }
 
@@ -1466,7 +1466,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix .best-offer .offer-name { min-height: var(--offer-name-height, 0px); }
 
 .comparison-matrix .offer-difference > span.offer-value { font-size: 14px; line-height: 1.5; }
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
 }
 
