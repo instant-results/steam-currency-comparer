@@ -1332,10 +1332,12 @@ td:first-child { min-width: 0; }
 .comparison-matrix .header-stack-right > small { left: 0; right: 0; text-align: center; }
 .comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: center; gap: 12px; left: 0; right: 0; }
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
-  display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
+  display: grid; grid-template-columns: repeat(var(--region-count), min(var(--region-width), 255px));
+  justify-content: center; gap: 0;
   width: calc(var(--region-count) * var(--region-width));
 }
 .comparison-matrix .foreign > * { min-width: 0; padding: 10px 12px; border-left: 1px solid var(--line); }
+.comparison-matrix .foreign > :only-child { border-left: 0; }
 .comparison-matrix .foreign > span:not(.storefront-heading) { padding-top: 0; padding-bottom: 0; }
 .comparison-matrix .storefront-headings { margin-top: 0; }
 .comparison-matrix .storefront-label-row { height: auto; }
