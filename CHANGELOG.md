@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place wishlist completion beside the Games checked count as number · Complete,
+  removing the detached status and empty progress space once processing finishes.
+
 - Move wishlist title search to the spare cell beside currency labels in the
   second table-header row, with a
   wider bordered field, larger text and a full-width layout on narrow screens.

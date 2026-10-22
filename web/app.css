@@ -426,6 +426,8 @@ h2 {
   letter-spacing: -1px;
   font-variant-numeric: tabular-nums;
 }
+.summary-count-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.summary .count-completion { font-size: 12px; font-weight: 400; white-space: nowrap; }
 .summary > div:nth-child(2) strong {
   color: var(--green);
 }

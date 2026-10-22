@@ -53,6 +53,15 @@ Wishlist and owned library show both roles together.
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
 
+## Wishlist completion
+
+Show number · Complete inside the Games checked card when wishlist/example
+processing finishes with complete status. Keep Complete smaller than the number;
+allow it to wrap together with its separator on narrow screens. Hide the now-empty
+progress area. Active, partial, failed, cancelled and expired states retain their
+progress/status presentation. Complete describes finished processing, including
+checked products with unavailable prices; it does not promise full price coverage.
+
 ## Currency-update wording
 
 Use **Update currencies** for the explicit action on a completed comparison in the

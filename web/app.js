@@ -420,7 +420,13 @@ async function pollWishlistCurrencies() {
 }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
-function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
+function status(text, active = false) {
+  const complete = text === "COMPLETE" && !active;
+  $("status-badge").textContent = text;
+  $("status-badge").classList.toggle("active", active);
+  $("progress-area").hidden = complete;
+  $("count-completion").hidden = !complete;
+}
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 let showBestOffers = false;
