@@ -801,8 +801,53 @@ $("retry").addEventListener("click", () => {
 });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
+let openOfferHelp = null, offerHelpObserver = null;
+function closeOfferHelp(returnFocus = false) {
+  if (!openOfferHelp) return;
+  const {button, popup} = openOfferHelp;
+  popup.hidden = true; button.setAttribute("aria-expanded", "false"); openOfferHelp = null;
+  offerHelpObserver?.disconnect(); offerHelpObserver = null;
+  if (returnFocus) button.focus();
+}
+function toggleOfferHelp(button, popup) {
+  const wasOpen = openOfferHelp?.button === button;
+  closeOfferHelp();
+  if (wasOpen) return;
+  popup.hidden = false; button.setAttribute("aria-expanded", "true");
+  openOfferHelp = {button, popup};
+  positionOfferHelp(button, popup);
+  if (typeof ResizeObserver !== "undefined") {
+    offerHelpObserver = new ResizeObserver(() => positionOfferHelp(button, popup));
+    offerHelpObserver.observe(document.body);
+  }
+  $(popup.id + "-close").focus({preventScroll: true});
+}
+function positionOfferHelp(button, popup) {
+  // Reserve room for the close circle extending beyond the bubble's corner.
+  const edge = 24, gap = 16, viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  popup.style.width = `${Math.min(380, viewportWidth - edge * 2)}px`;
+  const anchor = button.getBoundingClientRect(), box = popup.getBoundingClientRect();
+  const centeredLeft = anchor.left + anchor.width / 2 - box.width / 2;
+  const left = Math.max(edge, Math.min(centeredLeft, viewportWidth - box.width - edge));
+  const below = anchor.bottom + gap;
+  const preferredTop = below + box.height <= window.innerHeight - edge ? below : anchor.top - box.height - gap;
+  const top = Math.max(edge, Math.min(preferredTop, window.innerHeight - box.height - edge));
+  popup.style.left = `${left + (window.scrollX || 0)}px`;
+  popup.style.top = `${top + (window.scrollY || 0)}px`;
+}
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && openOfferHelp) { closeOfferHelp(true); event.preventDefault(); }
+});
+function refreshOfferHelpPosition() {
+  if (openOfferHelp) positionOfferHelp(openOfferHelp.button, openOfferHelp.popup);
+}
+window.addEventListener?.("resize", refreshOfferHelpPosition);
 const bestOfferControls = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"].map($);
 for (const control of bestOfferControls) {
+  const button = $(control.id + "-info"), popup = $(control.id.replace("show-best-offers", "best-offers-help"));
+  popup.hidden = true; button.setAttribute("aria-expanded", "false");
+  button.addEventListener("click", () => toggleOfferHelp(button, popup));
+  $(popup.id + "-close").addEventListener("click", () => closeOfferHelp(true));
   control.checked = showBestOffers;
   control.addEventListener("change", () => {
     showBestOffers = control.checked;

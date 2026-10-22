@@ -737,9 +737,13 @@ selected purchase option. Each request has one country context. The existing
 selection limit is now one to 36 alternatives, using one representative country
 for each of the 37 supported live currencies.
 
-The checkbox sits directly above the comparison table in each tab, beside the
-result-display controls. Its setting is shared across tabs and survives reload
-in the same browser tab.
+The checkbox sits directly above the comparison table in each tab. Wishlist
+groups it with Show unavailable products and the game filters in one wrapping
+row. The blue circular i button after its label opens an explanation without
+changing the checkbox. Close it with its circular X, the i button or Escape.
+Clicking elsewhere leaves it open. The bubble opens centered on the i, adjusting
+near viewport edges, and scrolls with the page. Its setting is shared across tabs
+and survives reload in the same browser tab.
 
 Enable **Show Steam's best purchase offers alongside game prices** to reveal a
 separate set of prices and regional differences. Both datasets are fetched during

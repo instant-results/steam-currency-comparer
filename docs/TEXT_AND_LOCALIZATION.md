@@ -161,8 +161,24 @@ Keep compact country labels inline with amounts on narrow screens.
 ## Best-offer display control
 
 Place **Show Steam's best purchase offers alongside game prices** directly above
-the comparison table in every tab, after the local filters/display controls or
-catalog overview. Keep the explanatory paragraph in the same outlined panel.
+the comparison table in every tab. Wishlist and the internal library place it and
+Show unavailable products beside the result filters in one wrapping toolbar.
+Keep catalog placement after the overview. Match checkbox typography; narrower
+layouts wrap complete controls and allow the long offer label to wrap naturally.
+
+Place a small blue circular i button immediately after the offer label, outside
+its checkbox label so it never toggles the checkbox. It opens the existing
+explanation in a rounded blue popup rather than a permanently visible panel.
+Keep the popup within the viewport, associated through aria-controls and
+aria-expanded, and retain the checkbox's unique help-text association. Support
+Enter/Space activation and toggling closed. Center the i with its label text.
+Use a nonmodal pale-blue dialog with dark text, rounded corners and separate
+paragraphs. Emphasize the opening sentence. A contrasting-blue circular X overlaps
+the top-right corner, with enough viewport clearance to keep it accessible;
+focus the X on opening and return focus to the i when closing with X or Escape.
+Outside clicks and focus changes leave help open. Center it on the trigger,
+clamp to viewport edges on opening/resize, and let it scroll with the page.
+Only one explanation is open at a time; reading help fetches nothing.
 Use a labelled checkbox, a unique help-text association and the local table/list
 as its controlled region. All copies reflect the same saved display setting;
 changing one rerenders loaded results without fetching more prices. The internal

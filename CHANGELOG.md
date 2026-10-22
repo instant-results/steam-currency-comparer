@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Group availability and best-offer checkboxes with wishlist filters in a wrapping
+  row. Replace permanent offer help panels with blue information buttons and
+  pale-blue, rounded popups with spaced text, an overlapping circular close button
+  and keyboard support. Keep the bubble and close control within viewport bounds.
+  Center help on its information button and let it scroll with the page.
+  Help stays open when clicking elsewhere or resizing.
+
 - Place Change currencies beside the selected-currency summary and show Update
   currencies only inside expanded setup. Hiding setup discards unapplied edits
   and restores displayed currencies without starting a job or changing results;

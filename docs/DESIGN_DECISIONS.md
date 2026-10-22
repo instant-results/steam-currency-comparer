@@ -41,6 +41,30 @@ active-job locking, long titles and both catalog credit modes. Check widths on
 both sides of breakpoints and 1/2/3/36 alternatives, including best and missing
 offers, horizontal scroll extremes and sticky titles.
 
+## Result filters and display controls
+
+On wide layouts, place result filters, Show unavailable products and the Steam
+best-offers checkbox in the same left-aligned row. Allow the row to wrap as space
+narrows; preserve readable labels, checkbox states and accessible associations.
+Keep Reset sorting and its loading-order note below, aligned to the end.
+
+Replace permanent best-offer explanatory panels with a small blue circular i
+button after the label and a blue, rounded popup. The button is independent from
+the checkbox. The popup appears near it, stays inside viewport bounds, and keeps
+its position if loading changes page height. Center the i with the label text.
+Outside clicks and focus changes leave help open. Center the bubble on its i
+button, adjusting at viewport edges when opened or resized. Use document positioning
+so it scrolls away with the control instead of sticking to the screen. Use a pale-blue
+bubble with dark text, generously rounded corners and three spaced paragraphs
+with a stronger opening line. A contrasting
+blue circular X overlaps the top-right corner; draw its cross geometrically so
+it stays centered independently of font metrics. Reserve viewport space around
+the overlapping circle and scroll long help inside the bubble. The X, Escape,
+or the i button closes it. Opening focuses the X; closing with X or Escape returns
+focus to the i button. Keep the same help interaction
+for each tab's shared best-offer setting. The owned-library controls remain hidden
+under their existing feature flag.
+
 ## Wishlist title search
 
 Place wishlist search in the spare game cell of the second header row, beside
