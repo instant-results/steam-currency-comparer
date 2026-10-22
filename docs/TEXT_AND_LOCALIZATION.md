@@ -53,6 +53,12 @@ Wishlist and owned library show both roles together.
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
 
+## Wishlist CSV attribution
+
+The wishlist export checkbox reads **Include Steam profile URL or ID in CSV**.
+It opts into writing the supplied profile identifier to `wishlist_profile`;
+the value can be a profile URL or SteamID, and is blank when unchecked.
+
 ## Wishlist completion
 
 Show number · Complete inside the Games checked card when wishlist/example
