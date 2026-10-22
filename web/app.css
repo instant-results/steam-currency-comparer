@@ -1367,6 +1367,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix.matrix-with-credits .pinned-home,
 .comparison-matrix.matrix-with-credits th:nth-child(3) { position: sticky; left: calc(var(--game-width) + var(--credit-width)); z-index: 2; background: var(--panel); box-shadow: 2px 0 0 var(--line); }
 .comparison-matrix .cheapest-storefront { color: var(--muted); font-size: 10px; }
+.cheapest-storefront-name { display: block; }
 .creator-catalog .comparison-matrix tbody tr { background-image: none; }
 .creator-panel .creator-group-heading, .credit-column-visible .creator-group-heading { display: block; }
 .creator-panel .creator-identity { margin-bottom: 18px; }
