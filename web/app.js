@@ -78,6 +78,37 @@ function currencyLabel(selection) {
   return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
 }
 function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
+let currencyPanelWasActive = false, currencyPanelUsed = false, currencyPanelRestoreSelection = null;
+function displayedCurrencySelection() {
+  return window.creatorPane?.active ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
+}
+function setCurrencyPanelExpanded(expanded, discardChanges = false) {
+  const body = $("currency-panel-body"), toggle = $("currency-panel-toggle");
+  // Return focus before hiding a control used to start a currency update.
+  if (!expanded && body.contains(document.activeElement)) toggle.focus();
+  body.hidden = !expanded;
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.textContent = expanded ? "Hide currencies" : "Change currencies";
+  if (expanded) {
+    const selection = currencySelection();
+    currencyPanelRestoreSelection = {home: selection.home, regions: [...selection.regions]};
+  } else if (discardChanges && !comparisonCoordinator.busy) {
+    const selection = displayedCurrencySelection() || currencyPanelRestoreSelection;
+    if (selection) {
+      preferredComparisons = [...selection.regions];
+      document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === selection.home);
+      document.querySelectorAll('[name="region"]').forEach(el => el.checked = selection.regions.includes(el.value));
+      updateSelections();
+    }
+  }
+}
+function syncCurrencyPanel(hasComparison) {
+  const active = comparisonCoordinator.active;
+  // Collapse once per run; reopening during a run remains possible.
+  if ((active && !currencyPanelWasActive) || (hasComparison && !currencyPanelUsed)) setCurrencyPanelExpanded(false);
+  if (active || hasComparison) currencyPanelUsed = true;
+  currencyPanelWasActive = active;
+}
 function preserveComparisonScroll(update) {
   const x = window.scrollX || 0, y = window.scrollY || 0;
   const wraps = [...document.querySelectorAll('.table-wrap')].map(el => [el, el.scrollLeft]);
@@ -91,12 +122,14 @@ function validCurrencies(value) {
 }
 function refreshCurrencyAction() {
   const catalog = window.creatorPane?.active;
-  const displayed = catalog ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
+  const displayed = displayedCurrencySelection();
   const selected = currencySelection(), button = $("update-currencies");
-  button.hidden = !displayed;
   button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed);
   $("currency-update-help").hidden = !displayed;
+  $("currency-edit-help").hidden = !displayed;
   $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " Updating currencies will reload this saved comparison." : ""}` : "";
+  syncCurrencyPanel(Boolean(displayed));
+  button.hidden = !displayed || $("currency-panel-body").hidden;
 }
 function updateSelections(event) {
   const home = selectedHome();
@@ -108,6 +141,7 @@ function updateSelections(event) {
   for (const el of options) el.checked = el.value !== home && preferredComparisons.includes(el.value);
   const selected = options.filter(el => el.checked);
   const count = selected.length;
+  if (currencyPanelRestoreSelection === null) currencyPanelRestoreSelection = {home, regions: selected.map(el => el.value)};
   for (const caption of [$("welcome-currencies"), $("library-welcome-currencies")].filter(Boolean)) {
     caption.replaceChildren(node("span", storefronts[home].currency, "welcome-currency"));
     for (const el of selected) caption.append(node("span", "↔"), node("span", storefronts[el.value].currency, "welcome-currency"));
@@ -124,6 +158,9 @@ function updateSelections(event) {
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
   $("baseline-legend").textContent = `Baseline currency · ${storefronts[home].currency}`;
   $("selection-help").textContent = `${count} of ${maxComparisons} selected · Choose one or more.`;
+  $("currency-selection-summary").textContent = count
+    ? `Selected: ${currencyLabel({home, regions: selected.map(el => el.value)})}`
+    : `Selected: ${storefronts[home].currency} · no comparison currencies`;
   $("select-all-currencies").disabled = comparisonCoordinator.busy || count === maxComparisons;
   $("clear-currencies").disabled = comparisonCoordinator.busy || count === 0;
   filterStorefrontControls();
@@ -187,8 +224,11 @@ function scheduleOfferAlignment(table) {
 function setComparisonLayout(table, regions, credits = false) {
   table.classList.toggle("comparison-matrix", true);
   table.classList.toggle("matrix-with-credits", credits);
-  table.closest?.(".comparison-area")?.classList.toggle("matrix-with-credits", credits);
-  table.style.setProperty("--region-count", String(Math.max(regions.length, 1)));
+  const count = String(Math.max(regions.length, 1));
+  const area = table.closest?.(".comparison-area");
+  area?.classList.toggle("matrix-with-credits", credits);
+  area?.style.setProperty("--region-count", count);
+  table.style.setProperty("--region-count", count);
   table.parentElement?.refreshScrollControls?.();
   scheduleOfferAlignment(table);
 }
@@ -214,10 +254,22 @@ function bindComparisonScroll(prefix, wrap) {
       headingSignature = source.innerHTML;
     }
     stickyTitles.classList.toggle("matrix-with-credits", table.classList.contains("matrix-with-credits"));
-    stickyTitles.style.setProperty("--region-count", table.style.getPropertyValue("--region-count"));
-    stickyTitles.firstElementChild.style.transform = `translateX(${-wrap.scrollLeft}px)`;
-    const sourceBox = source.getBoundingClientRect(), top = shell.getBoundingClientRect().bottom;
-    stickyTitles.hidden = wrap.clientWidth === 0 || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
+    const count = table.style.getPropertyValue("--region-count") || "1";
+    stickyTitles.style.setProperty("--region-count", count);
+    const sourceBox = source.getBoundingClientRect(), shellBox = shell.getBoundingClientRect();
+    const wrapBox = wrap.getBoundingClientRect();
+    const homeBox = table.querySelector(".storefront-label-row .pinned-home").getBoundingClientRect();
+    const differenceBox = table.querySelector(".storefront-label-row .pinned-difference").getBoundingClientRect();
+    // Use rendered cell edges: the table can be narrower than its scroll surface,
+    // and this copy lives outside the table's container-query sizing context.
+    const left = Math.max(sourceBox.left, homeBox.right, wrapBox.left);
+    const right = Math.min(sourceBox.right, differenceBox.left, wrapBox.right);
+    stickyTitles.style.left = `${left - shellBox.left}px`;
+    stickyTitles.style.width = `${Math.max(0, right - left)}px`;
+    stickyTitles.style.setProperty("--region-width", `${sourceBox.width / Number(count)}px`);
+    stickyTitles.firstElementChild.style.transform = `translateX(${sourceBox.left - left}px)`;
+    const top = shellBox.bottom;
+    stickyTitles.hidden = wrap.clientWidth === 0 || right <= left || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
   };
   const refresh = () => {
     const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
@@ -400,7 +452,28 @@ async function pollWishlistCurrencies() {
 }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
-function status(text, active = false) { $("status-badge").textContent = text; $("status-badge").classList.toggle("active", active); }
+function nextTableSort(sort, direction, column) {
+  if (sort !== column) return {sort: column, direction: 1};
+  return direction === 1 ? {sort: column, direction: -1} : {sort: "arrival", direction: 1};
+}
+function updateSortIndicators(buttons, sort, direction) {
+  for (const button of buttons) button.closest("th").removeAttribute("aria-sort");
+  for (const button of buttons) {
+    const active = button.dataset.sort === sort;
+    const state = active ? (direction === 1 ? "ascending" : "descending") : "none";
+    button.setAttribute("aria-pressed", String(active));
+    button.setAttribute("data-sort-direction", state);
+    button.setAttribute("title", state === "none" ? "Sort lowest to highest (A–Z)" : state === "ascending" ? "Sort highest to lowest (Z–A)" : "Restore original loading order");
+    if (active) button.closest("th").setAttribute("aria-sort", state);
+  }
+}
+function status(text, active = false) {
+  const complete = text === "COMPLETE" && !active;
+  $("status-badge").textContent = text;
+  $("status-badge").classList.toggle("active", active);
+  $("progress-area").hidden = complete;
+  $("count-completion").hidden = !complete;
+}
 let currentRates = [], currentProfile = "";
 const rowCache = new Map();
 let showBestOffers = false;
@@ -565,15 +638,7 @@ function render() {
   $("empty").hidden = visible.length > 0;
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
-  $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
-  $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
-  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
-    button.closest('th').removeAttribute('aria-sort');
-    button.setAttribute('aria-pressed', String(button.dataset.sort === sort));
-  });
-  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
-    if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
-  });
+  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
   saveWishlist();
 }
 function formatRateTime(isoString) {
@@ -729,6 +794,11 @@ function downloadCsv(contents, filename) {
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 buildStorefrontControls();
+$("currency-panel-toggle").addEventListener("click", () => {
+  const expanded = $("currency-panel-body").hidden;
+  setCurrencyPanelExpanded(expanded, !expanded);
+  refreshCurrencyAction();
+});
 bindComparisonScroll("wishlist", $("wishlist-table").parentElement || $("wishlist-scroll"));
 bindComparisonScroll("library", $("library-table").parentElement || $("library-scroll"));
 $("currency-search").addEventListener("input", filterStorefrontControls);
@@ -753,8 +823,60 @@ $("retry").addEventListener("click", () => {
 });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
+let openOfferHelp = null, offerHelpObserver = null;
+function closeOfferHelp(returnFocus = false) {
+  if (!openOfferHelp) return;
+  const {button, popup} = openOfferHelp;
+  popup.hidden = true; button.setAttribute("aria-expanded", "false"); openOfferHelp = null;
+  offerHelpObserver?.disconnect(); offerHelpObserver = null;
+  if (returnFocus) button.focus();
+}
+function toggleOfferHelp(button, popup) {
+  const wasOpen = openOfferHelp?.button === button;
+  closeOfferHelp();
+  if (wasOpen) return;
+  popup.hidden = false; button.setAttribute("aria-expanded", "true");
+  openOfferHelp = {button, popup};
+  positionOfferHelp(button, popup, true);
+  if (typeof ResizeObserver !== "undefined") {
+    offerHelpObserver = new ResizeObserver(() => positionOfferHelp(button, popup));
+    offerHelpObserver.observe(document.body);
+  }
+  $(popup.id + "-close").focus({preventScroll: true});
+}
+function positionOfferHelp(button, popup, fitViewport = false) {
+  if (openOfferHelp?.button !== button) return;
+  // Reserve room for the close circle extending beyond the bubble's corner.
+  const edge = 24, gap = 16, viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  popup.style.width = `${Math.min(380, viewportWidth - edge * 2)}px`;
+  const anchor = button.getBoundingClientRect(), box = popup.getBoundingClientRect();
+  const centeredLeft = anchor.left + anchor.width / 2 - box.width / 2;
+  const left = Math.max(edge, Math.min(centeredLeft, viewportWidth - box.width - edge));
+  const help = openOfferHelp;
+  // Fit when opening or resizing a visible anchor. Layout shifts should carry
+  // the bubble with its button, including when that button moves offscreen.
+  if (!help.placement || (fitViewport && anchor.bottom > 0 && anchor.top < window.innerHeight)) {
+    help.placement = anchor.bottom + gap + box.height <= window.innerHeight - edge ? "below" : "above";
+    const preferredTop = help.placement === "below" ? anchor.bottom + gap : anchor.top - box.height - gap;
+    help.verticalShift = Math.max(edge, Math.min(preferredTop, window.innerHeight - box.height - edge)) - preferredTop;
+  }
+  const top = (help.placement === "below" ? anchor.bottom + gap : anchor.top - box.height - gap) + help.verticalShift;
+  popup.style.left = `${left + (window.scrollX || 0)}px`;
+  popup.style.top = `${top + (window.scrollY || 0)}px`;
+}
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && openOfferHelp) { closeOfferHelp(true); event.preventDefault(); }
+});
+function refreshOfferHelpPosition() {
+  if (openOfferHelp) positionOfferHelp(openOfferHelp.button, openOfferHelp.popup, true);
+}
+window.addEventListener?.("resize", refreshOfferHelpPosition);
 const bestOfferControls = ["show-best-offers", "developers-show-best-offers", "publishers-show-best-offers", "library-show-best-offers"].map($);
 for (const control of bestOfferControls) {
+  const button = $(control.id + "-info"), popup = $(control.id.replace("show-best-offers", "best-offers-help"));
+  popup.hidden = true; button.setAttribute("aria-expanded", "false");
+  button.addEventListener("click", () => toggleOfferHelp(button, popup));
+  $(popup.id + "-close").addEventListener("click", () => closeOfferHelp(true));
   control.checked = showBestOffers;
   control.addEventListener("change", () => {
     showBestOffers = control.checked;
@@ -763,9 +885,8 @@ for (const control of bestOfferControls) {
     render(); window.creatorPane?.render(); window.libraryPane?.render();
   });
 }
-$("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
-document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
+document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
 $("identifier").addEventListener("input", () => { automaticExampleDismissed = true; comparisonCoordinator.cancel("wishlist-example"); });
 
 // Deferred scripts restore their tabs before DOMContentLoaded. Catalog restoration

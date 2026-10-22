@@ -116,7 +116,7 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 49px 0 37px;
+  padding: 37px 0;
   gap: 30px;
 }
 .eyebrow {
@@ -125,15 +125,6 @@ main {
   font-weight: 600;
   color: var(--muted);
   margin: 0 0 18px;
-}
-.dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: var(--blue);
-  border-radius: 50%;
-  vertical-align: middle;
-  margin-right: 7px;
 }
 h1 {
   font-size: clamp(32px, 3.2vw, 49px);
@@ -151,7 +142,7 @@ h1 > span { color: var(--muted); }
 }
 .workspace {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   border: 1px solid var(--line);
   border-radius: 13px;
   overflow: clip;
@@ -232,7 +223,7 @@ h1 > span { color: var(--muted); }
   padding: 26px 24px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .section-label {
   display: flex;
@@ -363,6 +354,7 @@ legend {
 .currency-update-action button:disabled { cursor: default; opacity: .55; }
 .displayed-currencies { color: var(--muted); }
 .results-panel {
+  container-type: inline-size;
   padding: 27px 26px 0;
   min-width: 0;
   display: flex;
@@ -419,11 +411,20 @@ h2 {
   font-size: 14px;
   color: var(--muted);
 }
-.summary strong {
+.summary strong, .summary .count-completion {
   font-size: 31px;
   font-weight: 500;
   letter-spacing: -1px;
   font-variant-numeric: tabular-nums;
+}
+.summary-count-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.summary .count-completion { white-space: nowrap; }
+.summary .count-completion > span { font-size: inherit; }
+@media (max-width: 600px) {
+  #wishlist-panel .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #wishlist-panel .summary > div:first-child { grid-column: 1 / -1; }
+  #wishlist-panel .summary > div + div { border-top: 1px solid var(--line); }
+  #wishlist-panel .summary > div:nth-child(2) { border-left: 0; }
 }
 .summary > div:nth-child(2) strong {
   color: var(--green);
@@ -542,6 +543,9 @@ th small {
   right: 0;
 }
 .sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: 0;
   padding: 0;
@@ -551,8 +555,15 @@ th small {
   text-align: left;
 }
 .sort-arrow {
-  color: #64748b;
-  margin-left: 4px;
+  display: inline-block; flex: 0 0 12px; width: 12px; height: 18px;
+  font-size: 0; background: #64748b;
+  clip-path: polygon(50% 3%, 95% 30%, 85% 38%, 57% 20%, 57% 80%, 85% 62%, 95% 70%, 50% 97%, 5% 70%, 15% 62%, 43% 80%, 43% 20%, 15% 38%, 5% 30%);
+}
+.sort[data-sort-direction=descending] .sort-arrow { background: linear-gradient(to top, #c4edff 0%, #60a5fa 20%, #64748b 40%, #64748b 100%); }
+.sort[data-sort-direction=ascending] .sort-arrow { background: linear-gradient(to bottom, #c4edff 0%, #60a5fa 20%, #64748b 40%, #64748b 100%); }
+@media (max-width: 1000px) {
+  .comparison-matrix .sort { gap: 2px; }
+  .comparison-matrix thead .header-stack > .difference-sorts { gap: 6px; }
 }
 :is(#home-heading, #library-home-heading), :is(#difference-currency, #library-difference-currency) {
   color: inherit;
@@ -795,7 +806,6 @@ progress::-webkit-progress-value {
   border-radius: 4px;
 }
 @media (min-width: 1450px) {
-  .workspace { grid-template-columns: 330px 1fr; }
   .profile-row { padding: 25px 30px; }
   .setup { padding: 30px; }
   .results-panel { padding: 30px 32px 0; }
@@ -803,7 +813,6 @@ progress::-webkit-progress-value {
 @media (max-width: 1100px) {
   main { padding: 0 3%; }
   .topbar { padding: 0 3%; }
-  .workspace { grid-template-columns: 270px 1fr; }
   .profile-row { padding: 20px 18px; gap: 12px; }
   .profile-actions { gap: 16px; }
   .setup { padding: 22px 18px; }
@@ -873,7 +882,7 @@ progress::-webkit-progress-value {
   }
   .summary span { font-size: 14px; }
   .summary > div { padding: 12px 8px; }
-  .summary strong { font-size: 26px; }
+  .summary strong, .summary .count-completion { font-size: 26px; }
   .filter { font-size: 14px; padding: 6px; }
   .results-panel { padding: 20px 14px 0; }
   .foreign { display: block; }
@@ -937,12 +946,21 @@ progress::-webkit-progress-value {
   border-color: var(--blue);
   color: var(--blue-light);
 }
-:is(#order-note, #library-order-note) { font-size: 12px; }
 th { white-space: normal; }
 td:first-child { min-width: 0; }
 
 /* Starting and stopping share one action slot; status belongs to progress. */
 .comparison-action .primary { min-height: 48px; align-items: center; }
+#compare-form .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
+#compare-form, #compare-form .profile-field { min-width: 0; }
+#compare-form .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
+#compare-form .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
+#compare-form #analyze { border-color: transparent; }
+#compare-form .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
+#compare-form .retry-button:hover { background: #203654; border-color: var(--blue); }
+@media (max-width: 800px) {
+  #compare-form { grid-template-columns: minmax(0, 1fr); }
+}
 .cancel-button {
   background: #38291f;
   color: #ffd0ad;
@@ -1103,10 +1121,10 @@ td:first-child { min-width: 0; }
   margin-top: 6px;
   white-space: nowrap;
 }
-.sort[aria-pressed=true], .sort[aria-pressed=true] .sort-arrow { color: var(--blue-light); }
+.sort[aria-pressed=true] { color: var(--blue-light); }
 :is(#filter-help, #library-filter-help) { margin: 0 0 14px; font-size: 13px; }
 
-.setup .currency-options { display: block; margin: 24px 0; }
+.setup .currency-options { display: flex; flex-direction: column; min-width: 0; margin: 0; }
 .currency-options .region { padding: 10px 12px; margin-bottom: 8px; }
 .currency-options .region:has(input:disabled):not(:has(input:checked)) { opacity: .5; }
 .currency-options .region small { white-space: normal; }
@@ -1295,13 +1313,45 @@ td:first-child { min-width: 0; }
 .currency-selection-actions button { background: none; border: 0; color: var(--blue-light); padding: 4px 0; font-size: 12px; }
 .currency-selection-actions button:disabled { opacity: .5; }
 
+/* Shared setup sits above the full-width comparison at every viewport size. */
+.currency-panel-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; margin-top: 8px; }
+.setup .currency-panel-heading h2 { min-width: 0; font-size: 20px; margin: 0; overflow-wrap: anywhere; }
+#currency-panel-toggle { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; border: 1px solid var(--blue-border); border-radius: 7px; background: var(--blue-subtle); color: var(--blue-light); font-size: 14px; }
+#currency-panel-toggle:hover { background: var(--surface); }
+#currency-panel-body { margin-top: 22px; }
+#currency-panel-body .currency-search { max-width: 420px; }
+.currency-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 20px; }
+.currency-picker .hint { margin: 0 0 10px; }
+.currency-picker .storefront-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-content: start; gap: 8px; margin-top: auto; }
+.currency-picker .storefront-list .region { margin: 0; align-items: flex-start; }
+.currency-picker .region input { flex: 0 0 auto; margin-top: 4px; }
+.currency-picker .region > span { min-width: 0; overflow-wrap: anywhere; }
+.setup .currency-update-action { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 0; }
+.setup .currency-update-action:has(> :not([hidden])) { margin-top: 18px; }
+.setup .currency-update-action .primary { width: auto; min-height: 44px; align-items: center; gap: 12px; }
+.setup .currency-update-action .hint { flex: 1 1 280px; margin: 0; }
+@media (max-width: 600px) {
+  .currency-panel-heading { gap: 10px 12px; }
+  .setup .currency-panel-heading h2 { font-size: 18px; }
+  .currency-picker { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .currency-picker .storefront-list { grid-template-columns: minmax(0, 1fr); max-height: 210px; }
+  #currency-panel-body .currency-search { max-width: none; }
+}
+
 /* One scroll surface, with fixed context at both edges and aligned regional slots. */
 .comparison-scroll { max-width: 100%; container-type: inline-size; isolation: isolate; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: auto; scrollbar-width: none; }
 .comparison-scroll::-webkit-scrollbar { display: none; }
 .comparison-area { min-width: 0; position: relative; }
 .comparison-area, .comparison-matrix {
-  --game-width: 230px; --credit-width: 0px; --home-width: 125px;
+  /* Keep the usual identity width for scrolling tables; absorb unused space
+     when the complete set of regional columns fits inside the surface. */
+  --game-width: max(
+    clamp(300px, calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - 510px), 480px),
+    calc(100cqw - var(--credit-width) - var(--home-width) - var(--difference-width) - var(--region-count, 3) * var(--region-width))
+  );
+  --credit-width: 0px; --home-width: 125px;
   --region-width: max(170px, calc(510px / var(--region-count, 3))); --difference-width: 165px;
+  --difference-content-inset: 18px;
 }
 .comparison-area.matrix-with-credits { --credit-width: 125px; }
 .regional-scrollbar-shell {
@@ -1331,6 +1381,28 @@ td:first-child { min-width: 0; }
 .comparison-matrix .header-stack-right { display: block; }
 .comparison-matrix .header-stack-right > small { left: 0; right: 0; text-align: center; }
 .comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: center; gap: 12px; left: 0; right: 0; }
+
+/* Use the spare game cell alongside currency labels for wishlist search. */
+#wishlist-table .storefront-label-row > .wishlist-search-cell { padding: 8px 12px; }
+.wishlist-table-search {
+  width: 100%; max-width: none; min-height: 44px; gap: 10px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+  font-weight: 400; letter-spacing: normal;
+}
+.wishlist-table-search:focus-within { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: 2px; }
+.wishlist-table-search input:focus-visible { outline: none; }
+.wishlist-table-search input:not([type=checkbox]) {
+  min-width: 0; min-height: 42px; padding: 10px 0; font-size: 14px; line-height: 1.5;
+}
+@media (max-width: 1000px) {
+  #wishlist-table thead tr:first-child > th:not(:first-child) {
+    display: flex; align-items: center; justify-content: center; padding-bottom: 40px;
+  }
+  #wishlist-table .storefront-label-row > .wishlist-search-cell {
+    display: block; grid-row: 1; grid-column: 1 / -1; width: 100cqw; max-width: 100cqw; padding: 8px;
+  }
+  #wishlist-table .storefront-label-row > :not(.wishlist-search-cell) { grid-row: 2; }
+}
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
   display: grid; grid-template-columns: repeat(var(--region-count), min(var(--region-width), 255px));
   justify-content: center; gap: 0;
@@ -1364,6 +1436,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix .pinned-difference, .comparison-matrix th:last-child {
   position: sticky; right: 0; z-index: 3; background: var(--panel); box-shadow: -2px 0 0 var(--line);
 }
+.comparison-matrix tbody .pinned-difference { padding-inline-end: var(--difference-content-inset); }
 .comparison-matrix.matrix-with-credits .catalog-credit-cell,
 .comparison-matrix.matrix-with-credits th:nth-child(2) { position: sticky; left: var(--game-width); z-index: 2; background: var(--panel); box-shadow: none; }
 .comparison-matrix.matrix-with-credits .pinned-home,
@@ -1383,7 +1456,7 @@ td:first-child { min-width: 0; }
 
 /* On phones the pinned identity occupies a row above the pinned price edges. */
 @media (max-width: 1000px) {
-  .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
+  .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; --difference-content-inset: 14px; }
   .comparison-area.matrix-with-credits, .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
   .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
   .comparison-matrix colgroup { display: none; }
@@ -1430,11 +1503,16 @@ td:first-child { min-width: 0; }
 .regional-scrollbar-shell.without-scrollbar { padding-top: 0; padding-bottom: 0; }
 .sticky-storefront-titles.comparison-matrix {
   position: absolute; top: 100%;
-  left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
-  right: var(--difference-width); width: auto;
+  /* Bounds and track width are copied from the rendered table cells. */
   overflow: hidden; background: var(--panel); border-bottom: 1px solid var(--line);
   pointer-events: none;
 }
+.sticky-storefront-titles::before, .sticky-storefront-titles::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--line); z-index: 1;
+}
+.sticky-storefront-titles::before { left: 0; }
+.sticky-storefront-titles::after { right: 0; }
 
 .sticky-storefront-titles .foreign > .storefront-heading { padding-top: 5px; padding-bottom: 5px; }
 
@@ -1466,11 +1544,40 @@ td:first-child { min-width: 0; }
   .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
 }
 
-/* Keep the shared offer display choice beside the results it changes. */
-.results-panel .offer-controls {
-  margin: 0 0 16px; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 7px; background: var(--blue-subtle);
+/* Filters and display choices share a wrapping row; offer help opens separately. */
+.comparison-toolbar { justify-content: flex-start; gap: 10px 18px; }
+.comparison-toolbar > .filters { max-width: 100%; }
+.result-option { display: flex; align-items: center; gap: 8px; max-width: 100%; color: var(--muted); font-size: 14px; cursor: pointer; }
+.result-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--blue); }
+.results-panel .offer-toggle { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-width: 100%; margin: 0 0 16px; }
+.comparison-toolbar .offer-toggle { margin: 0; }
+.offer-toggle > input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--blue); }
+.offer-label-with-info { min-width: 0; font-size: 14px; line-height: 24px; color: var(--muted); }
+.offer-label-with-info label { display: inline; font-size: inherit; cursor: pointer; }
+.offer-info-button {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; transform: translateY(-2px);
+  width: 24px; height: 24px; padding: 0; margin-inline-start: 4px; border-radius: 50%;
+  border: 1px solid #416d9f; background: #182f4d; color: #8cc1ff; font-size: 14px; font-weight: 650; line-height: 1;
 }
-.results-panel .offer-controls label { align-items: flex-start; font-size: 13px; }
-.results-panel .offer-controls input { flex: 0 0 auto; margin-top: 3px; }
-.results-panel .offer-controls .hint { margin: 6px 0 0; }
+.offer-info-button:hover, .offer-info-button[aria-expanded=true] { background: #244c76; border-color: #72adf2; }
+.offer-help-popover {
+  position: absolute; z-index: 30; width: min(380px, calc(100vw - 48px)); overflow: visible;
+  border: 1px solid #8bb8df; border-radius: 24px;
+  background: #c3ddf3; color: #1b3957; box-shadow: 0 12px 36px #0006; font-size: 13px; line-height: 1.65;
+}
+.offer-help-content { max-height: calc(100vh - 50px); overflow: auto; padding: 23px 25px; border-radius: inherit; color-scheme: light; }
+.offer-help-popover p { margin: 0; }
+.offer-help-popover p + p { margin-top: 12px; }
+.offer-help-popover .offer-help-lead { font-size: 14px; font-weight: 600; line-height: 1.5; }
+.offer-help-close {
+  position: absolute; z-index: 1; top: -12px; right: -10px; display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0; border: 1px solid #9fc9eb; border-radius: 50%;
+  background: #527fa7; color: #f2f8ff; box-shadow: 0 3px 8px #0003;
+}
+.offer-help-close:hover { background: #3d6b94; border-color: #c3e1f8; }
+.offer-help-close-icon { position: relative; display: block; width: 12px; height: 12px; }
+.offer-help-close-icon::before, .offer-help-close-icon::after {
+  content: ""; position: absolute; top: 50%; left: 0; width: 12px; height: 2px; border-radius: 1px; background: currentColor;
+  transform: translateY(-50%) rotate(45deg);
+}
+.offer-help-close-icon::after { transform: translateY(-50%) rotate(-45deg); }

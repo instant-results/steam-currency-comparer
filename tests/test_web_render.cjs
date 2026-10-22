@@ -8,6 +8,7 @@ class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
   get parentElement() { return this.parent; }
   get firstElementChild() { return this.children[0] || null; }
+  contains(element) { return this === element || this.children.some(child => child.contains(element)); }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
   remove() { if(this.parent) { const list = this.parent.children; list.splice(list.indexOf(this), 1); this.parent = null; } }
@@ -24,10 +25,124 @@ function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
   const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
-  return {get, ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
+  return {get, dispatchDocument: (name, event) => documentEvents.get(name)?.(event), ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
 const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
+
+function offerHelpFixture(ctx, control = "show-best-offers", anchor = {left:100,top:100,bottom:124,width:24}, box = {width:280,height:160}) {
+  const button = ctx.get(control + "-info"), popup = ctx.get(control.replace("show-best-offers", "best-offers-help"));
+  button.getBoundingClientRect = () => anchor;
+  popup.getBoundingClientRect = () => box;
+  ctx.run("window.innerWidth = 1440; window.innerHeight = 900");
+  return {button, popup};
+}
+
+for (const control of ["show-best-offers","developers-show-best-offers","publishers-show-best-offers","library-show-best-offers"]) test(`${control} information opens independently from the saved checkbox setting`, () => {
+  const ctx = creatorSetup(), {button,popup} = offerHelpFixture(ctx,control);
+  assert.equal(popup.hidden,true);
+  button.listeners.click();
+  assert.equal(popup.hidden,false);
+  assert.equal(button.attributes["aria-expanded"],"true");
+  assert.equal(ctx.get(control).checked,false);
+  assert.equal(ctx.run("showBestOffers"),false);
+  assert.equal(ctx.calls.length,0);
+  assert.equal(ctx.get(popup.id + "-close").focused,true);
+  ctx.get(popup.id + "-close").listeners.click();
+  assert.equal(popup.hidden,true);
+  assert.equal(button.focused,true);
+  button.listeners.click();
+  button.listeners.click();
+  assert.equal(popup.hidden,true);
+  assert.equal(button.attributes["aria-expanded"],"false");
+});
+
+test("offer information persists through outside clicks and focus changes until Escape", () => {
+  const ctx = creatorSetup(), {button,popup} = offerHelpFixture(ctx);
+  button.listeners.click();
+  ctx.dispatchDocument("click",{target:button});
+  ctx.dispatchDocument("click",{target:popup});
+  assert.equal(popup.hidden,false);
+  ctx.dispatchDocument("click",{target:ctx.get("search")});
+  assert.equal(popup.hidden,false);
+  ctx.dispatchDocument("focusin",{target:ctx.get("search")});
+  assert.equal(popup.hidden,false);
+  let prevented=false;
+  ctx.dispatchDocument("keydown",{key:"Escape",preventDefault(){prevented=true;}});
+  assert.equal(popup.hidden,true);
+  assert.equal(button.focused,true);
+  assert.equal(prevented,true);
+});
+
+test("only one offer explanation is open and its rectangle stays within the viewport", () => {
+  const ctx = creatorSetup(), first = offerHelpFixture(ctx), second = offerHelpFixture(ctx,"developers-show-best-offers",{left:300,top:230,bottom:254,width:24},{width:272,height:160});
+  ctx.run("window.innerWidth = 320; window.innerHeight = 300");
+  first.button.listeners.click(); second.button.listeners.click();
+  assert.equal(first.popup.hidden,true);
+  assert.equal(first.button.attributes["aria-expanded"],"false");
+  assert.equal(second.popup.hidden,false);
+  assert.equal(second.popup.style.width,"272px");
+  assert.equal(second.popup.style.left,"24px");
+  assert.equal(second.popup.style.top,"54px");
+});
+
+test("offer help centers on its trigger, uses document coordinates and only repositions on resize", () => {
+  const events = new Map();
+  const ctx = setup({}, {window:{addEventListener:(name,callback)=>events.set(name,callback)}});
+  const anchor = {left:500,top:100,bottom:124,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  ctx.run("window.scrollY = 600");
+  button.listeners.click();
+  assert.equal(popup.style.left,"372px");
+  assert.equal(popup.style.top,"740px");
+  ctx.run("window.innerWidth = 320"); events.get("resize")();
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.width,"272px");
+  assert.equal(popup.style.left,"24px");
+  anchor.top = -500; anchor.bottom = -476;
+  ctx.run("window.scrollY = 1200");
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.top,"740px");
+});
+
+test("open offer help follows its trigger when currency setup moves the results offscreen", () => {
+  let layoutChanged;
+  class ResizeObserver {
+    constructor(callback) { layoutChanged = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const ctx = setup({}, {ResizeObserver});
+  const anchor = {left:500,top:100,bottom:124,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  button.listeners.click();
+  assert.equal(popup.style.top,"140px");
+  anchor.top += 1000; anchor.bottom += 1000; layoutChanged();
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.top,"1140px");
+  anchor.top -= 1000; anchor.bottom -= 1000; layoutChanged();
+  assert.equal(popup.style.top,"140px");
+});
+
+test("offer help preserves above-trigger placement during offscreen layout and viewport changes", () => {
+  let layoutChanged;
+  const events = new Map();
+  class ResizeObserver {
+    constructor(callback) { layoutChanged = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const ctx = setup({}, {ResizeObserver,window:{addEventListener:(name,callback)=>events.set(name,callback)}});
+  const anchor = {left:500,top:700,bottom:724,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  button.listeners.click();
+  assert.equal(popup.style.top,"524px");
+  anchor.top += 1000; anchor.bottom += 1000; layoutChanged();
+  assert.equal(popup.style.top,"1524px");
+  ctx.run("window.innerHeight = 600"); events.get("resize")();
+  assert.equal(popup.style.top,"1524px");
+  assert.equal(popup.hidden,false);
+});
 
 // Parse quoted fields, including embedded commas, quotes, and line breaks.
 function parseCsv(csv) {
@@ -97,6 +212,114 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
 const savedWishlist = (identifier = "76561198000000000") => JSON.stringify({id:"w".repeat(32),token:"t".repeat(43),
   request:{identifier,home:"gb",regions:["us"],order:"date_added"}});
+
+for (const column of ["name","home","difference","percentage"]) test(`wishlist ${column} sorting cycles ascending, descending and original order`, () => {
+  const differenceHead = new Element("th");
+  const sorts = ["name","home","difference","percentage"].map(key => {
+    const button = new Element("button"), head = ["difference","percentage"].includes(key) ? differenceHead : new Element("th");
+    button.dataset.sort = key; button.closest = () => head; return button;
+  });
+  const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta"),skipped("4","request_failure")];
+  data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
+  const ctx = setup({'.sort:not(.library-sort)':sorts});
+  ctx.run(`items = ${JSON.stringify(data)}; render()`);
+  const button = sorts.find(value => value.dataset.sort === column), ids = () => ctx.get("rows").children.map(row => row.dataset.appId);
+  button.listeners.click();
+  assert.deepEqual(ids(), column === "name" ? ["4","2","3","1"] : ["1","3","2","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"ascending");
+  assert.equal(button.closest().attributes["aria-sort"],"ascending");
+  button.listeners.click();
+  assert.deepEqual(ids(), column === "name" ? ["1","3","2","4"] : ["2","3","1","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"descending");
+  assert.equal(button.closest().attributes["aria-sort"],"descending");
+  button.listeners.click();
+  assert.deepEqual(ids(),["1","2","3","4"]);
+  assert.equal(button.attributes["data-sort-direction"],"none");
+  assert.ok(sorts.every(value => value.attributes["aria-pressed"] === "false" && value.attributes["data-sort-direction"] === "none"));
+  assert.equal(button.closest().attributes["aria-sort"],undefined);
+  assert.equal(ctx.run("direction"),1);
+  // A different header starts ascending even after descending on this one.
+  button.listeners.click(); button.listeners.click();
+  const other = sorts.find(value => value !== button);
+  other.listeners.click();
+  assert.equal(other.attributes["data-sort-direction"],"ascending");
+  assert.equal(button.attributes["data-sort-direction"],"none");
+});
+
+for (const column of ["name","home","difference","percentage"]) test(`library ${column} sorting restores loading order and persists the unsorted state`, () => {
+  const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta")];
+  data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
+  const ctx = creatorSetup({"polisher-library-job":JSON.stringify(savedLibrary(data))},"developer",true);
+  const button = ctx.librarySorts.find(value => value.dataset.sort === column), ids = () => ctx.get("library-rows").children.map(row => row.dataset.appId);
+  button.listeners.click();
+  assert.deepEqual(ids(),column === "name" ? ["2","3","1"] : ["1","3","2"]);
+  assert.equal(button.attributes["data-sort-direction"],"ascending");
+  button.listeners.click();
+  assert.deepEqual(ids(),column === "name" ? ["1","3","2"] : ["2","3","1"]);
+  assert.equal(button.attributes["data-sort-direction"],"descending");
+  button.listeners.click();
+  assert.deepEqual(ids(),["1","2","3"]);
+  assert.equal(button.attributes["data-sort-direction"],"none");
+  const saved = JSON.parse(ctx.storage.get("polisher-library-job"));
+  assert.equal(saved.sort,"arrival"); assert.equal(saved.direction,1);
+});
+
+test("currency panel reopens without changing selections, displayed prices or starting work", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").attributes["aria-expanded"], "false");
+  const calls = ctx.calls.length, prices = ctx.run("JSON.stringify(items)"), selected = ctx.run("JSON.stringify(currencySelection())");
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.equal(ctx.get("currency-panel-toggle").textContent, "Hide currencies");
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").textContent, "Change currencies");
+  assert.equal(ctx.run("JSON.stringify(items)"), prices);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), selected);
+  assert.equal(ctx.calls.length, calls);
+  assert.equal(ctx.get("update-currencies").hidden, true);
+});
+
+test("initialization holds leave setup open; each new run collapses once and can be reopened while locked", () => {
+  const ctx = creatorSetup();
+  ctx.get("currency-panel-body").hidden = false;
+  ctx.run('const releasePanelHold = comparisonCoordinator.hold("setup-test")');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  ctx.run('releasePanelHold(); comparisonCoordinator.setBusy("publisher", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  ctx.get("currency-panel-toggle").listeners.click();
+  ctx.run('comparisonCoordinator.setBusy("publisher", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.ok(ctx.regions.every(el => el.disabled));
+  assert.ok(ctx.radios.every(el => el.disabled));
+  ctx.run('comparisonCoordinator.setBusy("publisher", false)');
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  ctx.run('comparisonCoordinator.setBusy("wishlist", true)');
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
+
+test("collapsed setup summarizes the selection separately from the displayed comparison, including empty/all choices", async () => {
+  const ctx = creatorSetup({}, "developer", false, [], false, null, true);
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  ctx.regions.forEach(el => el.checked = false);
+  ctx.run('updateSelections({target:{name:"region"}})');
+  assert.match(ctx.get("currency-selection-summary").textContent, /Selected: PLN · no comparison currencies/);
+  assert.match(ctx.get("currency-update-help").textContent, /Displayed: PLN against USD and EUR/);
+  ctx.get("select-all-currencies").listeners.click();
+  assert.equal(ctx.get("currency-selection-summary").textContent, "Selected: PLN against 36 storefronts");
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
+
+test("automatic currency collapse returns focus from hidden controls to its disclosure button", () => {
+  const ctx = creatorSetup();
+  ctx.get("currency-panel-body").append(ctx.get("currency-search"));
+  ctx.run('document.activeElement = document.getElementById("currency-search"); comparisonCoordinator.setBusy("wishlist", true)');
+  assert.equal(ctx.get("currency-panel-toggle").focused, true);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+});
 
 test("a fresh page automatically compares the example once using current selections", async () => {
   const ctx = creatorSetup();
@@ -203,6 +426,30 @@ test("queued catalog auto-loading is cancelled when leaving the catalog tab", as
   ctx.get("wishlist-tab").listeners.click();
   ctx.run("setBusy(false)"); await settle();
   assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length, 0);
+});
+
+test("completed wishlist status accompanies the checked count and restores progress for other states", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  assert.equal(ctx.get("count-total").textContent, 1);
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+  for (const state of ["RUNNING", "PARTIAL", "FAILED", "CANCELLED", "COMPARISON EXPIRED", "UPDATING CURRENCIES"]) {
+    ctx.run(`status(${JSON.stringify(state)}, ${state === "RUNNING" || state === "UPDATING CURRENCIES"})`);
+    assert.equal(ctx.get("count-completion").hidden, true, state);
+    assert.equal(ctx.get("progress-area").hidden, false, state);
+    assert.equal(ctx.get("status-badge").textContent, state);
+  }
+  ctx.run('status("COMPLETE")');
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+});
+
+test("restored completed results retain inline completion without restarting a job", async () => {
+  const ctx = restoredWishlist("example", true); await settle();
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+  assert.equal(ctx.calls.length, 0);
 });
 
 test("failed example startup releases controls and requires an explicit retry", async () => {
@@ -725,7 +972,9 @@ test("library results restore with independent filters, sorting, rows, and opt-i
   const retained = ctx.get("library-rows").children[0];
   ctx.librarySorts[0].listeners.click();
   assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4","2","1"]);
-  ctx.get("library-arrival-order").listeners.click();
+  ctx.librarySorts[0].listeners.click();
+  assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["1","2","4"]);
+  ctx.librarySorts[0].listeners.click();
   assert.equal(ctx.get("library-rows").children[0],retained);
   ctx.libraryFilters.at(-1).listeners.click();
   assert.deepEqual(ctx.get("library-rows").children.map(row => row.dataset.appId),["4"]);
@@ -1538,6 +1787,7 @@ test("calculated discounts display whole percentages and approximation without c
 });
 
 function chooseCurrencies(ctx, home, regions) {
+  if (ctx.get("currency-panel-body").hidden) ctx.get("currency-panel-toggle").listeners.click();
   ctx.radios.forEach(el => el.checked = el.value === home);
   ctx.regions.forEach(el => el.checked = regions.includes(el.value));
   ctx.run("preferredComparisons = null; updateSelections();");
@@ -1551,6 +1801,8 @@ const switchedWishlist = (state = "complete", extra = {}) => wishlistSnapshot(st
 
 test("currency action is explicit, follows the active tab, and requires a valid changed selection", async () => {
   const ctx = await loadedWishlist();
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  ctx.get("currency-panel-toggle").listeners.click();
   assert.equal(ctx.get("update-currencies").hidden, false);
   assert.equal(ctx.get("update-currencies").disabled, true);
   chooseCurrencies(ctx,"gb",["us"]);
@@ -1564,6 +1816,60 @@ test("currency action is explicit, follows the active tab, and requires a valid 
   assert.match(ctx.get("currency-update-help").textContent,/Displayed: GBP/);
   ctx.get("wishlist-tab").listeners.click();
   assert.match(ctx.get("currency-update-help").textContent,/Displayed: PLN/);
+});
+
+test("hiding wishlist currency edits restores displayed selection without requests or result changes", async () => {
+  const ctx = await loadedWishlist();
+  const calls = ctx.calls.length, csv = ctx.run('buildCsv(false,"fixed")');
+  chooseCurrencies(ctx,"gb",["no"]);
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, false);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), JSON.stringify({home:"pl",regions:["us","de"]}));
+  assert.equal(ctx.run('buildCsv(false,"fixed")'),csv);
+  assert.equal(ctx.calls.length,calls);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("update-currencies").hidden, false);
+  assert.equal(ctx.get("update-currencies").disabled, true);
+  assert.equal(ctx.run("JSON.stringify(preferredComparisons)"),JSON.stringify(["us","de"]));
+});
+
+for (const kind of ["developer","publisher"]) test(`hiding ${kind} currency edits restores that tab's displayed selection`, async () => {
+  const ctx = creatorSetup({},kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const displayed = ctx.run("JSON.stringify(window.creatorPane.currencyState())");
+  const calls = ctx.calls.length;
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"), displayed);
+  assert.equal(ctx.get("update-currencies").hidden, true);
+  assert.equal(ctx.calls.length,calls);
+});
+
+test("hiding currency setup before any results restores its initial choices", () => {
+  const ctx = creatorSetup();
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),JSON.stringify({home:"pl",regions:["us","de"]}));
+  assert.equal(ctx.calls.length,0);
+});
+
+test("automatic currency-update collapse and hiding locked selectors retain the submitted selection", async () => {
+  const ctx = await loadedWishlist();
+  chooseCurrencies(ctx,"gb",["no"]);
+  ctx.snapshots.push(switchedWishlist("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const expected = JSON.stringify({home:"gb",regions:["no"]});
+  assert.equal(ctx.get("currency-panel-body").hidden,true);
+  assert.equal(ctx.get("update-currencies").hidden,true);
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),expected);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.get("update-currencies").disabled,true);
+  ctx.get("currency-panel-toggle").listeners.click();
+  assert.equal(ctx.run("JSON.stringify(currencySelection())"),expected);
+  assert.equal(JSON.stringify(ctx.calls.find(call=>call.path.endsWith("/currencies")).body),expected);
 });
 
 test("wishlist switch preserves rows, rates, view and CSV while pending, then publishes one snapshot", async () => {
@@ -1626,6 +1932,19 @@ function restoredWishlist(identifier = "example", expired = false, extra = {}) {
   const saved = {id:"w".repeat(32),token:"t".repeat(43),request,displayed,expired,...extra};
   return creatorSetup({"polisher-job":JSON.stringify(saved)});
 }
+
+test("restoring a completed comparison collapses setup without starting work or losing its snapshot", async () => {
+  const ctx = restoredWishlist("example", true); await settle();
+  assert.equal(ctx.run("comparisonCoordinator.active"), false);
+  assert.equal(ctx.get("currency-panel-body").hidden, true);
+  assert.equal(ctx.get("currency-panel-toggle").attributes["aria-expanded"], "false");
+  assert.equal(ctx.calls.length, 0);
+  const csv = ctx.run('buildCsv(false,"fixed")');
+  ctx.get("currency-panel-toggle").listeners.click();
+  ctx.run("refreshCurrencyAction(); updateSelections()");
+  assert.equal(ctx.get("currency-panel-body").hidden, false);
+  assert.equal(ctx.run('buildCsv(false,"fixed")'), csv);
+});
 
 for (const identifier of ["example","76561198000000000"]) test(`expired restored ${identifier === "example" ? "example" : "wishlist"} recreates on currency update without discarding the snapshot`, async () => {
   const ctx = restoredWishlist(identifier); await settle();
@@ -1912,21 +2231,27 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   const wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar"), shell = new Element("div");
   shell.append(rail);
   const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
-  let sourceTop = 200, areaBottom = 1000, clones = 0;
+  let sourceTop = 200, areaBottom = 1000, clones = 0, sourceWidth = 720;
+  let differenceLeft = 880, surfaceRight = 900;
   source.innerHTML = "USD EUR";
   source.cloneNode = () => { clones++; const copy = new Element("div"); copy.setAttribute("id", "wishlist-storefront-headings"); return copy; };
   table.classList.contains = () => false;
   table.style.setProperty("--region-count", "2");
-  source.getBoundingClientRect = () => ({top:sourceTop,height:60});
-  wrap.getBoundingClientRect = () => ({top:0});
+  source.getBoundingClientRect = () => ({top:sourceTop,height:60,left:500-wrap.scrollLeft,right:500-wrap.scrollLeft+sourceWidth,width:sourceWidth});
+  table.querySelector(".storefront-label-row .pinned-home").getBoundingClientRect = () => ({right:500});
+  table.querySelector(".storefront-label-row .pinned-difference").getBoundingClientRect = () => ({left:differenceLeft});
+  wrap.getBoundingClientRect = () => ({top:0,left:0,right:surfaceRight});
   wrap.closest = () => ({getBoundingClientRect:() => ({bottom:areaBottom})});
-  shell.getBoundingClientRect = () => ({bottom:29});
+  shell.getBoundingClientRect = () => ({bottom:29,left:0});
   wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
   wrap.refreshScrollControls();
   const titles = shell.children[1];
   assert.equal(titles.hidden, true);
   assert.equal(titles.attributes["aria-hidden"], "true");
   assert.equal(titles.firstElementChild.attributes.id, undefined);
+  assert.equal(titles.style.left,"500px");
+  assert.equal(titles.style.width,"380px");
+  assert.equal(titles.style.getPropertyValue("--region-width"),"360px");
   sourceTop = 20; listeners[0]();
   assert.equal(titles.hidden, false);
   rail.scrollLeft = 340; rail.listeners.scroll();
@@ -1942,6 +2267,15 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   wrap.refreshScrollControls();
   assert.equal(rail.hidden, true);
   assert.equal(titles.hidden, false);
+  // Three currencies fit inside a wider surface: stop at the actual Difference
+  // cell rather than extending to the surface's far edge.
+  sourceWidth = 510; differenceLeft = 1010; surfaceRight = 1400;
+  table.style.setProperty("--region-count", "3");
+  wrap.refreshScrollControls();
+  assert.equal(titles.style.left,"500px");
+  assert.equal(titles.style.width,"510px");
+  assert.equal(titles.style.getPropertyValue("--region-width"),"170px");
+  assert.equal(titles.firstElementChild.style.transform,"translateX(0px)");
 });
 
 test("top regional scrollbar preserves the table range and synchronizes dragging, table scrolling and layout changes", () => {

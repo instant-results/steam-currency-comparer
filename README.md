@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.7.1** · Beta for local use.
+**Version: 0.7.2** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -29,6 +29,13 @@ change over time. No personal Steam profile is used.
   Any can be the baseline, with up to 36 alternatives. Search the currency picker
   or choose Select all; the default is PLN against USD and EUR.
   See the [supported storefronts](docs/STOREFRONTS.md).
+- Keeps currency selection above the full-width comparison. The selectors collapse
+  when a comparison starts; **Change currencies** reopens them. The selection
+  summary and its reopen button remain visible while browsing results.
+  **Update currencies** appears inside the expanded panel; **Hide currencies**
+  discards unapplied edits and restores the displayed selection.
+  Desktop tables give artwork and long game titles more room; narrow screens keep
+  game identity above the price row.
 - Keeps game/title, baseline and DIFFERENCE visible while regional price columns
   scroll horizontally. A blue scrollbar above the results spans only the regional
   columns and stays available while scrolling down the comparison. Catalog tables
@@ -46,6 +53,8 @@ change over time. No personal Steam profile is used.
   10.9 seconds versus 4.9 seconds. See the [test protocol and limitations](docs/STEAM_PRICE_PERFORMANCE.md).
 - Loads games by Your Rank, Date Added, or Name, with search, filters, and
   result sorting once results arrive.
+  Table headers cycle ascending, descending and original loading order; compact
+  blue indicators show the active direction. Wishlist search sits below Game name.
 - Caches prices and exchange rates, labels stale results, and lets you cancel
   or retry a comparison.
 - Fetches both NBP exchange-rate tables (A and B) upfront and caches all rates for
@@ -216,15 +225,16 @@ The version is defined in `steam_price_polisher/version.py` and shown in the app
 header, server startup message, and `/api/health` response. The intended first
 stable release is **1.0.0**.
 
-During development toward that release, use **0.MINOR.PATCH-beta**:
+Current releases use **0.MINOR.PATCH**; beta status is documented separately
+until the stable release:
 
 - Increment **MINOR** for a substantial new feature and reset PATCH to zero:
-  `0.1.0-beta` → `0.2.0-beta`.
+  `0.7.2` → `0.8.0`.
 - Increment **PATCH** for fixes and refinements within the current feature
-  milestone: `0.2.0-beta` → `0.2.1-beta`.
-- Keep the **-beta** suffix while the app is in beta. Do not append an iteration
-  number such as `.1`; version bumps use MINOR or PATCH instead.
-- Use **1.0.0**, without the beta suffix, when the app reaches the intended stable
+  milestone: `0.7.1` → `0.7.2`.
+- Releases through `0.7.0-beta` used a beta suffix. From `0.7.1`, version numbers
+  omit that suffix; earlier release names remain unchanged.
+- Use **1.0.0** when the app reaches the intended stable
   release. After that, use patch versions for fixes, minor versions for compatible
   features, and major versions for incompatible changes.
 

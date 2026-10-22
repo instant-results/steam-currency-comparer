@@ -60,8 +60,18 @@ The server's shared worker, request pacing and job limits still apply.
 
 ## Change currencies after loading
 
+Currency selection sits above the full-width comparison. The selectors collapse
+when a run starts or saved results are restored; **Change currencies** reopens
+them without changing results. The button sits beside the selection summary;
+**Update currencies** appears only in the expanded panel. **Hide currencies**
+discards unapplied changes and restores the active tab's displayed currencies.
+Before any results exist, hiding restores the choices from opening setup instead.
+Automatic collapse when submitting preserves the requested currencies. Picker
+lists sit side by side on wider screens and stack on phones. During loading,
+reopening is allowed but selection stays locked.
+
 After a wishlist/example or catalog comparison finishes, select a baseline and
-one or more other storefronts, then click **Update currencies** in the sidebar.
+one or more other storefronts, then click **Update currencies** in the currency panel.
 The button is available when the valid selection differs from the displayed
 comparison. It updates the current tab. Other tabs keep their own comparisons;
 the displayed-currency captions identify the selection used by their results.
@@ -156,7 +166,7 @@ See the [retrieval research](STEAM_OWNED_LIBRARY_API.md) for credentials and cov
 Library results, filters, sorting, profile, currency settings, and job access are
 saved independently under `polisher-library-job` in session storage. Completed
 results survive reload in the same tab, even after server jobs expire. Active jobs
-reconnect; retry uses that run's settings. Changing sidebar choices does not
+reconnect; retry uses that run's settings. Changing currency-panel choices does not
 relabel results; submit the profile again to compare with new choices. All four
 tabs share one paced worker and job locking. Return to the owning tab to cancel.
 Price/rate caches are shared; ownership mappings are never saved in the server cache.
@@ -174,7 +184,7 @@ with three selected games each from Supergiant Games, CD PROJEKT RED, and Techla
 Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios
 (Poland), with examples developed by other studios. See [featured catalogs](FEATURED_CATALOGS.md)
 for the selected games and verification sources. Each tab compares its starting games
-using the sidebar's baseline and comparison currencies.
+using the currency panel's baseline and comparison currencies.
 Names and artwork appear immediately; prices and differences fill in as requests
 complete. **Load more** expands products whose Steam store pages credit that
 exact name as developer or publisher, depending on the tab. Catalogs include
@@ -204,7 +214,7 @@ catalogs and their pagination remain. New defaults are compared automatically.
 Older combined-tab selections migrate only when they carry an explicit developer
 or publisher selector; old homepage catalogs are not assigned a role.
 New entries use the Steam-logo fallback. Existing results retain their comparison
-currencies until **Update currencies** or **Refresh comparisons** applies the sidebar choices.
+currencies until **Update currencies** or **Refresh comparisons** applies the currency-panel choices.
 
 Search remains available during comparisons, while adding, refreshing, and
 expanding catalogs wait for the active comparison to finish or be cancelled.
@@ -244,11 +254,11 @@ The arrow is shallow, has a flat top and no visible border, and fades most stron
 at its top center; its white label remains accessible to keyboard and screen-reader
 users. The introduction keeps the free-product note, progress status, and statistics
 explanation with consistent text sizing. The exclusion note sits on its own line.
-Currency choices appear in the shared sidebar, numbered **01 / CURRENCIES** in
+Currency choices appear in the shared currency panel above the comparison, numbered **01 / CURRENCIES** in
 this tab and **02 / CURRENCIES** in the wishlist tab.
 
 Currency selections are shared between tabs. Existing results keep the currencies
-used for that comparison; **Refresh comparisons** applies the current sidebar
+used for that comparison; **Refresh comparisons** applies the current currency-panel
 choices to all displayed creator products, including expanded pages. Changing the
 baseline preserves existing cursor context and starts new-storefront discovery from
 the first page on the next Load more. Use it to
@@ -298,7 +308,7 @@ python .\steam_wishlist_compare.py 76561198000000000 --regions de us
 Without `--regions`, the default is `us de`. Selection order is preserved in
 results. Currency is determined by the storefront; arbitrary currency/region
 pairs, duplicate regions, and the home region are rejected before requests or
-cache initialization. The web sidebar additionally lets any supported
+cache initialization. The web currency panel additionally lets any supported
 storefront become the baseline; it is not inferred from the Steam account. Run with `--help` for command-line help.
 
 ## Custom Steam profile URLs
@@ -587,9 +597,20 @@ that external host.
 
 ## Readability and sorting
 
+Wishlist title search sits in the second table-header row, below **Game name**
+and beside the individual currency labels. Its bordered
+field fills the game column on desktop and the visible table width on narrow
+screens. It filters loaded titles without fetching more data; clear it to restore
+matching results under the current filters and sorting. Name sorting remains a
+separate button above search.
+
 Foreign final prices use 16px text. Column headings identify Game name and
 the baseline storefront. Difference offers independent absolute and percentage sort buttons;
-repeated clicks reverse direction, with unavailable percentages last. Uncompared
+repeated clicks cycle lowest to highest (A–Z), highest to lowest (Z–A), then
+original loading order. Switching to another column starts ascending. Missing
+numeric values stay last in either direction. The enlarged arrow lights its
+top 40% for ascending or bottom 40% for descending with a light-blue gradient;
+neither end lights when unsorted. This replaces Reset sorting. Uncompared
 shows contextual help explaining missing prices, failed requests, and the separate
 availability toggle. Storefront labels remain geographic: currency alone does not
 establish identical regional offers.
@@ -597,7 +618,7 @@ establish identical regional offers.
 
 ## Baseline and comparison selection
 
-Select a baseline in the searchable sidebar and one to 36 other currencies.
+Select a baseline in the searchable currency panel above the comparison and one to 36 other currencies.
 The baseline cannot also be an alternative. Select all chooses every other
 representative storefront; Clear removes alternatives. Search does not deselect
 hidden choices. The browser and API use the same 37-currency registry. See
@@ -720,9 +741,13 @@ selected purchase option. Each request has one country context. The existing
 selection limit is now one to 36 alternatives, using one representative country
 for each of the 37 supported live currencies.
 
-The checkbox sits directly above the comparison table in each tab, beside the
-result-display controls. Its setting is shared across tabs and survives reload
-in the same browser tab.
+The checkbox sits directly above the comparison table in each tab. Wishlist
+groups it with Show unavailable products and the game filters in one wrapping
+row. The blue circular i button after its label opens an explanation without
+changing the checkbox. Close it with its circular X, the i button or Escape.
+Clicking elsewhere leaves it open. The bubble opens centered on the i, adjusting
+near viewport edges, and scrolls with the page. Its setting is shared across tabs
+and survives reload in the same browser tab.
 
 Enable **Show Steam's best purchase offers alongside game prices** to reveal a
 separate set of prices and regional differences. Both datasets are fetched during

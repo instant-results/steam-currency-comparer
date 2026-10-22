@@ -7,7 +7,13 @@ others. The default remains PLN against USD/EUR.
 Available in `0.7.0-beta`, integrated into `main` through
 [PR #1](https://github.com/instant-results/steam-currency-comparer/pull/1).
 
-Use the searchable sidebar picker to find a currency or country. Select all
+Use the searchable currency panel above the comparison to find a currency or
+country. Selectors collapse when a comparison starts or saved results are restored;
+Change currencies reopens them from beside the selection summary. Update currencies
+appears only while expanded. Hide currencies discards unapplied edits and restores
+the active tab's displayed currencies; automatic collapse during a run preserves
+the submitted selection.
+The picker lists sit side by side above 600px and stack on smaller screens. Select all
 chooses every alternative to the current baseline; Clear removes alternatives.
 Searching hides choices without changing their selection. Changing the baseline
 excludes that country from alternatives while retaining temporarily conflicting
@@ -17,7 +23,11 @@ Update currencies applies the choices to the current tab.
 ## Table behavior
 
 Game/title and baseline stay pinned on the left, and DIFFERENCE stays pinned on
-the right. The main column headings share a vertical centre on desktop. OTHER
+the right. The comparison uses the workspace's full width. Desktop identity
+columns normally adapt between 300px and 480px, growing further when needed to
+fill unused space if all selected storefronts fit. Narrow screens keep identity
+above prices.
+The main column headings share a vertical centre on desktop. OTHER
 STOREFRONTS and its conversion caption remain fixed horizontally; the individual
 currency/country labels occupy a separate row below and scroll with the prices.
 Once that row reaches the sticky scrollbar, its titles remain visible directly

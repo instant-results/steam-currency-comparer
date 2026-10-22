@@ -53,23 +53,57 @@ Wishlist and owned library show both roles together.
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
 
+## Table sorting
+
+Headers cycle ascending, descending, then original loading order. Use A–Z/Z–A
+for titles and lowest/highest for numeric values. Switching headers starts
+ascending; Reset sorting is removed. Preserve keyboard activation, aria-pressed,
+and aria-sort on the active column. Difference has two independent buttons in
+one header, so expose direction on each button as well.
+Make arrows 12x18px across screen sizes, muted when inactive.
+Ascending uses a blue gradient on the
+top 40%; descending lights the bottom 40%. Align Game name and baseline-price
+arrow centers vertically in the desktop row, independent of label wrapping.
+
+## Wishlist CSV attribution
+
+The wishlist export checkbox reads **Include Steam profile URL or ID in CSV**.
+It opts into writing the supplied profile identifier to `wishlist_profile`;
+the value can be a profile URL or SteamID, and is blank when unchecked.
+
+## Wishlist completion
+
+Show number · Complete inside the Games checked card when wishlist/example
+processing finishes with complete status. Match Complete and its separator to
+the number's font size and weight. Allow wrapping between number and status;
+on narrow screens, give Games checked its own row above the other two cards.
+Hide the now-empty progress area. Active, partial, failed, cancelled and expired states retain their
+progress/status presentation. Complete describes finished processing, including
+checked products with unavailable prices; it does not promise full price coverage.
+
 ## Currency-update wording
 
 Use **Update currencies** for the explicit action on a completed comparison in the
 current tab. **Displayed: PLN against USD and EUR** identifies the snapshot in use;
-sidebar choices can differ while the user prepares another selection. Pending
+currency-panel choices can differ while the user prepares another selection. Pending
 progress names the requested currencies without changing displayed price labels.
 **Retry currency update** repeats a failed or cancelled selection. An expired
 source is recreated automatically by Update currencies; progress identifies
 Recreating the example or Reloading the wishlist while old results stay visible.
 
-Keep these captions in the existing hint typography. The sidebar action uses the
+Keep these captions in the existing hint typography. The currency-panel action uses the
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
 alignment, horizontal table scrolling and both compact and separate credit layouts.
 
 ## Many-currency comparisons
 
 Use **Find a currency or country**, **Select all**, and **Clear** for selection.
+Place currency controls above the comparison, with **Selected:** identifying
+the current choices. Put **Change currencies** beside the summary; it reopens
+the selectors. **Update currencies** is available only while they are expanded.
+**Hide currencies** discards unapplied edits, restores the active tab's displayed
+currencies and closes setup. Explain this beside the expanded controls. Automatic
+collapse during submission preserves that request. See [layout decisions](DESIGN_DECISIONS.md#currency-setup-and-comparison-width).
 The currencies panel contains selection/update guidance without a repeated app
 description or decorative footer icon.
 Use **Scroll other storefronts horizontally** as the top scrollbar's accessible
@@ -93,6 +127,12 @@ slot rather than shifting other prices. The overall difference identifies the
 cheapest selected storefront. Put **Cheapest:** on its own line, with the currency
 and country beneath; allow natural wrapping on narrow screens. Large catalog
 metrics use **Regional statistics**.
+Keep difference values and their captions 18px from the right cell edge on
+desktop and 14px on narrow screens. This adds 6px of breathing room at the
+background boundary. Long storefront labels stay on one desktop line where
+space permits and wrap naturally on phones. Apply the extra inset to body cells
+only; DIFFERENCE and its sorting controls retain symmetric header padding and
+remain centered in the column.
 
 Use two header levels. On desktop, vertically centre GAME NAME, the baseline
 heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTHER
@@ -140,8 +180,26 @@ Keep compact country labels inline with amounts on narrow screens.
 ## Best-offer display control
 
 Place **Show Steam's best purchase offers alongside game prices** directly above
-the comparison table in every tab, after the local filters/display controls or
-catalog overview. Keep the explanatory paragraph in the same outlined panel.
+the comparison table in every tab. Wishlist and the internal library place it and
+Show unavailable products beside the result filters in one wrapping toolbar.
+Keep catalog placement after the overview. Match checkbox typography; narrower
+layouts wrap complete controls and allow the long offer label to wrap naturally.
+
+Place a small blue circular i button immediately after the offer label, outside
+its checkbox label so it never toggles the checkbox. It opens the existing
+explanation in a rounded blue popup rather than a permanently visible panel.
+Keep the popup within the viewport, associated through aria-controls and
+aria-expanded, and retain the checkbox's unique help-text association. Support
+Enter/Space activation and toggling closed. Center the i with its label text.
+Use a nonmodal pale-blue dialog with dark text, rounded corners and separate
+paragraphs. Emphasize the opening sentence. A contrasting-blue circular X overlaps
+the top-right corner, with enough viewport clearance to keep it accessible;
+focus the X on opening and return focus to the i when closing with X or Escape.
+Outside clicks and focus changes leave help open. Center it on the trigger,
+clamp to viewport edges on opening or resizing a visible trigger, and let it
+scroll with the page. Preserve its attachment during layout shifts such as
+opening currency setup; do not pull it onto the screen when its trigger moves offscreen.
+Only one explanation is open at a time; reading help fetches nothing.
 Use a labelled checkbox, a unique help-text association and the local table/list
 as its controlled region. All copies reflect the same saved display setting;
 changing one rerenders loaded results without fetching more prices. The internal

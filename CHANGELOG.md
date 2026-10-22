@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.7.2 — 2026-10-22
+
+- Keep offer-help bubbles attached to their information buttons when expanding
+  or hiding currency setup, including when the results move offscreen.
+
+- Let Game name absorb unused desktop comparison width so the table reaches
+  the right content edge without widening price columns or their padding.
+
+- Remove the redundant Regional Steam Pricing label and decorative dot above
+  the headline, with tighter introductory spacing.
+
+- Cycle table-header sorting through ascending, descending and original loading
+  order. Remove Reset sorting and its description; use compact arrows with blue
+  gradients on the top for ascending and bottom for descending, and align the
+  Game name and baseline-price arrows vertically.
+
+- Place wishlist Retry comparison beside Compare regional prices, with matching
+  button dimensions and typography; wrap the actions on narrow screens.
+
+- Align sticky storefront labels to the rendered currency-column boundaries,
+  preserving both side dividers and preventing overlap into Difference when
+  selected currencies fit within a wider comparison surface.
+
+- Remove the redundant final-price caption from wishlist and library footers.
+
+- Group availability and best-offer checkboxes with wishlist filters in a wrapping
+  row. Replace permanent offer help panels with blue information buttons and
+  pale-blue, rounded popups with spaced text, an overlapping circular close button
+  and keyboard support. Keep the bubble and close control within viewport bounds.
+  Center help on its information button and let it scroll with the page.
+  Help stays open when clicking elsewhere or resizing.
+
+- Place Change currencies beside the selected-currency summary and show Update
+  currencies only inside expanded setup. Hiding setup discards unapplied edits
+  and restores displayed currencies without starting a job or changing results;
+  automatic collapse and locked controls preserve submitted selections.
+
+- Place wishlist completion beside the Games checked count as number · Complete,
+  with matching number/status typography. On narrow screens, give Games checked
+  its own summary row so the enlarged status stays readable.
+  Remove the detached status and empty progress space once processing finishes.
+
+- Move wishlist title search to the spare cell beside currency labels in the
+  second table-header row, with a wider bordered field, larger text and a
+  full-width layout on narrow screens.
+
+- Add 6px of right-edge breathing room to difference values and storefront
+  captions, retaining readable long country labels on desktop and phones.
+  Keep the DIFFERENCE heading and sorting controls centered with symmetric padding.
+
+- Move currency selection above the full-width comparison, collapse selectors
+  when work starts or results are restored, and retain a summary and disclosure.
+  Adapt picker lists to screen width and give desktop game titles more room while
+  preserving pinned prices, aligned headings and narrow-screen identity rows.
+
 ## 0.7.1 — 2026-10-22
 
 - Recover currency updates when a saved wishlist/example job expires or the server
