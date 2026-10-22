@@ -107,7 +107,7 @@ isolated process imported the original modules for measurement. Raw responses,
 benchmark selection, caches and UI fixtures stay ignored. Research documents were
 committed before implementation, feature changes as `97a5c98`, and tests as
 `88cb5de`, with delivery documentation separate. This batching stage is complete;
-see [project context](../PROJECT_CONTEXT.md) for current integration status and
+see the [README](../README.md) for current supported behavior and
 [the roadmap](ROADMAP.md) for remaining work. Owned-library enablement remains deferred.
 
 

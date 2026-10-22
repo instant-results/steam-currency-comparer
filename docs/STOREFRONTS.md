@@ -1,6 +1,6 @@
 # Supported storefronts and the comparison matrix
 
-Updated: 2026-10-21. The app supports 37 live Steam currencies, with one
+Updated: 2026-10-22. The app supports 37 live Steam currencies, with one
 representative country per currency. Any can be the baseline; select one to 36
 others. The default remains PLN against USD/EUR.
 
@@ -54,6 +54,11 @@ The overall DIFFERENCE still compares the baseline with the cheapest selected
 alternative and now identifies that storefront. Missing required regional prices
 still make a product uncompared; Show unavailable products and retained partial
 best offers use the existing rules. More countries do not change that arithmetic.
+
+With one or two comparison currencies, the desktop regional area keeps a 510px
+minimum. A single currency uses a centered 255px content slot; two use 255px each.
+With three or more, each slot is 170px. Labels, prices and both offer sets share
+these positions. The existing narrow layout uses 125px regional slots.
 
 ## Registry
 

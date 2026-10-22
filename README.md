@@ -238,17 +238,16 @@ It does not imply a planned stable `0.4.0` release. The historical
 `0.1.0-beta.1` version predates this convention and remains unchanged in earlier
 release notes and screenshot captions.
 
-Update this README, the [changelog](CHANGELOG.md), and
-[project context](PROJECT_CONTEXT.md) when changing the version. Git tags,
-GitHub releases, and deployment are separate actions; a version bump or commit
+Update this README and the [changelog](CHANGELOG.md) when changing the version.
+Git tags, GitHub releases, and deployment are separate actions; a version bump or commit
 does not publish the app.
 
 ## Planned development
 
 The three available tabs share a CSV schema. Owned-library code and automated
 coverage are retained behind an internal flag; successful authenticated live
-retrieval remains TODO. See the [roadmap](docs/ROADMAP.md) for the test checklist
-and criteria for making the feature available.
+retrieval remains TODO. See the [roadmap](docs/ROADMAP.md) for validation criteria
+before considering the feature available.
 
 ## For developers
 
@@ -289,6 +288,7 @@ node --check web/library.js
 - [Development roadmap](docs/ROADMAP.md): next targets and the subsequent owned-library stage.
 - [Text and localization decisions](docs/TEXT_AND_LOCALIZATION.md): wording,
   credit alignment, and boundaries for future translations.
-- [Current project context](PROJECT_CONTEXT.md).
+- [Frontend design decisions](docs/DESIGN_DECISIONS.md): shared field-caption
+  spacing and where it applies.
 - [Sorted wishlist API research](docs/STEAM_SORTED_WISHLIST_API.md): proposed
   integration, not an implemented feature.

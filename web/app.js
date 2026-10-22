@@ -510,7 +510,9 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
     percentage.title = percentageDifference(c) == null ? "Cannot calculate a percentage against a zero reference price." : `Compared with the cheapest selected foreign price, converted to ${baseline().currency}.`;
     difference.append(percentage); difference.append(node("small", c.is_fair ? "Cheaper / equal" : `Pricier in ${baseline().name}`)); tr.append(difference);
     const cheapest = c.alternatives.reduce((best, value) => value.amount_in_home < best.amount_in_home ? value : best);
-    difference.append(node("small", `Cheapest: ${cheapest.currency} · ${storefronts[cheapest.region]?.name || cheapest.region.toUpperCase()}`, "cheapest-storefront"));
+    const cheapestCaption = node("small", "Cheapest:", "cheapest-storefront");
+    cheapestCaption.append(node("span", `${cheapest.currency} · ${storefronts[cheapest.region]?.name || cheapest.region.toUpperCase()}`, "cheapest-storefront-name"));
+    difference.append(cheapestCaption);
   } else {
     tr.append(node("td", item.pending ? "Waiting for regional prices…" : item.skipped?.reason || "Could not compare this game.", "skip-reason"));
     const foreign = node("td"), placeholders = node("div", undefined, "foreign");

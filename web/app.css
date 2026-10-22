@@ -159,9 +159,10 @@ h1 > span { color: var(--muted); }
 .profile-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) auto;
+  grid-template-columns: minmax(280px, 760px) auto;
+  justify-content: start;
   align-items: end;
-  gap: 36px;
+  gap: 12px;
   padding: 22px 24px;
   background: #0f1523;
   border-bottom: 1px solid var(--line);
@@ -191,7 +192,8 @@ h1 > span { color: var(--muted); }
 .wishlist-order {
   min-width: 0;
 }
-.wishlist-order > span {
+.field-caption { padding-inline-start: 6px; }
+.wishlist-order > span:first-child {
   display: block;
   margin-bottom: 6px;
   color: var(--muted);
@@ -203,7 +205,18 @@ h1 > span { color: var(--muted); }
   border: 1px solid #232f46;
   padding: 0 34px 0 12px;
   background: #0c101c;
+  appearance: none;
   color: var(--text);
+}
+.order-select-field { position: relative; display: block; }
+.order-select-field::after {
+  content: ""; position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; border: solid var(--text); border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-75%) rotate(45deg); pointer-events: none;
+}
+@media (forced-colors: active) {
+  .wishlist-order select { appearance: auto; }
+  .order-select-field::after { display: none; }
 }
 .profile-actions {
   display: flex;
@@ -212,7 +225,7 @@ h1 > span { color: var(--muted); }
   padding-bottom: 29px;
 }
 .profile-actions .comparison-action {
-  width: 230px;
+  width: 200px;
 }
 .setup {
   background: var(--panel);
@@ -229,7 +242,7 @@ h1 > span { color: var(--muted); }
   color: var(--muted);
   align-items: center;
 }
-.section-label > span:last-child {
+.section-label > span + span {
   font-size: 22px;
   color: var(--blue-light);
   line-height: 1;
@@ -324,6 +337,8 @@ legend {
   padding: 13px 15px;
   transition: background .15s;
 }
+.rate-source-link { display: inline-flex; align-items: center; gap: .3em; }
+.rate-source-link .external-link-arrow { line-height: 1; }
 .primary:hover {
   background: var(--blue-hover);
 }
@@ -343,21 +358,6 @@ legend {
   white-space: nowrap;
 }
 #demo span { margin-left: 5px; }
-.setup-foot {
-  display: flex;
-  gap: 13px;
-  align-items: center;
-  margin-top: auto;
-  padding-top: 45px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.mini-icon {
-  font-size: 27px;
-  color: #486581;
-}
-.setup-foot p { margin: 0; }
 .currency-update-action { margin: 0 0 22px; }
 .currency-update-action .hint { margin: 10px 0 0; overflow-wrap: anywhere; }
 .currency-update-action button:disabled { cursor: default; opacity: .55; }
@@ -479,8 +479,11 @@ h2 {
   gap: 5px;
   max-width: 160px;
 }
-.search > span {
-  font-size: 23px;
+.search > svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
   color: var(--muted);
 }
 .search input:not([type=checkbox]) {
@@ -801,7 +804,7 @@ progress::-webkit-progress-value {
   main { padding: 0 3%; }
   .topbar { padding: 0 3%; }
   .workspace { grid-template-columns: 270px 1fr; }
-  .profile-row { padding: 20px 18px; gap: 22px; }
+  .profile-row { padding: 20px 18px; gap: 12px; }
   .profile-actions { gap: 16px; }
   .setup { padding: 22px 18px; }
   .results-panel { padding: 23px 18px 0; }
@@ -827,7 +830,6 @@ progress::-webkit-progress-value {
   }
   .setup h2 { margin: 15px 0 20px; }
   .setup h2 br { display: none; }
-  .setup-foot { display: none; }
   fieldset {
     display: flex;
     gap: 10px;
@@ -1299,7 +1301,7 @@ td:first-child { min-width: 0; }
 .comparison-area { min-width: 0; position: relative; }
 .comparison-area, .comparison-matrix {
   --game-width: 230px; --credit-width: 0px; --home-width: 125px;
-  --region-width: 170px; --difference-width: 165px;
+  --region-width: max(170px, calc(510px / var(--region-count, 3))); --difference-width: 165px;
 }
 .comparison-area.matrix-with-credits { --credit-width: 125px; }
 .regional-scrollbar-shell {
@@ -1325,12 +1327,17 @@ td:first-child { min-width: 0; }
 .comparison-matrix th { white-space: normal; }
 .comparison-matrix thead tr:not(.storefront-label-row) { height: 88px; }
 .comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: absolute; }
-.comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: flex-end; gap: 12px; }
+.comparison-matrix th:last-child { text-align: center; }
+.comparison-matrix .header-stack-right { display: block; }
+.comparison-matrix .header-stack-right > small { left: 0; right: 0; text-align: center; }
+.comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: center; gap: 12px; left: 0; right: 0; }
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
-  display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
+  display: grid; grid-template-columns: repeat(var(--region-count), min(var(--region-width), 255px));
+  justify-content: center; gap: 0;
   width: calc(var(--region-count) * var(--region-width));
 }
 .comparison-matrix .foreign > * { min-width: 0; padding: 10px 12px; border-left: 1px solid var(--line); }
+.comparison-matrix .foreign > :only-child { border-left: 0; }
 .comparison-matrix .foreign > span:not(.storefront-heading) { padding-top: 0; padding-bottom: 0; }
 .comparison-matrix .storefront-headings { margin-top: 0; }
 .comparison-matrix .storefront-label-row { height: auto; }
@@ -1339,14 +1346,14 @@ td:first-child { min-width: 0; }
 .comparison-matrix .storefront-group-heading > .header-stack {
   position: sticky; left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
   z-index: 1; background: var(--panel);
-  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width) - 24px));
+  display: block; width: 100%; box-sizing: border-box; padding-inline: 12px; text-align: center;
+  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width)));
 }
-.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 0; white-space: normal; }
+.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 12px; white-space: normal; }
 .creator-panel th.catalog-foreign-heading.storefront-group-heading { border-left: 0; }
 .comparison-matrix .storefront-heading { color: var(--text); text-align: left; }
 .comparison-matrix .storefront-heading small { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0; }
 .comparison-matrix td.scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { padding-left: 0; padding-right: 0; }
-.comparison-matrix th:nth-last-child(2) > .header-stack { padding-left: 12px; }
 .comparison-matrix .pinned-game, .comparison-matrix th:first-child {
   position: sticky; left: 0; z-index: 2; background: var(--panel);
 }
@@ -1362,6 +1369,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix.matrix-with-credits .pinned-home,
 .comparison-matrix.matrix-with-credits th:nth-child(3) { position: sticky; left: calc(var(--game-width) + var(--credit-width)); z-index: 2; background: var(--panel); box-shadow: 2px 0 0 var(--line); }
 .comparison-matrix .cheapest-storefront { color: var(--muted); font-size: 10px; }
+.cheapest-storefront-name { display: block; }
 .creator-catalog .comparison-matrix tbody tr { background-image: none; }
 .creator-panel .creator-group-heading, .credit-column-visible .creator-group-heading { display: block; }
 .creator-panel .creator-identity { margin-bottom: 18px; }
@@ -1374,7 +1382,7 @@ td:first-child { min-width: 0; }
 .regional-statistics-grid .creator-statistic-value { font-size: 20px; }
 
 /* On phones the pinned identity occupies a row above the pinned price edges. */
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-area, .comparison-matrix { --game-width: 0px; --home-width: 88px; --difference-width: 100px; --region-width: 125px; }
   .comparison-area.matrix-with-credits, .comparison-matrix.matrix-with-credits { --credit-width: 0px; }
   .comparison-matrix, .comparison-matrix thead:not(.creator-accessible-head), .comparison-matrix tbody { display: block; }
@@ -1412,7 +1420,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix .foreign > span > span { display: inline; }
 .comparison-matrix .sale-note { line-height: 1.5; }
 .creator-catalog .comparison-matrix .foreign > span > span { white-space: normal; }
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .price, .comparison-matrix .difference,
   .comparison-matrix .foreign > span, .comparison-matrix .foreign > span > span,
   .comparison-matrix .offer-price { font-size: 12px; }
@@ -1443,7 +1451,7 @@ td:first-child { min-width: 0; }
 }
 .original-price-currency { min-width: 3ch; text-align: right; }
 
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .foreign .regional-price-line { font-size: 12px; }
 }
 
@@ -1454,7 +1462,7 @@ td:first-child { min-width: 0; }
 .comparison-matrix .best-offer .offer-name { min-height: var(--offer-name-height, 0px); }
 
 .comparison-matrix .offer-difference > span.offer-value { font-size: 14px; line-height: 1.5; }
-@media (max-width: 700px) {
+@media (max-width: 1000px) {
   .comparison-matrix .offer-difference > span.offer-value { font-size: 12px; }
 }
 

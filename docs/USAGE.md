@@ -74,10 +74,11 @@ Search, filters, sorting, scroll position, expanded catalogs, credit-column mode
 and the best-offer checkbox are preserved. Search/filter/sort and CSV remain usable
 while an update runs; exported data always describes the displayed comparison.
 
-Wishlist/example updates use the retained game list and loading order without
-fetching the wishlist again. Catalog updates deduplicate all loaded product IDs
-for retrieval, then keep their original groups and display order. Both default
-prices and best offers reuse the existing cache and independent freshness rules;
+Wishlist/example updates normally use the retained game list and loading order
+without fetching the wishlist again while the source job remains available.
+Catalog updates deduplicate all loaded product IDs for retrieval, then keep their
+original groups and display order. Both default prices and best offers reuse the
+existing cache and independent freshness rules;
 only missing or expired selected-country observations need retrieval. Even fully
 cached updates are asynchronous and show progress.
 
@@ -88,8 +89,12 @@ with missing prices and technical failures represented as uncompared products.
 Reload in the same browser tab restores the displayed snapshot, wishlist view
 settings and pending job credentials separately, reconnecting active updates even
 on hidden catalog tabs. If the source wishlist job has expired or the server has
-restarted, start a new wishlist comparison to change currencies; saved displayed
-results remain usable. Catalog updates can still use their locally saved IDs.
+restarted, Update currencies automatically starts a replacement comparison using
+the saved source, loading order and requested currencies. The example is recreated;
+a personal wishlist is fetched again and may reflect list changes since the saved
+comparison. Previous results stay visible until replacement completes. Failed or
+cancelled replacements retain that snapshot and can be retried, including after
+refresh. Catalog updates can still use their locally saved IDs.
 
 Catalog page cursors retain their discovery storefront. After changing the baseline,
 **Load more** starts at the first page for the new storefront and deduplicates
@@ -103,7 +108,7 @@ selection. Adding or expanding catalogs continues using their displayed currenci
 **Deferred / hidden by default.** This prototype is retained for internal testing;
 it is not an available feature in the normal app. Successful authenticated live
 API retrieval is TODO until Steam Guard/key setup can be completed. Merely setting
-STEAM_WEB_API_KEY does not enable it. See the [test checklist](ROADMAP.md#deferred-stage-the-users-owned-library).
+STEAM_WEB_API_KEY does not enable it. See the [validation criteria](ROADMAP.md#deferred-stage-the-users-owned-library).
 
 The server's internal OWNED_LIBRARY_ENABLED flag defaults to false. Isolated QA
 can explicitly construct WebApplication with owned_library_enabled=True; this
@@ -664,9 +669,11 @@ provenance and local-network-denial handling remain in effect.
 
 Loaded selection/order and profile attribution are private, expiring server memory;
 the shared cache stores no profile-to-game mapping. Server restart or source-job
-expiry requires a new initial wishlist comparison for currency changes; saved
-displayed results remain available. Catalog updates use saved loaded IDs. The
-frontend preserves view settings and restores displayed/pending state separately.
+expiry requires a new initial wishlist comparison for currency changes; the
+browser submits it automatically when Update currencies encounters an expired
+source, retaining displayed results until the replacement finishes. Catalog
+updates use saved loaded IDs. The frontend preserves view settings and restores
+displayed/pending state separately.
 
 ## Continuing development
 
@@ -675,10 +682,9 @@ The owned-library prototype is retained but hidden behind an internal flag in
 [development roadmap](ROADMAP.md) before enabling it. The available wishlist,
 developer, and publisher features retain the shared CSV and product credits.
 
-Read [PROJECT_CONTEXT.md](../PROJECT_CONTEXT.md) for the concise current-state
-handoff.
-Follow the preview lifecycle guidance above. Inspect the repository state before continuing; Git history is
-the detailed change history. Read
+Follow the preview lifecycle guidance above and inspect the repository state
+before continuing. Git and the [changelog](../CHANGELOG.md) record completed work;
+the [roadmap](ROADMAP.md) lists future directions. Read
 [docs/STEAM_SORTED_WISHLIST_API.md](STEAM_SORTED_WISHLIST_API.md) before
 changing wishlist retrieval or adding Steam-compatible loading orders.
 
@@ -779,7 +785,7 @@ These settings are operational bounds, not published Valve guarantees.
 See [measured performance](STEAM_PRICE_PERFORMANCE.md) and
 [implemented design](STEAM_PRICE_BATCHING_PLAN.md). Changing loaded-result currencies
 is implemented for completed wishlist/example and catalog comparisons; the
-loading-order dropdown adjustment remains deferred in [ROADMAP.md](ROADMAP.md).
+remaining layout and performance work is described in [ROADMAP.md](ROADMAP.md).
 
 
 Discount percentage preference: retain Steam's reported percentage when it agrees
