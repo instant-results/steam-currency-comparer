@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Recover currency updates when a saved wishlist/example job expires or the server
+  restarts. Keep displayed results available while recreating the comparison;
+  preserve retry, cancellation and reload behavior.
+- Simplify comparison controls: remove decorative action/rate-heading arrows and
+  the repeated currency-panel description, compact the comparison button and
+  place it beside the profile controls.
+- Give small field captions a consistent inset and keep dropdown indicators clear
+  of rounded edges. Center filter magnifying glasses and the NBP link arrow.
+- Keep a roomy desktop regional area for one/two currencies; center a single
+  currency in a slot matching each of the two-currency slots. Center regional and
+  difference headings while preserving aligned prices and sticky currency labels.
+- Put Cheapest: above the currency/country label to give long country names more
+  room on desktop.
+
 - Place the best-offers checkbox directly above each tab's comparison table,
   keeping its help text nearby and synchronizing the shared setting across tabs.
 

@@ -40,8 +40,6 @@ every label or use text spaces to produce the alignment.
 
 ### Verification
 
-Browser checks at 1920px and 390px confirmed the four visible caption types have
-the same 6px inset, with unchanged input text padding and no page overflow.
-Dropdown keyboard selection passed. The 122 frontend tests and 22 focused
-web-application tests passed. Synthetic preview data and screenshots remain in
-ignored local QA storage.
+Check desktop and narrow layouts for a consistent 6px caption inset, unchanged
+input text padding and no page overflow. Verify label associations and dropdown
+keyboard behavior. Keep the library control behind its existing feature flag.

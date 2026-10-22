@@ -1,6 +1,6 @@
 # Text and localization decisions
 
-Updated: 2026-10-21. This is the current reference for user-facing wording,
+Updated: 2026-10-22. This is the current reference for user-facing wording,
 typography, and text alignment. Update the relevant decision when changing copy
 or its presentation. English is the current interface language; a translation
 system and language selector have not been implemented.
@@ -59,8 +59,9 @@ Use **Update currencies** for the explicit action on a completed comparison in t
 current tab. **Displayed: PLN against USD and EUR** identifies the snapshot in use;
 sidebar choices can differ while the user prepares another selection. Pending
 progress names the requested currencies without changing displayed price labels.
-**Retry currency update** repeats a failed or cancelled selection. **Reload wishlist**
-is used when an expired source job requires a new initial comparison.
+**Retry currency update** repeats a failed or cancelled selection. An expired
+source is recreated automatically by Update currencies; progress identifies
+Recreating the example or Reloading the wishlist while old results stay visible.
 
 Keep these captions in the existing hint typography. The sidebar action uses the
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
@@ -69,24 +70,38 @@ alignment, horizontal table scrolling and both compact and separate credit layou
 ## Many-currency comparisons
 
 Use **Find a currency or country**, **Select all**, and **Clear** for selection.
+The currencies panel contains selection/update guidance without a repeated app
+description or decorative footer icon.
 Use **Scroll other storefronts horizontally** as the top scrollbar's accessible
 label. Headings pair a currency code
 with its representative country; USD means United States and EUR means Germany.
 For more than four alternatives the compact displayed caption gives the baseline
 and storefront count; actual column headings and CSV retain every selected code.
 
+On desktop, keep the regional area at least 510px wide. One selected currency
+uses a centered 255px content slot, matching each slot in the two-currency view;
+two currencies fill that area equally. Three or more use 170px slots. Apply the
+same alignment to normal/sticky labels and both offer sets, including missing
+observations. At viewport widths up to 1000px, use the existing stacked identity
+layout and 125px regional slots so pinned columns leave regional content visible.
+
 Keep the existing column order and typography. Pin game/title and baseline on the
 left and DIFFERENCE on the right; regional headings and both offer sets use the
 same ordered slots. On narrow screens put identity above the price row, keeping
 baseline and DIFFERENCE at its edges. Missing observations occupy their regional
 slot rather than shifting other prices. The overall difference identifies the
-cheapest selected storefront. Large catalog metrics use **Regional statistics**.
+cheapest selected storefront. Put **Cheapest:** on its own line, with the currency
+and country beneath; allow natural wrapping on narrow screens. Large catalog
+metrics use **Regional statistics**.
 
 Use two header levels. On desktop, vertically centre GAME NAME, the baseline
 heading, OTHER STOREFRONTS and DIFFERENCE in the same main heading row. Keep OTHER
 STOREFRONTS and its conversion caption fixed horizontally within the visible
-regional area. Put individual currency/country labels in a separate row below,
-scrolling with the corresponding prices. Keep each country below its currency.
+regional area, with both lines horizontally centered in that visible area. Center
+DIFFERENCE and its sorting controls within the pinned header cell; numeric row
+values remain right-aligned. Put individual currency/country labels in a separate
+row below, scrolling with the corresponding prices. Keep each country below its
+currency.
 When this label row reaches the sticky scrollbar, retain its currency/country
 titles immediately below the scrollbar until the comparison ends. Match its
 column widths, typography and horizontal offset to the original labels and prices;
@@ -174,6 +189,36 @@ CSV schema 1 remains a stable analysis format: decimal points, true/false,
 UTC timestamps, and semicolon-separated credit lists. Preserve source names,
 missing-value semantics, and spreadsheet formula escaping. See
 [USAGE.md](USAGE.md#shared-csv-schema).
+
+## Field captions and loading-order controls
+
+Loading order and the currency/developer/publisher search labels share the 6px
+caption inset documented in [frontend design decisions](DESIGN_DECISIONS.md).
+Keep field borders, text padding, font styles and label associations intact.
+The large profile prompt, legends, checkboxes and inline filters use their own
+patterns. The hidden library dropdown shares the Loading order treatment.
+
+Keep the dropdown chevron inset from its rounded right edge and vertically
+centered, with reserved space for the selected text. Its custom visual indicator
+retains native select/keyboard behavior; forced colors restores the system arrow.
+
+## Action and link arrows
+
+The Compare regional prices button and Exchange rates heading have no decorative
+arrows. Comparison actions use a compact 200px desktop button; retain the full-width
+phone layout and the shared start/cancel action slot. A heading without an icon
+keeps the section-label typography.
+
+The remaining arrow usage needs a separate review: the brand mark, How we compare
+anchor, currency section ornament and empty states mix decoration with navigation.
+Do not add arrows to ordinary actions or headings without a clear purpose. External
+Steam/NBP links and functional sort/dropdown indicators have distinct meanings;
+their review should preserve those cues and accessible controls.
+
+The NBP source link places its external-link arrow in a separate, vertically
+centered inline-flex item with a small gap. Hide that decorative character from
+assistive technology; keep the source name, destination and new-tab behavior.
+Game-title arrow styling remains a separate typography decision.
 
 ## Verification when text changes
 
