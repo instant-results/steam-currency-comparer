@@ -25,10 +25,85 @@ function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
   const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
-  return {get, ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
+  return {get, dispatchDocument: (name, event) => documentEvents.get(name)?.(event), ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
 }
 const game = (id, name) => ({app_id:id, name, developers:["Test developer"], publishers:["Test publisher", "Co-publisher"], comparison:{home_price:{amount:10}, alternatives:[{region:"us", original_amount:5, currency:"USD", rate_to_home:4, amount_in_home:20}], is_fair:true}});
 const skipped = (id, category) => ({app_id:id, name:id, skipped:{category, reason:category}});
+
+function offerHelpFixture(ctx, control = "show-best-offers", anchor = {left:100,top:100,bottom:124,width:24}, box = {width:280,height:160}) {
+  const button = ctx.get(control + "-info"), popup = ctx.get(control.replace("show-best-offers", "best-offers-help"));
+  button.getBoundingClientRect = () => anchor;
+  popup.getBoundingClientRect = () => box;
+  ctx.run("window.innerWidth = 1440; window.innerHeight = 900");
+  return {button, popup};
+}
+
+for (const control of ["show-best-offers","developers-show-best-offers","publishers-show-best-offers","library-show-best-offers"]) test(`${control} information opens independently from the saved checkbox setting`, () => {
+  const ctx = creatorSetup(), {button,popup} = offerHelpFixture(ctx,control);
+  assert.equal(popup.hidden,true);
+  button.listeners.click();
+  assert.equal(popup.hidden,false);
+  assert.equal(button.attributes["aria-expanded"],"true");
+  assert.equal(ctx.get(control).checked,false);
+  assert.equal(ctx.run("showBestOffers"),false);
+  assert.equal(ctx.calls.length,0);
+  assert.equal(ctx.get(popup.id + "-close").focused,true);
+  ctx.get(popup.id + "-close").listeners.click();
+  assert.equal(popup.hidden,true);
+  assert.equal(button.focused,true);
+  button.listeners.click();
+  button.listeners.click();
+  assert.equal(popup.hidden,true);
+  assert.equal(button.attributes["aria-expanded"],"false");
+});
+
+test("offer information persists through outside clicks and focus changes until Escape", () => {
+  const ctx = creatorSetup(), {button,popup} = offerHelpFixture(ctx);
+  button.listeners.click();
+  ctx.dispatchDocument("click",{target:button});
+  ctx.dispatchDocument("click",{target:popup});
+  assert.equal(popup.hidden,false);
+  ctx.dispatchDocument("click",{target:ctx.get("search")});
+  assert.equal(popup.hidden,false);
+  ctx.dispatchDocument("focusin",{target:ctx.get("arrival-order")});
+  assert.equal(popup.hidden,false);
+  let prevented=false;
+  ctx.dispatchDocument("keydown",{key:"Escape",preventDefault(){prevented=true;}});
+  assert.equal(popup.hidden,true);
+  assert.equal(button.focused,true);
+  assert.equal(prevented,true);
+});
+
+test("only one offer explanation is open and its rectangle stays within the viewport", () => {
+  const ctx = creatorSetup(), first = offerHelpFixture(ctx), second = offerHelpFixture(ctx,"developers-show-best-offers",{left:300,top:230,bottom:254,width:24},{width:272,height:160});
+  ctx.run("window.innerWidth = 320; window.innerHeight = 300");
+  first.button.listeners.click(); second.button.listeners.click();
+  assert.equal(first.popup.hidden,true);
+  assert.equal(first.button.attributes["aria-expanded"],"false");
+  assert.equal(second.popup.hidden,false);
+  assert.equal(second.popup.style.width,"272px");
+  assert.equal(second.popup.style.left,"24px");
+  assert.equal(second.popup.style.top,"54px");
+});
+
+test("offer help centers on its trigger, uses document coordinates and only repositions on resize", () => {
+  const events = new Map();
+  const ctx = setup({}, {window:{addEventListener:(name,callback)=>events.set(name,callback)}});
+  const anchor = {left:500,top:100,bottom:124,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  ctx.run("window.scrollY = 600");
+  button.listeners.click();
+  assert.equal(popup.style.left,"372px");
+  assert.equal(popup.style.top,"740px");
+  ctx.run("window.innerWidth = 320"); events.get("resize")();
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.width,"272px");
+  assert.equal(popup.style.left,"24px");
+  anchor.top = -500; anchor.bottom = -476;
+  ctx.run("window.scrollY = 1200");
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.top,"740px");
+});
 
 // Parse quoted fields, including embedded commas, quotes, and line breaks.
 function parseCsv(csv) {
