@@ -212,7 +212,7 @@ h1 > span { color: var(--muted); }
   padding-bottom: 29px;
 }
 .profile-actions .comparison-action {
-  width: 230px;
+  width: 200px;
 }
 .setup {
   background: var(--panel);
@@ -229,7 +229,7 @@ h1 > span { color: var(--muted); }
   color: var(--muted);
   align-items: center;
 }
-.section-label > span:last-child {
+.section-label > span + span {
   font-size: 22px;
   color: var(--blue-light);
   line-height: 1;
