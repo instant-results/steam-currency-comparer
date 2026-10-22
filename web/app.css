@@ -191,10 +191,10 @@ h1 > span { color: var(--muted); }
 .wishlist-order {
   min-width: 0;
 }
+.field-caption { padding-inline-start: 6px; }
 .wishlist-order > span:first-child {
   display: block;
   margin-bottom: 6px;
-  padding-inline-start: 13px;
   color: var(--muted);
   font-size: 12px;
 }
