@@ -116,7 +116,7 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 49px 0 37px;
+  padding: 37px 0;
   gap: 30px;
 }
 .eyebrow {
@@ -125,15 +125,6 @@ main {
   font-weight: 600;
   color: var(--muted);
   margin: 0 0 18px;
-}
-.dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  background: var(--blue);
-  border-radius: 50%;
-  vertical-align: middle;
-  margin-right: 7px;
 }
 h1 {
   font-size: clamp(32px, 3.2vw, 49px);

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Remove the redundant Regional Steam Pricing label and decorative dot above
+  the headline, with tighter introductory spacing.
+
 - Cycle table-header sorting through ascending, descending and original loading
   order. Remove Reset sorting and its description; use larger arrows showing directional blue
   gradients, and align the Game name and baseline-price arrows vertically.
