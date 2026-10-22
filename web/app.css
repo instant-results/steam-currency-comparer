@@ -1412,8 +1412,8 @@ td:first-child { min-width: 0; }
 }
 .comparison-matrix .pinned-difference, .comparison-matrix th:last-child {
   position: sticky; right: 0; z-index: 3; background: var(--panel); box-shadow: -2px 0 0 var(--line);
-  padding-inline-end: var(--difference-content-inset);
 }
+.comparison-matrix tbody .pinned-difference { padding-inline-end: var(--difference-content-inset); }
 .comparison-matrix.matrix-with-credits .catalog-credit-cell,
 .comparison-matrix.matrix-with-credits th:nth-child(2) { position: sticky; left: var(--game-width); z-index: 2; background: var(--panel); box-shadow: none; }
 .comparison-matrix.matrix-with-credits .pinned-home,

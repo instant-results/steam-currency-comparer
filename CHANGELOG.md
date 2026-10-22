@@ -8,6 +8,7 @@
 
 - Add 6px of right-edge breathing room to difference values and storefront
   captions, retaining readable long country labels on desktop and phones.
+  Keep the DIFFERENCE heading and sorting controls centered with symmetric padding.
 
 - Move currency selection above the full-width comparison, collapse selectors
   when work starts or results are restored, and retain a summary and disclosure.
