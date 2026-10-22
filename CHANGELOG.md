@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.3 — 2026-10-23
 
 - Format currency summaries with commas and a final ", and" for three or four
   alternatives, retaining "and" for two and the storefront count for longer lists.

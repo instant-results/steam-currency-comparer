@@ -5,6 +5,13 @@ release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
 
+## Completed in 0.7.3
+
+Baseline and comparison currency cards now include circular flags, with the EU
+flag for EUR and Germany retained as its representative storefront. The artwork
+loads from one bundled SVG sprite. Named currency summaries use commas and a
+final conjunction, with the existing count summary for more than four alternatives.
+
 ## Completed in 0.7.2
 
 Currency setup now sits above the full-width results, with draft discard on hide.
