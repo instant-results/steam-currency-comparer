@@ -105,6 +105,45 @@ test("offer help centers on its trigger, uses document coordinates and only repo
   assert.equal(popup.style.top,"740px");
 });
 
+test("open offer help follows its trigger when currency setup moves the results offscreen", () => {
+  let layoutChanged;
+  class ResizeObserver {
+    constructor(callback) { layoutChanged = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const ctx = setup({}, {ResizeObserver});
+  const anchor = {left:500,top:100,bottom:124,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  button.listeners.click();
+  assert.equal(popup.style.top,"140px");
+  anchor.top += 1000; anchor.bottom += 1000; layoutChanged();
+  assert.equal(popup.hidden,false);
+  assert.equal(popup.style.top,"1140px");
+  anchor.top -= 1000; anchor.bottom -= 1000; layoutChanged();
+  assert.equal(popup.style.top,"140px");
+});
+
+test("offer help preserves above-trigger placement during offscreen layout and viewport changes", () => {
+  let layoutChanged;
+  const events = new Map();
+  class ResizeObserver {
+    constructor(callback) { layoutChanged = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const ctx = setup({}, {ResizeObserver,window:{addEventListener:(name,callback)=>events.set(name,callback)}});
+  const anchor = {left:500,top:700,bottom:724,width:24};
+  const {button,popup} = offerHelpFixture(ctx,"show-best-offers",anchor);
+  button.listeners.click();
+  assert.equal(popup.style.top,"524px");
+  anchor.top += 1000; anchor.bottom += 1000; layoutChanged();
+  assert.equal(popup.style.top,"1524px");
+  ctx.run("window.innerHeight = 600"); events.get("resize")();
+  assert.equal(popup.style.top,"1524px");
+  assert.equal(popup.hidden,false);
+});
+
 // Parse quoted fields, including embedded commas, quotes, and line breaks.
 function parseCsv(csv) {
   assert.ok(csv.startsWith("\uFEFF"));
