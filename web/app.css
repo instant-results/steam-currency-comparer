@@ -1488,11 +1488,16 @@ td:first-child { min-width: 0; }
 .regional-scrollbar-shell.without-scrollbar { padding-top: 0; padding-bottom: 0; }
 .sticky-storefront-titles.comparison-matrix {
   position: absolute; top: 100%;
-  left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
-  right: var(--difference-width); width: auto;
+  /* Bounds and track width are copied from the rendered table cells. */
   overflow: hidden; background: var(--panel); border-bottom: 1px solid var(--line);
   pointer-events: none;
 }
+.sticky-storefront-titles::before, .sticky-storefront-titles::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 2px;
+  background: var(--line); z-index: 1;
+}
+.sticky-storefront-titles::before { left: 0; }
+.sticky-storefront-titles::after { right: 0; }
 
 .sticky-storefront-titles .foreign > .storefront-heading { padding-top: 5px; padding-bottom: 5px; }
 

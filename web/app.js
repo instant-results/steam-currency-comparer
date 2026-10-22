@@ -251,10 +251,22 @@ function bindComparisonScroll(prefix, wrap) {
       headingSignature = source.innerHTML;
     }
     stickyTitles.classList.toggle("matrix-with-credits", table.classList.contains("matrix-with-credits"));
-    stickyTitles.style.setProperty("--region-count", table.style.getPropertyValue("--region-count"));
-    stickyTitles.firstElementChild.style.transform = `translateX(${-wrap.scrollLeft}px)`;
-    const sourceBox = source.getBoundingClientRect(), top = shell.getBoundingClientRect().bottom;
-    stickyTitles.hidden = wrap.clientWidth === 0 || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
+    const count = table.style.getPropertyValue("--region-count") || "1";
+    stickyTitles.style.setProperty("--region-count", count);
+    const sourceBox = source.getBoundingClientRect(), shellBox = shell.getBoundingClientRect();
+    const wrapBox = wrap.getBoundingClientRect();
+    const homeBox = table.querySelector(".storefront-label-row .pinned-home").getBoundingClientRect();
+    const differenceBox = table.querySelector(".storefront-label-row .pinned-difference").getBoundingClientRect();
+    // Use rendered cell edges: the table can be narrower than its scroll surface,
+    // and this copy lives outside the table's container-query sizing context.
+    const left = Math.max(sourceBox.left, homeBox.right, wrapBox.left);
+    const right = Math.min(sourceBox.right, differenceBox.left, wrapBox.right);
+    stickyTitles.style.left = `${left - shellBox.left}px`;
+    stickyTitles.style.width = `${Math.max(0, right - left)}px`;
+    stickyTitles.style.setProperty("--region-width", `${sourceBox.width / Number(count)}px`);
+    stickyTitles.firstElementChild.style.transform = `translateX(${sourceBox.left - left}px)`;
+    const top = shellBox.bottom;
+    stickyTitles.hidden = wrap.clientWidth === 0 || right <= left || sourceBox.top > top || area.getBoundingClientRect().bottom <= top + sourceBox.height;
   };
   const refresh = () => {
     const overflow = Math.max(0, wrap.scrollWidth - wrap.clientWidth);

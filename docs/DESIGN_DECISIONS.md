@@ -41,6 +41,12 @@ active-job locking, long titles and both catalog credit modes. Check widths on
 both sides of breakpoints and 1/2/3/36 alternatives, including best and missing
 offers, horizontal scroll extremes and sticky titles.
 
+The sticky storefront-label copy uses the original heading width and rendered
+baseline/Difference cell edges. Clip it to that visible currency interval, retain
+the original track sizing and scroll offset, and draw matching 2px side dividers
+inside the clipped strip. The surrounding scroll surface can be wider than the
+table, so its outer edge is not a reliable endpoint for the sticky labels.
+
 ## Result filters and display controls
 
 On wide layouts, place result filters, Show unavailable products and the Steam

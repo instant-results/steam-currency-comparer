@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Align sticky storefront labels to the rendered currency-column boundaries,
+  preserving both side dividers and preventing overlap into Difference when
+  selected currencies fit within a wider comparison surface.
+
 - Remove the redundant final-price caption from wishlist and library footers.
 
 - Group availability and best-offer checkboxes with wishlist filters in a wrapping
