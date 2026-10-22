@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 — 2026-10-22
 
 - Recover currency updates when a saved wishlist/example job expires or the server
   restarts. Keep displayed results available while recreating the comparison;
