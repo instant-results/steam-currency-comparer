@@ -94,9 +94,9 @@ function refreshCurrencyAction() {
   const displayed = catalog ? window.creatorPane.currencyState() : window.libraryPane?.active ? null : displayedWishlist?.request;
   const selected = currencySelection(), button = $("update-currencies");
   button.hidden = !displayed;
-  button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed) || (!catalog && wishlistExpired);
+  button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed);
   $("currency-update-help").hidden = !displayed;
-  $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " This wishlist job expired; start a new comparison above." : ""}` : "";
+  $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " Updating currencies will reload this saved comparison." : ""}` : "";
 }
 function updateSelections(event) {
   const home = selectedHome();
@@ -340,20 +340,33 @@ function applyWishlistSnapshot(data, body) {
   render();
 }
 async function updateWishlistCurrencies(selection = currencySelection()) {
-  if (!displayedWishlist || !validCurrencies(selection) || wishlistExpired || !comparisonCoordinator.claim("wishlist")) return;
+  if (!displayedWishlist || !validCurrencies(selection) || !comparisonCoordinator.claim("wishlist")) return;
   retryCurrency = selection;
   pendingCurrency = {request: {...displayedWishlist.request, ...selection}, job: null};
   setBusy(true); $("cancel").disabled = true; status("UPDATING CURRENCIES", true);
   $("progress").value = 0; $("progress-label").textContent = `Updating to ${currencyLabel(selection)}… Displayed results remain available.`;
   notice(""); saveWishlist();
   try {
-    pendingCurrency.job = await request(`/api/jobs/${job.id}/currencies`, {method: "POST", body: JSON.stringify(selection), headers: {Authorization: `Bearer ${job.token}`}});
+    if (!wishlistExpired) {
+      try {
+        pendingCurrency.job = await request(`/api/jobs/${job.id}/currencies`, {method: "POST", body: JSON.stringify(selection), headers: {Authorization: `Bearer ${job.token}`}});
+      } catch (error) {
+        if (error.status !== 404) throw error;
+        wishlistExpired = true;
+      }
+    }
+    if (wishlistExpired) {
+      const source = pendingCurrency.request.identifier === "example" ? "Recreating the example" : "Reloading the wishlist";
+      $("progress-label").textContent = `${source} with ${currencyLabel(selection)}… Displayed results remain available.`;
+      refreshCurrencyAction(); saveWishlist();
+      pendingCurrency.job = await request("/api/jobs", {method: "POST", body: JSON.stringify(pendingCurrency.request)});
+    }
     saveWishlist(); $("cancel").disabled = false; pollWishlistCurrencies();
   } catch (error) {
-    pendingCurrency = null; wishlistExpired = error.status === 404;
+    pendingCurrency = null;
     setBusy(false); status("UPDATE COULD NOT START");
-    notice(wishlistExpired ? "This wishlist comparison expired. Start a new comparison above to change currencies. Displayed results are still available." : `${error.message} Displayed results are unchanged. Retry the currency update.`, true);
-    $("retry").textContent = wishlistExpired ? "Reload wishlist ↻" : "Retry currency update ↻"; saveWishlist();
+    notice(`${error.message} Displayed results are unchanged. Retry the currency update.`, true);
+    $("retry").textContent = "Retry currency update ↻"; saveWishlist();
   }
 }
 async function pollWishlistCurrencies() {
@@ -369,7 +382,7 @@ async function pollWishlistCurrencies() {
     preserveComparisonScroll(() => {
       pendingCurrency = null;
       if (["complete", "partial"].includes(data.state)) {
-        job = pending.job; displayedWishlist = {request: pending.request, data}; retryCurrency = null;
+        job = pending.job; displayedWishlist = {request: pending.request, data}; retryCurrency = null; wishlistExpired = false;
         applyWishlistSnapshot(data, pending.request);
         notice(data.state === "partial" ? "Currencies updated. Some games could not be compared; retry to check missing prices." : (data.warnings || []).join(" "));
       } else notice(`${data.error || (data.state === "cancelled" ? "Currency update cancelled." : "Currency update failed.")} Displayed results are unchanged. Retry the currency update.`, data.state === "failed");
@@ -733,8 +746,8 @@ $("update-currencies").addEventListener("click", () => {
 });
 $("cancel").addEventListener("click", async () => { const target = pendingCurrency?.job || job; if(!target) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${target.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${target.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => {
-  if (displayedWishlist && !wishlistExpired) updateWishlistCurrencies(retryCurrency || {home: displayedWishlist.request.home, regions: displayedWishlist.request.regions});
-  else if(lastRequest) start(wishlistExpired && retryCurrency ? {...lastRequest, ...retryCurrency} : lastRequest);
+  if (displayedWishlist) updateWishlistCurrencies(retryCurrency || {home: displayedWishlist.request.home, regions: displayedWishlist.request.regions});
+  else if(lastRequest) start(lastRequest);
 });
 $("search").addEventListener("input", render);
 $("show-unavailable").addEventListener("change", render);
@@ -810,7 +823,7 @@ try {
         preferredComparisons = [...pendingCurrency.request.regions];
         document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === pendingCurrency.request.home);
         setBusy(true); status("RECONNECTING", true); saveWishlist(); pollWishlistCurrencies();
-      } else { setBusy(false); status(displayedWishlist.data.state.toUpperCase()); $("retry").textContent = wishlistExpired ? "Reload wishlist ↻" : retryCurrency ? "Retry currency update ↻" : "Retry comparison ↻"; saveWishlist(); }
+      } else { setBusy(false); status(displayedWishlist.data.state.toUpperCase()); $("retry").textContent = retryCurrency ? "Retry currency update ↻" : "Retry comparison ↻"; saveWishlist(); }
     } else { if (!restoreRequest(saved)) showProfile(null); setBusy(true); status("RECONNECTING", true); poll(); }
   }
 } catch (_) { saveJob(null); }

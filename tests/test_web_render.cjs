@@ -1609,14 +1609,77 @@ for (const state of ["failed","cancelled"]) test(`wishlist ${state} update retai
   assert.equal(ctx.run("resultHome"),"gb");
 });
 
-for (const status of [429,404]) test(`wishlist submission ${status} preserves results and explains the next action`, async () => {
+for (const status of [429,403]) test(`wishlist submission ${status} preserves results and explains the next action`, async () => {
   const ctx = await loadedWishlist(); chooseCurrencies(ctx,"gb",["us"]);
   ctx.submissions.push({httpStatus:status,error:"Could not update"});
   ctx.get("update-currencies").listeners.click(); await settle();
   assert.equal(ctx.run("items[0].name"),"Example game");
   assert.equal(ctx.run("comparisonCoordinator.busy"),false);
-  assert.match(ctx.get("notice").textContent,status === 404 ? /expired.*new comparison/ : /unchanged.*Retry/);
-  assert.equal(ctx.get("update-currencies").disabled,status === 404);
+  assert.match(ctx.get("notice").textContent,/unchanged.*Retry/);
+  assert.equal(ctx.get("update-currencies").disabled,false);
+  assert.equal(ctx.calls.filter(c => c.path === "/api/jobs").length,1);
+});
+
+function restoredWishlist(identifier = "example", expired = false, extra = {}) {
+  const request = {identifier, home:"pl", regions:["us","de"], order:"name"};
+  const displayed = {request, data:wishlistSnapshot("complete",{profile:identifier})};
+  const saved = {id:"w".repeat(32),token:"t".repeat(43),request,displayed,expired,...extra};
+  return creatorSetup({"polisher-job":JSON.stringify(saved)});
+}
+
+for (const identifier of ["example","76561198000000000"]) test(`expired restored ${identifier === "example" ? "example" : "wishlist"} recreates on currency update without discarding the snapshot`, async () => {
+  const ctx = restoredWishlist(identifier); await settle();
+  const row = ctx.get("rows").children[0], csv = ctx.run('buildCsv(false,"fixed")');
+  chooseCurrencies(ctx,"pl",["gb"]);
+  ctx.submissions.push({httpStatus:404,error:"Expired"});
+  ctx.snapshots.push(wishlistSnapshot("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const starts = ctx.calls.filter(c=>c.path==="/api/jobs");
+  assert.equal(starts.length,1);
+  assert.deepEqual(starts[0].body,{identifier,home:"pl",regions:["gb"],order:"name"});
+  assert.equal(starts[0].authorization,undefined);
+  assert.equal(ctx.calls.filter(c=>c.path.endsWith("/currencies")).length,1);
+  assert.equal(ctx.get("rows").children[0],row);
+  assert.equal(ctx.run('buildCsv(false,"fixed")'),csv);
+  assert.equal(ctx.run("comparisonCoordinator.busy"),true);
+  assert.match(ctx.get("currency-update-help").textContent,/reload this saved comparison/);
+  ctx.snapshots.push(wishlistSnapshot("complete",{regions:["gb"]}));
+  await ctx.run("pollWishlistCurrencies()");
+  assert.equal(ctx.run("wishlistExpired"),false);
+  assert.equal(ctx.run("job.id"),"a".repeat(32));
+  assert.deepEqual(JSON.parse(ctx.storage.get("polisher-job")).request.regions,["gb"]);
+});
+
+test("known-expired snapshots still allow currency updates after refresh and recover retry selections", async () => {
+  const ctx = restoredWishlist("example",true,{retryCurrency:{home:"pl",regions:["gb"]}}); await settle();
+  chooseCurrencies(ctx,"pl",["gb"]);
+  assert.equal(ctx.get("update-currencies").disabled,false);
+  ctx.submissions.push({httpStatus:429,error:"Busy"});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(c=>c.path.endsWith("/currencies")).length,0);
+  assert.equal(ctx.run("items[0].name"),"Example game");
+  assert.match(ctx.get("notice").textContent,/unchanged.*Retry/);
+  const restored = creatorSetup(Object.fromEntries(ctx.storage)); await settle();
+  chooseCurrencies(restored,"no",["de"]);
+  restored.snapshots.push(wishlistSnapshot());
+  restored.get("retry").listeners.click(); await settle();
+  assert.deepEqual(restored.calls.find(c=>c.path==="/api/jobs").body,{identifier:"example",home:"pl",regions:["gb"],order:"name"});
+  assert.equal(restored.run("wishlistExpired"),false);
+});
+
+test("recreated currency comparisons reconnect after refresh and cancel their own job", async () => {
+  const ctx = restoredWishlist("example",true); await settle();
+  chooseCurrencies(ctx,"pl",["gb"]);
+  ctx.snapshots.push(wishlistSnapshot("running",{items:[]}));
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),"developer",false,[wishlistSnapshot("running",{items:[]})]); await settle();
+  assert.equal(restored.calls.some(c=>c.path==="/api/jobs"||c.path.endsWith("/currencies")),false);
+  await restored.get("cancel").listeners.click();
+  assert.equal(restored.calls.find(c=>c.path.endsWith("/cancel")).path,`/api/jobs/${"a".repeat(32)}/cancel`);
+  restored.snapshots.push(wishlistSnapshot("cancelled")); await restored.run("pollWishlistCurrencies()");
+  assert.equal(restored.run("items[0].name"),"Example game");
+  assert.equal(restored.run("wishlistExpired"),true);
+  assert.equal(restored.run("comparisonCoordinator.busy"),false);
 });
 
 test("wishlist cancellation targets the pending job and expired pending work can retry the source", async () => {
