@@ -263,6 +263,30 @@ test("queued catalog auto-loading is cancelled when leaving the catalog tab", as
   assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length, 0);
 });
 
+test("completed wishlist status accompanies the checked count and restores progress for other states", async () => {
+  const ctx = creatorSetup();
+  ctx.snapshots.push(wishlistSnapshot()); ctx.ready(); await settle();
+  assert.equal(ctx.get("count-total").textContent, 1);
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+  for (const state of ["RUNNING", "PARTIAL", "FAILED", "CANCELLED", "COMPARISON EXPIRED", "UPDATING CURRENCIES"]) {
+    ctx.run(`status(${JSON.stringify(state)}, ${state === "RUNNING" || state === "UPDATING CURRENCIES"})`);
+    assert.equal(ctx.get("count-completion").hidden, true, state);
+    assert.equal(ctx.get("progress-area").hidden, false, state);
+    assert.equal(ctx.get("status-badge").textContent, state);
+  }
+  ctx.run('status("COMPLETE")');
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+});
+
+test("restored completed results retain inline completion without restarting a job", async () => {
+  const ctx = restoredWishlist("example", true); await settle();
+  assert.equal(ctx.get("count-completion").hidden, false);
+  assert.equal(ctx.get("progress-area").hidden, true);
+  assert.equal(ctx.calls.length, 0);
+});
+
 test("failed example startup releases controls and requires an explicit retry", async () => {
   const ctx = creatorSetup();
   ctx.run('let exampleAttempts = 0; request = async () => { exampleAttempts++; throw new Error("Steam unavailable"); }');
