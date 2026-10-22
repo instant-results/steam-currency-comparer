@@ -78,6 +78,22 @@ function currencyLabel(selection) {
   return `${storefronts[selection.home].currency} against ${selection.regions.length > 4 ? `${selection.regions.length} storefronts` : selection.regions.map(id => storefronts[id].currency).join(" and ")}`;
 }
 function sameCurrencies(a, b) { return a.home === b.home && a.regions.join(",") === b.regions.join(","); }
+let currencyPanelWasActive = false, currencyPanelUsed = false;
+function setCurrencyPanelExpanded(expanded) {
+  const body = $("currency-panel-body"), toggle = $("currency-panel-toggle");
+  // Return focus before hiding a control used to start a currency update.
+  if (!expanded && body.contains(document.activeElement)) toggle.focus();
+  body.hidden = !expanded;
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.textContent = expanded ? "Hide currencies" : "Change currencies";
+}
+function syncCurrencyPanel(hasComparison) {
+  const active = comparisonCoordinator.active;
+  // Collapse once per run; reopening during a run remains possible.
+  if ((active && !currencyPanelWasActive) || (hasComparison && !currencyPanelUsed)) setCurrencyPanelExpanded(false);
+  if (active || hasComparison) currencyPanelUsed = true;
+  currencyPanelWasActive = active;
+}
 function preserveComparisonScroll(update) {
   const x = window.scrollX || 0, y = window.scrollY || 0;
   const wraps = [...document.querySelectorAll('.table-wrap')].map(el => [el, el.scrollLeft]);
@@ -97,6 +113,7 @@ function refreshCurrencyAction() {
   button.disabled = comparisonCoordinator.busy || !validCurrencies(selected) || !displayed || sameCurrencies(selected, displayed);
   $("currency-update-help").hidden = !displayed;
   $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " Updating currencies will reload this saved comparison." : ""}` : "";
+  syncCurrencyPanel(Boolean(displayed));
 }
 function updateSelections(event) {
   const home = selectedHome();
@@ -124,6 +141,9 @@ function updateSelections(event) {
   $("compare-legend").textContent = `Compare ${storefronts[home].currency} with`;
   $("baseline-legend").textContent = `Baseline currency · ${storefronts[home].currency}`;
   $("selection-help").textContent = `${count} of ${maxComparisons} selected · Choose one or more.`;
+  $("currency-selection-summary").textContent = count
+    ? `Selected: ${currencyLabel({home, regions: selected.map(el => el.value)})}`
+    : `Selected: ${storefronts[home].currency} · no comparison currencies`;
   $("select-all-currencies").disabled = comparisonCoordinator.busy || count === maxComparisons;
   $("clear-currencies").disabled = comparisonCoordinator.busy || count === 0;
   filterStorefrontControls();
@@ -729,6 +749,7 @@ function downloadCsv(contents, filename) {
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
 $("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 buildStorefrontControls();
+$("currency-panel-toggle").addEventListener("click", () => setCurrencyPanelExpanded($("currency-panel-body").hidden));
 bindComparisonScroll("wishlist", $("wishlist-table").parentElement || $("wishlist-scroll"));
 bindComparisonScroll("library", $("library-table").parentElement || $("library-scroll"));
 $("currency-search").addEventListener("input", filterStorefrontControls);

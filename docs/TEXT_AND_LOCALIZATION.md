@@ -57,19 +57,23 @@ Implementation: web/app.js (comparisonRow) and web/app.css
 
 Use **Update currencies** for the explicit action on a completed comparison in the
 current tab. **Displayed: PLN against USD and EUR** identifies the snapshot in use;
-sidebar choices can differ while the user prepares another selection. Pending
+currency-panel choices can differ while the user prepares another selection. Pending
 progress names the requested currencies without changing displayed price labels.
 **Retry currency update** repeats a failed or cancelled selection. An expired
 source is recreated automatically by Update currencies; progress identifies
 Recreating the example or Reloading the wishlist while old results stay visible.
 
-Keep these captions in the existing hint typography. The sidebar action uses the
+Keep these captions in the existing hint typography. The currency-panel action uses the
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
 alignment, horizontal table scrolling and both compact and separate credit layouts.
 
 ## Many-currency comparisons
 
 Use **Find a currency or country**, **Select all**, and **Clear** for selection.
+Place currency controls above the comparison, with **Selected:** identifying
+the current choices. **Hide currencies** collapses only the selectors;
+**Change currencies** reopens them. Keep the summary and Update currencies
+action available in either state. See [layout decisions](DESIGN_DECISIONS.md#currency-setup-and-comparison-width).
 The currencies panel contains selection/update guidance without a repeated app
 description or decorative footer icon.
 Use **Scroll other storefronts horizontally** as the top scrollbar's accessible

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Move currency selection above the full-width comparison, collapse selectors
+  when work starts or results are restored, and retain a summary and disclosure.
+  Adapt picker lists to screen width and give desktop game titles more room while
+  preserving pinned prices, aligned headings and narrow-screen identity rows.
+
 ## 0.7.1 — 2026-10-22
 
 - Recover currency updates when a saved wishlist/example job expires or the server

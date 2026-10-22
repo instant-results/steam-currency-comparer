@@ -29,6 +29,11 @@ change over time. No personal Steam profile is used.
   Any can be the baseline, with up to 36 alternatives. Search the currency picker
   or choose Select all; the default is PLN against USD and EUR.
   See the [supported storefronts](docs/STOREFRONTS.md).
+- Keeps currency selection above the full-width comparison. The selectors collapse
+  when a comparison starts; **Change currencies** reopens them. The selection
+  summary and **Update currencies** remain accessible while browsing results.
+  Desktop tables give artwork and long game titles more room; narrow screens keep
+  game identity above the price row.
 - Keeps game/title, baseline and DIFFERENCE visible while regional price columns
   scroll horizontally. A blue scrollbar above the results spans only the regional
   columns and stays available while scrolling down the comparison. Catalog tables

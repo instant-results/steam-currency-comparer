@@ -5,6 +5,37 @@ the relevant decision when changing the design; keep implementation history in G
 See [text and localization decisions](TEXT_AND_LOCALIZATION.md) for wording,
 credits, comparison-table typography and translation boundaries.
 
+## Currency setup and comparison width
+
+Currency selection occupies a full-width panel above the comparison, shared by
+wishlist, developer and publisher tabs. It does not reserve a sidebar beside rows.
+The panel starts expanded until a comparison starts or saved results are restored.
+Each new run collapses the selectors once. Change currencies can reopen them even
+during a run, while the existing job lock keeps selections disabled. Completion,
+polling and tab changes do not repeatedly close a manually reopened panel.
+
+Keep Selected: distinct from Displayed: so editing the setup never relabels saved
+prices. The summary, disclosure and existing Update currencies action remain
+outside the collapsed body. Empty selections and large currency counts have
+explicit summaries. Disclosure uses a native button, aria-expanded, aria-controls
+and the hidden attribute; return focus when hiding a focused selector.
+
+Above 600px the two bounded, scrollable picker lists sit side by side. Within
+each list, currency cards adapt to available width. At 600px and below the lists
+stack, with one card per row and bounded height. Search and selections survive
+collapse; disclosure alone starts no requests.
+
+Desktop game identity is 300–480px wide, using spare comparison width after
+reserving the baseline, optional credit column, difference and 510px regional
+area. At 1000px and below retain the stacked identity/price layout and existing
+regional slots. Use the same widths for table headers, rows, sticky copies and
+scrollbar boundaries. Artwork retains its current dimensions.
+
+Verify expanded and collapsed states, keyboard disclosure, saved comparisons,
+active-job locking, long titles and both catalog credit modes. Check widths on
+both sides of breakpoints and 1/2/3/36 alternatives, including best and missing
+offers, horizontal scroll extremes and sticky titles.
+
 ## Small labels above input fields
 
 Accepted: 2026-10-22.

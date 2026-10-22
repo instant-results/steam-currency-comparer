@@ -9,9 +9,10 @@ release commitments. See the [README](../README.md) for current features, the
 
 ### Game titles and artwork
 
-Improve the readability of long titles beside game artwork without squeezing the
-price columns. Evaluate thumbnail size, identity-column width and arrangements
-that adapt to the available space. No replacement layout has been selected.
+The currency panel now sits above the comparison and collapses during loading,
+freeing width for game identity. Desktop titles use a wider, adaptive column;
+narrow layouts retain identity above prices. Evaluate further thumbnail and
+title refinements against this layout without squeezing the price columns.
 
 ### Interface clarity
 
