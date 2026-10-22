@@ -1337,7 +1337,10 @@ td:first-child { min-width: 0; }
 .comparison-matrix th { white-space: normal; }
 .comparison-matrix thead tr:not(.storefront-label-row) { height: 88px; }
 .comparison-matrix .header-stack > small, .comparison-matrix .header-stack > .difference-sorts { position: absolute; }
-.comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: flex-end; gap: 12px; }
+.comparison-matrix th:last-child { text-align: center; }
+.comparison-matrix .header-stack-right { display: block; }
+.comparison-matrix .header-stack-right > small { left: 0; right: 0; text-align: center; }
+.comparison-matrix .header-stack > .difference-sorts { display: flex; justify-content: center; gap: 12px; left: 0; right: 0; }
 .comparison-matrix .foreign, .creator-catalog .comparison-matrix .foreign {
   display: grid; grid-template-columns: repeat(var(--region-count), var(--region-width)); gap: 0;
   width: calc(var(--region-count) * var(--region-width));
@@ -1351,14 +1354,14 @@ td:first-child { min-width: 0; }
 .comparison-matrix .storefront-group-heading > .header-stack {
   position: sticky; left: calc(var(--game-width) + var(--credit-width) + var(--home-width));
   z-index: 1; background: var(--panel);
-  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width) - 24px));
+  display: block; width: 100%; box-sizing: border-box; padding-inline: 12px; text-align: center;
+  max-width: max(1px, calc(100cqw - var(--game-width) - var(--credit-width) - var(--home-width) - var(--difference-width)));
 }
-.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 0; white-space: normal; }
+.comparison-matrix .storefront-group-heading .header-stack > small { left: 12px; right: 12px; white-space: normal; }
 .creator-panel th.catalog-foreign-heading.storefront-group-heading { border-left: 0; }
 .comparison-matrix .storefront-heading { color: var(--text); text-align: left; }
 .comparison-matrix .storefront-heading small { display: block; margin-top: 3px; font-size: 10px; letter-spacing: 0; }
 .comparison-matrix td.scrolling-storefronts, .comparison-matrix th:nth-last-child(2) { padding-left: 0; padding-right: 0; }
-.comparison-matrix th:nth-last-child(2) > .header-stack { padding-left: 12px; }
 .comparison-matrix .pinned-game, .comparison-matrix th:first-child {
   position: sticky; left: 0; z-index: 2; background: var(--panel);
 }
