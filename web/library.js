@@ -86,13 +86,7 @@
     }
     const hiddenCount = showUnavailable ? 0 : items.filter(unavailable).length;
     $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}`;
-    $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
-    $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
-    buttons(".library-sort").forEach(button => {
-      button.closest("th").removeAttribute("aria-sort");
-      button.setAttribute("aria-pressed", String(button.dataset.sort === sort));
-    });
-    buttons(".library-sort").forEach(button => { if (button.dataset.sort === sort) button.closest("th").setAttribute("aria-sort", direction === 1 ? "ascending" : "descending"); });
+    updateSortIndicators(buttons(".library-sort"), sort, direction);
     buttons(".library-filter").forEach(button => { button.classList.toggle("active", button.dataset.filter === filter); button.setAttribute("aria-pressed", String(button.dataset.filter === filter)); });
     refreshControls();
   }
@@ -146,9 +140,8 @@
   });
   for (const id of ["search","show-unavailable"]) $(id).addEventListener(id === "search" ? "input" : "change", () => { render(); save(); });
   $("export-owner").addEventListener("change", save);
-  $("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); save(); });
   buttons(".library-filter").forEach(button => button.addEventListener("click", () => { filter = button.dataset.filter; render(); save(); }));
-  buttons(".library-sort").forEach(button => button.addEventListener("click", () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); save(); }));
+  buttons(".library-sort").forEach(button => button.addEventListener("click", () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); save(); }));
   $("export-csv").addEventListener("click", () => downloadCsv(buildPriceCsv(items, home, rates,
     {sourceTab:"library", includeOwner:$("export-owner").checked, profile:lastRequest?.identifier, regions:lastRequest?.regions || [], order:lastRequest?.order}), "steam-library-comparison.csv"));
   window.libraryPane = {get busy() { return busy; }, get active() { return active; }, refreshControls, render,

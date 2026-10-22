@@ -449,6 +449,21 @@ async function pollWishlistCurrencies() {
 }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
 function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
+function nextTableSort(sort, direction, column) {
+  if (sort !== column) return {sort: column, direction: 1};
+  return direction === 1 ? {sort: column, direction: -1} : {sort: "arrival", direction: 1};
+}
+function updateSortIndicators(buttons, sort, direction) {
+  for (const button of buttons) button.closest("th").removeAttribute("aria-sort");
+  for (const button of buttons) {
+    const active = button.dataset.sort === sort;
+    const state = active ? (direction === 1 ? "ascending" : "descending") : "none";
+    button.setAttribute("aria-pressed", String(active));
+    button.setAttribute("data-sort-direction", state);
+    button.setAttribute("title", state === "none" ? "Sort lowest to highest (A–Z)" : state === "ascending" ? "Sort highest to lowest (Z–A)" : "Restore original loading order");
+    if (active) button.closest("th").setAttribute("aria-sort", state);
+  }
+}
 function status(text, active = false) {
   const complete = text === "COMPLETE" && !active;
   $("status-badge").textContent = text;
@@ -620,15 +635,7 @@ function render() {
   $("empty").hidden = visible.length > 0;
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
-  $("arrival-order").setAttribute("aria-pressed", String(sort === "arrival"));
-  $("order-note").textContent = sort === "arrival" ? "Loaded games append at the end" : "Sorted results · loaded games follow this sort";
-  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
-    button.closest('th').removeAttribute('aria-sort');
-    button.setAttribute('aria-pressed', String(button.dataset.sort === sort));
-  });
-  document.querySelectorAll('.sort:not(.library-sort)').forEach(button => {
-    if (button.dataset.sort === sort) button.closest('th').setAttribute('aria-sort', direction === 1 ? 'ascending' : 'descending');
-  });
+  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
   saveWishlist();
 }
 function formatRateTime(isoString) {
@@ -868,9 +875,8 @@ for (const control of bestOfferControls) {
     render(); window.creatorPane?.render(); window.libraryPane?.render();
   });
 }
-$("arrival-order").addEventListener("click", () => { sort = "arrival"; direction = 1; render(); });
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
-document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { direction = sort === button.dataset.sort ? -direction : 1; sort = button.dataset.sort; render(); }));
+document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
 $("identifier").addEventListener("input", () => { automaticExampleDismissed = true; comparisonCoordinator.cancel("wishlist-example"); });
 
 // Deferred scripts restore their tabs before DOMContentLoaded. Catalog restoration

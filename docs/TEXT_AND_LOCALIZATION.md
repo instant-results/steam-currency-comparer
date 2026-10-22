@@ -53,6 +53,18 @@ Wishlist and owned library show both roles together.
 Implementation: web/app.js (comparisonRow) and web/app.css
 (.wishlist-credits). Catalog compact styling remains .catalog-credit.
 
+## Table sorting
+
+Headers cycle ascending, descending, then original loading order. Use A–Z/Z–A
+for titles and lowest/highest for numeric values. Switching headers starts
+ascending; Reset sorting is removed. Preserve keyboard activation, aria-pressed,
+and aria-sort on the active column. Difference has two independent buttons in
+one header, so expose direction on each button as well.
+Make arrows 12x18px across screen sizes, muted when inactive.
+Ascending uses a blue gradient on the
+top 40%; descending lights the bottom 40%. Align Game name and baseline-price
+arrow centers vertically in the desktop row, independent of label wrapping.
+
 ## Wishlist CSV attribution
 
 The wishlist export checkbox reads **Include Steam profile URL or ID in CSV**.

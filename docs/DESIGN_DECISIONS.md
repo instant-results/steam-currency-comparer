@@ -57,7 +57,15 @@ Wrap the pair on narrow screens; the results footer retains the result count.
 On wide layouts, place result filters, Show unavailable products and the Steam
 best-offers checkbox in the same left-aligned row. Allow the row to wrap as space
 narrows; preserve readable labels, checkbox states and accessible associations.
-Keep Reset sorting and its loading-order note below, aligned to the end.
+Remove the separate sorting toolbar, including its loading-order note. Headers cycle
+ascending, descending and original loading order; no separate Reset sorting
+button is needed. Switching columns starts ascending. Use geometric arrows
+(12x18px across screen sizes):
+arrows: ascending lights the top 40% with a light-blue gradient; descending
+lights the bottom 40%; unsorted stays muted. Reflect state in aria-sort and each
+button's direction attribute, including the two Difference controls sharing a
+header. Center the Game name and baseline-price arrows on the same desktop
+header line even when the baseline label wraps.
 
 Replace permanent best-offer explanatory panels with a small blue circular i
 button after the label and a blue, rounded popup. The button is independent from

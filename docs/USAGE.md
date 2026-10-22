@@ -606,7 +606,11 @@ separate button above search.
 
 Foreign final prices use 16px text. Column headings identify Game name and
 the baseline storefront. Difference offers independent absolute and percentage sort buttons;
-repeated clicks reverse direction, with unavailable percentages last. Uncompared
+repeated clicks cycle lowest to highest (A–Z), highest to lowest (Z–A), then
+original loading order. Switching to another column starts ascending. Missing
+numeric values stay last in either direction. The enlarged arrow lights its
+top 40% for ascending or bottom 40% for descending with a light-blue gradient;
+neither end lights when unsorted. This replaces Reset sorting. Uncompared
 shows contextual help explaining missing prices, failed requests, and the separate
 availability toggle. Storefront labels remain geographic: currency alone does not
 establish identical regional offers.

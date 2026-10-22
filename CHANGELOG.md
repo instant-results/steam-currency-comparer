@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Cycle table-header sorting through ascending, descending and original loading
+  order. Remove Reset sorting and its description; use larger arrows showing directional blue
+  gradients, and align the Game name and baseline-price arrows vertically.
+
 - Place wishlist Retry comparison beside Compare regional prices, with matching
   button dimensions and typography; wrap the actions on narrow screens.
 
