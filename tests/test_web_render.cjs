@@ -2139,21 +2139,27 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   const wrap = ctx.get("wishlist-scroll"), rail = ctx.get("wishlist-scrollbar"), shell = new Element("div");
   shell.append(rail);
   const table = wrap.querySelector("table"), source = table.querySelector(".storefront-label-cell .storefront-headings");
-  let sourceTop = 200, areaBottom = 1000, clones = 0;
+  let sourceTop = 200, areaBottom = 1000, clones = 0, sourceWidth = 720;
+  let differenceLeft = 880, surfaceRight = 900;
   source.innerHTML = "USD EUR";
   source.cloneNode = () => { clones++; const copy = new Element("div"); copy.setAttribute("id", "wishlist-storefront-headings"); return copy; };
   table.classList.contains = () => false;
   table.style.setProperty("--region-count", "2");
-  source.getBoundingClientRect = () => ({top:sourceTop,height:60});
-  wrap.getBoundingClientRect = () => ({top:0});
+  source.getBoundingClientRect = () => ({top:sourceTop,height:60,left:500-wrap.scrollLeft,right:500-wrap.scrollLeft+sourceWidth,width:sourceWidth});
+  table.querySelector(".storefront-label-row .pinned-home").getBoundingClientRect = () => ({right:500});
+  table.querySelector(".storefront-label-row .pinned-difference").getBoundingClientRect = () => ({left:differenceLeft});
+  wrap.getBoundingClientRect = () => ({top:0,left:0,right:surfaceRight});
   wrap.closest = () => ({getBoundingClientRect:() => ({bottom:areaBottom})});
-  shell.getBoundingClientRect = () => ({bottom:29});
+  shell.getBoundingClientRect = () => ({bottom:29,left:0});
   wrap.clientWidth = 900; wrap.scrollWidth = 2700; rail.clientWidth = 380;
   wrap.refreshScrollControls();
   const titles = shell.children[1];
   assert.equal(titles.hidden, true);
   assert.equal(titles.attributes["aria-hidden"], "true");
   assert.equal(titles.firstElementChild.attributes.id, undefined);
+  assert.equal(titles.style.left,"500px");
+  assert.equal(titles.style.width,"380px");
+  assert.equal(titles.style.getPropertyValue("--region-width"),"360px");
   sourceTop = 20; listeners[0]();
   assert.equal(titles.hidden, false);
   rail.scrollLeft = 340; rail.listeners.scroll();
@@ -2169,6 +2175,15 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   wrap.refreshScrollControls();
   assert.equal(rail.hidden, true);
   assert.equal(titles.hidden, false);
+  // Three currencies fit inside a wider surface: stop at the actual Difference
+  // cell rather than extending to the surface's far edge.
+  sourceWidth = 510; differenceLeft = 1010; surfaceRight = 1400;
+  table.style.setProperty("--region-count", "3");
+  wrap.refreshScrollControls();
+  assert.equal(titles.style.left,"500px");
+  assert.equal(titles.style.width,"510px");
+  assert.equal(titles.style.getPropertyValue("--region-width"),"170px");
+  assert.equal(titles.firstElementChild.style.transform,"translateX(0px)");
 });
 
 test("top regional scrollbar preserves the table range and synchronizes dragging, table scrolling and layout changes", () => {
