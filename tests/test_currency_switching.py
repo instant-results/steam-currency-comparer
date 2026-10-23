@@ -237,8 +237,12 @@ class CurrencySwitchingTests(unittest.TestCase):
     def test_currency_changes_keep_owner_and_capacity_limits(self):
         source = self.initial()
         self.manager.max_jobs = 1
+        other = self.manager.submit("example", ComparisonConfig(), "other")
         with self.assertRaises(BusyError):
             self.change(source)
+        other.update(state="complete")
+        self.manager.queue.get_nowait(); self.manager.queue.task_done()
+        self.execute(self.change(source))
         self.manager.max_jobs = 20
         self.manager.submit("example", ComparisonConfig(), "switch")
         with self.assertRaises(BusyError):
