@@ -96,6 +96,27 @@ class CurrencySwitchingTests(unittest.TestCase):
             self.assertEqual(row["live_requests"], 0)
             self.assertEqual(row["comparison"]["home_price"]["currency"], "USD")
 
+    def test_removed_title_stays_out_of_currency_updates_and_shared_cache_survives(self):
+        source = self.initial()
+        calls = len(self.http.calls)
+        source.remove_titles(["20"])
+        changed = self.execute(self.change(source, home="us", regions=("pl",)))
+        self.assertEqual([row["app_id"] for row in changed.data["items"]], ["10"])
+        self.assertEqual(len(self.http.calls), calls)
+        fresh = self.initial()
+        self.assertEqual([row["app_id"] for row in fresh.data["items"]], ["20", "10"])
+        self.assertEqual(len(self.http.calls), calls)
+
+    def test_removing_all_titles_creates_an_empty_currency_update_without_requests(self):
+        source = self.initial()
+        source.remove_titles(["20", "10"])
+        calls = len(self.http.calls)
+        changed = self.execute(self.change(source))
+        self.assertEqual(changed.data["items"], [])
+        self.assertEqual(changed.data["total"], 0)
+        self.assertEqual(changed.data["rates"], [])
+        self.assertEqual(len(self.http.calls), calls)
+
     def test_new_storefront_only_and_switch_back_reuses_retained_countries_across_windows(self):
         source = self.initial()
         calls = len(self.http.calls)
