@@ -286,6 +286,20 @@ centered inline-flex item with a small gap. Hide that decorative character from
 assistive technology; keep the source name, destination and new-tab behavior.
 Game-title arrow styling remains a separate typography decision.
 
+## Shared profile and game input
+
+The wishlist input label is "Steam profile, game ID, store URL or game name".
+Its help text is "Load a public wishlist, or add individual games to this comparison."
+The submit label follows the input: "Compare regional prices", "Search games" or
+"Add". Name search runs after four seconds without typing and remains available
+through explicit submission. Search-match buttons say "Add" and precede the name
+visually and in keyboard order, including on phones. Their accessible names include
+the product name and App ID. Manual rows use "Manually added". Developer/publisher
+catalog actions retain "Add & compare".
+
+The required-field validation popup is browser-native. Its warning icon and
+typography are controlled by the browser; app CSS does not position them.
+
 ## Verification when text changes
 
 Check long names, multiple names, missing/pending metadata, desktop and narrow

@@ -25,7 +25,7 @@ and run one server process:
 python -m pip install -r requirements-web.txt
 $env:WEB_ORIGIN = "https://your-domain.example"
 $env:STEAM_PRICE_POLISHER_DATA_DIR = "C:\data\steam-price-polisher"
-waitress-serve --listen=127.0.0.1:8765 --threads=4 --max-request-body-size=2048 --call steam_price_polisher.web_app:create_app
+waitress-serve --listen=127.0.0.1:8765 --threads=4 --max-request-body-size=262144 --call steam_price_polisher.web_app:create_app
 ```
 
 On Linux, set the same environment variables using your hosting platform and
@@ -54,11 +54,14 @@ for the production server and proxy settings.
 - Run **one process / one replica**. Job ownership and the paced analysis queue
   are in memory. Multiple web threads are supported; multiple processes require
   a shared job store and distributed Steam pacing first.
-- One analysis runs at a time. The queue and retained results are bounded to 20
-  jobs total. Results expire after one hour. The limit is intentionally small
-  for this first version; busy clients receive a retryable HTTP 429 response.
-- One unfinished job per client connection/IP, at most three recent jobs per
-  minute, and at most 1,000 wishlist games per analysis. Large cold wishlists can
+- One analysis runs at a time, with at most 20 unfinished jobs and a bounded
+  worker queue. Completed results have a separate limit of 100 jobs and 32 MiB
+  of serialized snapshots, plus one-hour expiry; oldest results are evicted first.
+  This is a serialized-size budget, not a strict process-memory ceiling. Active
+  jobs are not evicted. Busy clients receive a retryable HTTP 429 response.
+- One unfinished job per client connection/IP and at most 1,000 wishlist games
+  per analysis. There is no application-level per-minute submission limit;
+  retained jobs and the worker queue remain bounded. Large cold wishlists can
   take many minutes because Steam calls are paced at 1.5-second intervals.
 - Cancellation is cooperative: an in-flight request may finish before the
   worker stops. Completed prices remain cached for the next attempt.
@@ -95,8 +98,12 @@ The current code still needs a focused service-readiness review:
 
 - Address long jobs blocking the single worker, with measured scan limits and
   queue fairness. More replicas require shared job state and Steam pacing.
-- Separate completed-result retention from admission capacity: the 20-job limit
-  currently includes completed jobs, even when the worker is idle.
+- Completed-result retention is separate from active-work admission. Measure real
+  process-memory use and tune the snapshot budget on the deployment host.
+- Add anonymous-session workflow ownership plus broader IP/global abuse limits;
+  current ownership still uses REMOTE_ADDR. Add operation-specific search and HTTP
+  burst limits, measured work budgets, and fair scheduling before public hosting.
+  Removing the old three-starts-per-minute quota is not a complete public abuse policy.
 - Review throttling and retry behavior. Web retries cap delays at 15 seconds,
   including numeric upstream `Retry-After` values; date-form values are not parsed.
 - Add useful worker/queue/cache monitoring, deployment and rollback procedures,

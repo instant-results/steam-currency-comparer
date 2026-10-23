@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.8.0** · Beta for local use.
+**Version: 0.9.0** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -24,6 +24,14 @@ change over time. No personal Steam profile is used.
 [View the app title and setup screen](docs/images/app-overview.jpg).
 
 ## What it does
+
+- The profile field also accepts a Steam App ID, an `/app/` store URL, or a game
+  name. Name search runs after four seconds without typing, or immediately with
+  **Search games**. Click **Add** to the left of a match to include it in the current
+  wishlist comparison. See [individual games](docs/USAGE.md#add-individual-games).
+  Additions start immediately when idle; further selections wait visibly and are
+  combined only when already queued. No Steam profile is needed for a manual list.
+  Manually added games are labeled and retained across reloads and currency updates.
 
 - Compares 37 currencies using one representative Steam storefront per currency.
   Any can be the baseline, with up to 36 alternatives. Search the currency picker
@@ -84,7 +92,7 @@ change over time. No personal Steam profile is used.
 - Each catalog's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
   Statistics cover the displayed selection rather than the entire catalog.
-- Each tab searches its own role and offers **Add & compare** for matching names.
+- Developers and Publishers each search their own role and offer **Add & compare** for matching names.
   Developer and publisher selections, results, and catalog positions are saved
   independently in the same browser tab. Developer/publisher credits appear
   beneath each game, or in a separate column using **Show publisher column** /

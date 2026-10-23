@@ -22,6 +22,7 @@ const removalNotices = (() => {
     if (focused) (entries.at(-1)?.button || $("wishlist-tab")).focus({preventScroll: true});
   }
   return {
+    undo(owner, id) { const entry = entries.find(entry => entry.key === key(owner, id)); if (entry) finish(entry, true); },
     find(owner, id) { return entries.find(entry => entry.key === key(owner, id)); },
     commitOwner(owner) { for (const entry of [...entries]) if (entry.key.startsWith(`${owner}:`)) finish(entry); },
     commitAll() { for (const entry of [...entries]) finish(entry); },
@@ -83,6 +84,13 @@ function createTitleRemovals(owner, changed, restoreRow, reportError) {
       return items.filter(item => { if (!removed.has(item.app_id)) return true; this.capture(item); return false; });
     },
     pending: id => removalNotices.find(owner, id)?.data,
+    pendingIds: () => [...removed].filter(id => removalNotices.find(owner, id)),
+    readd(id) {
+      removalNotices.undo(owner, id);
+      removed.delete(id); committed.delete(id);
+      for (const source of sources.values()) source.sent.delete(id);
+      changed();
+    },
     remove(id, name, data) {
       if (removed.has(id)) return;
       if (removed.size >= 10000) { reportError("This comparison has reached its 10,000-title removal limit. Start a fresh comparison to reset it."); return; }
@@ -93,15 +101,15 @@ function createTitleRemovals(owner, changed, restoreRow, reportError) {
     },
     register(source) {
       if (!source?.id || !source.token || sources.has(source.id)) return;
-      // The server retains at most 20 jobs; older credentials cannot own live data.
-      if (sources.size >= 20) sources.delete(sources.keys().next().value);
+      // Cover the default 100 completed and 20 active server job slots.
+      if (sources.size >= 120) sources.delete(sources.keys().next().value);
       sources.set(source.id, {token: source.token, sent: new Set()}); if (committed.size) sync();
     },
     exclusions: () => [...committed],
     serialize: () => ({removed: [...removed], sources: [...sources].map(([id, source]) => ({id, token: source.token}))}),
     restore(value) {
       for (const id of Array.isArray(value?.removed) ? value.removed.slice(0, 10000) : []) if (validId(id)) { removed.add(id); committed.add(id); }
-      for (const source of Array.isArray(value?.sources) ? value.sources.slice(-20) : []) {
+      for (const source of Array.isArray(value?.sources) ? value.sources.slice(-120) : []) {
         if (/^[A-Za-z0-9_-]{32}$/.test(source.id) && /^[A-Za-z0-9_-]{43}$/.test(source.token)) this.register(source);
       }
     }
@@ -267,6 +275,7 @@ function refreshCurrencyAction() {
   $("currency-update-help").textContent = displayed ? `Displayed: ${currencyLabel(displayed)}. Updates apply to this tab.${!catalog && wishlistExpired ? " Updating currencies will reload this saved comparison." : ""}` : "";
   syncCurrencyPanel(Boolean(displayed));
   button.hidden = !displayed || $("currency-panel-body").hidden;
+  window.gameAdditions?.refreshControls();
 }
 function updateSelections(event) {
   const home = selectedHome();
@@ -456,8 +465,11 @@ function gameArtwork(appId) {
 }
 function showProfile(profile) {
   currentProfile = profile || "";
-  if (profile === "example") {
-    $("profile-attribution").textContent = "Curated example wishlist · 7 popular Steam games";
+  if (profile === "selection") {
+    currentProfile = ""; $("profile-attribution").textContent = "Manually selected games";
+  } else if (profile === "example") {
+    $("profile-attribution").textContent = items.some(item => item.manually_added)
+      ? "Curated example wishlist + manually added games" : "Curated example wishlist";
   } else {
     $("profile-attribution").textContent = profile ? `Wishlist: ${profile}` : "Saved comparison · profile was not recorded by the earlier app version";
   }
@@ -468,10 +480,12 @@ function restoreRequest(saved) {
   const order = request?.order || "priority";
   if (!request || typeof request.identifier !== "string" || request.identifier.length > 200 || !Array.isArray(request.regions) || !request.regions.length || request.regions.length > maxComparisons || !Object.hasOwn(storefronts, request.home || "pl") || !wishlistOrders.has(order) || new Set(request.regions).size !== request.regions.length || request.regions.some(region => !Object.hasOwn(storefronts, region) || region === (request.home || "pl"))) return false;
   preferredComparisons = [...request.regions];
-  lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl", order};
+  lastRequest = {identifier: request.identifier, regions: request.regions, home: request.home || "pl", order,
+    ...(Array.isArray(request.app_ids) ? {app_ids: request.app_ids} : {}),
+    ...(Array.isArray(request.added_app_ids) ? {added_app_ids: request.added_app_ids} : {})};
   document.querySelectorAll('[name="home"]').forEach(el => el.checked = el.value === lastRequest.home);
   showBaseline(lastRequest.home);
-  $("identifier").value = request.identifier === "example" ? "" : request.identifier;
+  $("identifier").value = ["example", "selection"].includes(request.identifier) ? "" : request.identifier;
   $("wishlist-order").value = order;
   document.querySelectorAll('[name="region"]').forEach(el => el.checked = request.regions.includes(el.value));
   updateSelections();
@@ -547,7 +561,7 @@ async function updateWishlistCurrencies(selection = currencySelection()) {
       }
     }
     if (wishlistExpired) {
-      const source = pendingCurrency.request.identifier === "example" ? "Recreating the example" : "Reloading the wishlist";
+      const source = pendingCurrency.request.app_ids ? "Recreating the saved selection" : pendingCurrency.request.identifier === "example" ? "Recreating the example" : "Reloading the wishlist";
       $("progress-label").textContent = `${source} with ${currencyLabel(selection)}… Displayed results remain available.`;
       refreshCurrencyAction(); saveWishlist();
       const excluded = wishlistRemovals.exclusions();
@@ -592,7 +606,7 @@ async function pollWishlistCurrencies() {
   }
 }
 function notice(text, error = false) { $("notice").textContent = text; $("notice").hidden = !text; $("notice").classList.toggle("error", error); }
-function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; }
+function setBusy(value) { running = value; $("analyze").hidden = value; $("cancel").hidden = !value; $("cancel-label").textContent = "Cancel comparison"; $("identifier").disabled = value; $("wishlist-order").disabled = value; comparisonCoordinator.setBusy("wishlist", value); $("progress").hidden = !value; $("progress-label").hidden = !value; $("cancel").disabled = false; $("retry").hidden = value || !lastRequest; window.gameAdditions?.refreshControls(); }
 function nextTableSort(sort, direction, column) {
   if (sort !== column) return {sort: column, direction: 1};
   return direction === 1 ? {sort: column, direction: -1} : {sort: "arrival", direction: 1};
@@ -728,6 +742,7 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
   tr.dataset.appId = item.app_id;
   const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", (item.name || `Steam product ${item.app_id}`) + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
   artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer";
+  if (item.manually_added) gameTitle.append(node("small", "Manually added", "manual-game-label"));
   if (onRemove) {
     const identity = node("div", undefined, "game-name"), control = node("span", undefined, "game-artwork-control");
     const artworkLink = node("a"); artworkLink.href = link.href; artworkLink.target = link.target; artworkLink.rel = link.rel;
@@ -801,6 +816,9 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
   return tr;
 }
 function render() {
+  const manualGames = items.some(item => item.manually_added);
+  $("results-title").textContent = demoMode ? (manualGames ? "Example + added games" : "Example price comparison") : "Your price comparison";
+  if (lastRequest) showProfile(lastRequest.identifier);
   const regions = comparisonRegions(lastRequest?.regions, items);
   setComparisonLayout($("wishlist-table"), regions);
   $("wishlist-storefront-headings").replaceChildren(...regionalHeadings(regions));
@@ -811,7 +829,7 @@ function render() {
   $("count-fair").textContent = comparable.filter(item => item.comparison.is_fair).length;
   $("count-expensive").textContent = comparable.filter(item => !item.comparison.is_fair).length;
   const search = $("search").value.trim().toLocaleLowerCase();
-  const hiddenUnavailable = item => ["no_regional_price", "app_unavailable"].includes(item.skipped?.category);
+  const hiddenUnavailable = item => !item.manually_added && ["no_regional_price", "app_unavailable"].includes(item.skipped?.category);
   const showUnavailable = $("show-unavailable").checked;
   const hiddenCount = showUnavailable ? 0 : items.filter(hiddenUnavailable).length;
   const visible = items.filter(item => (showUnavailable || !hiddenUnavailable(item)) && item.name.toLocaleLowerCase().includes(search) && (filter === "all" || (filter === "discounts" ? hasDifferentDiscounts(item.comparison) : filter === "skipped" ? !item.comparison : item.comparison && item.comparison.is_fair === (filter === "fair"))));
@@ -845,7 +863,7 @@ function render() {
     $("empty").querySelector("p").textContent = "Use Undo while its notice is available, or start a new comparison.";
   }
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
-  $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
+  $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? manualGames ? " · example + added games" : " · curated example" : ""}`;
   updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
   saveWishlist();
 }
@@ -944,7 +962,7 @@ const priceCsvHeaders = Object.freeze([
   "developers_known", "publishers_known", "library_profile", "library_loading_order",
   "best_offer_status", "best_offer_kind", "best_offer_id", "best_offer_name", "best_offer_final_price",
   "best_offer_currency", "best_offer_currency_basis", "best_offer_regular_price", "best_offer_discount_percent",
-  "best_offer_final_price_baseline", "best_offer_source", "best_offer_difference_baseline", "best_offer_difference_percent", "discount_calculated", "best_offer_discount_calculated"
+  "best_offer_final_price_baseline", "best_offer_source", "best_offer_difference_baseline", "best_offer_difference_percent", "discount_calculated", "best_offer_discount_calculated", "manually_added"
 ]);
 function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new Date().toISOString()) {
   const baseline = () => storefronts[home];
@@ -963,7 +981,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
       const rate = identity ? {} : rates.find(value => value.currency === price.currency) || {};
       const factor = c ? (price.region === home ? 1 : price.rate_to_home) : null;
       const foreign = c && price.region !== home;
-      const row = [exportedAt, example, item.app_id, item.name, c ? "compared" : item.skipped?.category,
+      const row = [exportedAt, example && !item.manually_added, item.app_id, item.name, c ? "compared" : item.skipped?.category,
         price.region, price.currency, price.original_amount, price.base_amount, price.discount_percent,
         identity ? 1 : rate.rate_to_pln, rate.effective_date, rate.retrieved_at_utc, rate.checked_at_utc,
         identity ? "Identity conversion" : rate.source, identity ? "identity" : rate.cache_status,
@@ -972,7 +990,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
       row.push(home, baseline().currency, factor,
         homeIdentity ? 1 : homeRate.rate_to_pln, homeRate.effective_date,
         homeRate.retrieved_at_utc, homeRate.checked_at_utc, homeIdentity ? "identity" : homeRate.cache_status,
-        sourceTab === "wishlist" && includeOwner ? profile : null,
+        sourceTab === "wishlist" && includeOwner && !item.manually_added ? profile : null,
         item.catalog_role, item.catalog_name, (item.developers || []).join("; "), (item.publishers || []).join("; "),
         1, sourceTab, item.catalog_id, `https://store.steampowered.com/app/${item.app_id}/`,
         comparisonRegions.join("; "), comparisonRegions.map(region => storefronts[region].currency).join("; "),
@@ -992,7 +1010,7 @@ function buildPriceCsv(exportItems, home, rates, options = {}, exportedAt = new 
         offer?.price?.currency, offer?.currency_basis, offer?.price?.base_amount, offer?.price?.discount_percent,
         offer?.amount_in_home ?? bestPrice?.amount_in_home, offer?.source,
         best ? best.home_price.amount - Math.min(...best.alternatives.map(p => p.amount_in_home)) : null,
-        best ? percentageDifference(best) : null, price.discount_calculated, offer?.price?.discount_calculated);
+        best ? percentageDifference(best) : null, price.discount_calculated, offer?.price?.discount_calculated, item.manually_added === true);
       rows.push(row);
     }
   }
@@ -1008,7 +1026,7 @@ function downloadCsv(contents, filename) {
   link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $("export-csv").addEventListener("click", () => downloadCsv(buildCsv($("export-owner").checked), "steam-price-comparison.csv"));
-$("compare-form").addEventListener("submit", event => { event.preventDefault(); const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
+$("compare-form").addEventListener("submit", event => { event.preventDefault(); if (window.gameAdditions) { window.gameAdditions.submit(); return; } const regions = [...document.querySelectorAll('[name="region"]:checked')].map(el => el.value); if(!regions.length || regions.length > maxComparisons) return notice("Choose one or more comparison currencies.", true); start({identifier: $("identifier").value.trim(), regions, home: selectedHome(), order: $("wishlist-order").value}); });
 buildStorefrontControls();
 $("currency-panel-toggle").addEventListener("click", () => {
   const expanded = $("currency-panel-body").hidden;
@@ -1032,7 +1050,7 @@ $("update-currencies").addEventListener("click", () => {
   if (window.creatorPane?.active) window.creatorPane.updateCurrencies();
   else if (!window.libraryPane?.active) updateWishlistCurrencies();
 });
-$("cancel").addEventListener("click", async () => { const target = pendingCurrency?.job || job; if(!target) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${target.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${target.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
+$("cancel").addEventListener("click", async () => { if (window.gameAdditions?.busy) { await window.gameAdditions.cancel(); return; } const target = pendingCurrency?.job || job; if(!target) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${target.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${target.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => {
   if (displayedWishlist && retryCurrency) updateWishlistCurrencies(retryCurrency);
   else if(lastRequest) start(lastRequest);
