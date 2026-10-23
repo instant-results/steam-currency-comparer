@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0 — 2026-10-23
+
+- Add games to the wishlist comparison through the existing profile field using
+  an App ID, Steam app URL, or selectable name-search results. Search names after
+  four seconds without typing and place Add buttons to the left of matches. Start immediately
+  when idle and combine only additions already waiting for the current work.
+  Preserve previous results during additions, retain selections across reloads
+  and currency changes, and support explicit re-addition after removal. Label
+  manual rows and append manually_added to CSV without attributing them to a wishlist.
+- Separate active-job admission from completed-result retention. Retain at most
+  100 completed jobs and 32 MiB of serialized snapshots, subject to one-hour expiry.
+  Active jobs are never evicted to make room for old results.
+- Remove the three-comparisons-per-minute submission limit so sequential small
+  comparisons can start immediately. Retain one unfinished job per connection,
+  bounded job storage and queue capacity, and shared Steam request pacing.
+
 ## 0.8.0 — 2026-10-23
 
 - Remove individual titles with a circular × overlapping their thumbnail. Exclude

@@ -94,7 +94,7 @@ class TitleRemovalTests(unittest.TestCase):
         self.assertEqual(self.request({"app_ids": ["1"]})["status"], 404)
         self.assertEqual(len(self.job.data["items"]), 2)
 
-    def test_cleanup_does_not_consume_submission_rate_limit(self):
+    def test_sequential_jobs_have_no_per_minute_limit_after_cleanup(self):
         owner = "rate-limit-browser"
         with patch("steam_price_polisher.web_app.time.monotonic", return_value=1000):
             sources = []
@@ -104,7 +104,7 @@ class TitleRemovalTests(unittest.TestCase):
                 source.update(state="complete", total=2,
                               items=[{"app_id": "1"}, {"app_id": "2"}])
                 sources.append(source)
-        with patch("steam_price_polisher.web_app.time.monotonic", return_value=1120):
+        with patch("steam_price_polisher.web_app.time.monotonic", return_value=1001):
             for source in sources:
                 source.remove_titles(["1"])
             updated = self.manager.change_currencies(sources[-1], ComparisonConfig(), owner)
@@ -113,8 +113,14 @@ class TitleRemovalTests(unittest.TestCase):
             for _ in range(2):
                 fresh = self.manager.submit("example", ComparisonConfig(), owner)
                 fresh.update(state="complete")
-            with self.assertRaisesRegex(BusyError, "wait a minute"):
+            fresh = self.manager.submit("example", ComparisonConfig(), owner)
+            with self.assertRaisesRegex(BusyError, "already running"):
                 self.manager.submit("example", ComparisonConfig(), owner)
+            fresh.update(state="complete")
+            self.manager.max_jobs = 1
+            self.manager.submit("example", ComparisonConfig(), owner)
+            with self.assertRaisesRegex(BusyError, "service is busy"):
+                self.manager.submit("example", ComparisonConfig(), "another-browser")
 
     def test_cleanup_accepts_ten_thousand_ids_in_a_request(self):
         ids = [str(100000000000 + i) for i in range(10000)]

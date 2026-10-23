@@ -24,6 +24,7 @@ from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
 from .configuration import ComparisonConfig, MAX_COMPARISONS, STOREFRONTS
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
+from .games import GameSearch
 from .http_client import HttpClientError, UrllibJsonHttpClient, NETWORK_ACCESS_MESSAGE, is_network_access_denied
 from .models import ComparisonMethodology, WishlistFailure, WishlistItem, SkipCategory
 from .batching import BatchPolicy, CachedBatchPriceService, SteamBatchProvider
@@ -45,6 +46,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
           "/favicon.svg": ("favicon.svg", "image/svg+xml"),
           "/creators.js": ("creators.js", "text/javascript; charset=utf-8"),
           "/library.js": ("library.js", "text/javascript; charset=utf-8"),
+          "/games.js": ("games.js", "text/javascript; charset=utf-8"),
           "/steam-logo.svg": ("steam-logo.svg", "image/svg+xml"),
           "/flags.svg": ("flags.svg", "image/svg+xml")}
 
@@ -73,14 +75,16 @@ class BusyError(RuntimeError):
 
 def validate_request(payload):
     required = {"identifier", "regions"}
-    allowed = {*required, "home", "order", "excluded_app_ids"}
+    allowed = {*required, "home", "order", "excluded_app_ids", "app_ids", "added_app_ids"}
     if not isinstance(payload, dict) or not required <= set(payload) <= allowed:
         raise InputError("Supply a Steam profile and comparison regions.")
     raw = payload["identifier"]
     if not isinstance(raw, str) or not 1 <= len(raw.strip()) <= 200:
         raise InputError("Enter a SteamID64 or a Steam profile URL.")
     identifier = raw.strip()
-    if identifier.lower() == "example":
+    if identifier == "selection" and payload.get("app_ids"):
+        pass
+    elif identifier.lower() == "example":
         identifier = "example"
     elif not re.fullmatch(r"[0-9]{17}", identifier):
         url = urlsplit(identifier)
@@ -103,6 +107,16 @@ def validate_request(payload):
     if payload.get("order", "priority") not in WISHLIST_ORDERS:
         raise InputError("Choose name, date added, or personal priority order.")
     validate_exclusions(payload.get("excluded_app_ids", []))
+    for field in ("app_ids", "added_app_ids"):
+        if field in payload:
+            ids = payload[field]
+            if (not isinstance(ids, list) or not 1 <= len(ids) <= 1000
+                    or any(not isinstance(value, str) or not re.fullmatch(r"[1-9][0-9]{0,9}", value)
+                           or int(value) > 4294967295 for value in ids)
+                    or len(set(ids)) != len(ids)):
+                raise InputError("Supply 1 to 1,000 unique Steam App IDs.")
+    if "app_ids" in payload and not set(payload.get("added_app_ids", [])) <= set(payload["app_ids"]):
+        raise InputError("Added games must belong to the selection.")
     return identifier, config
 
 
@@ -176,6 +190,8 @@ class Job:
         self.creator_request = deepcopy(creator_request)
         self.excluded_app_ids = set()
         self.library = library
+        self.request_app_ids = None
+        self.added_app_ids = ()
         # Private, expiring discovery state; never saved to the shared price cache.
         self.loaded_items = None
         self.creator_membership = {}
@@ -240,6 +256,9 @@ class Job:
                 self.loaded_items = tuple(item for item in self.loaded_items if item.app_id not in removed)
             for app_id in removed:
                 self.creator_membership.pop(app_id, None)
+            if self.request_app_ids is not None:
+                self.request_app_ids = tuple(value for value in self.request_app_ids if value not in removed)
+            self.added_app_ids = tuple(value for value in self.added_app_ids if value not in removed)
             if self.creator_request and "app_ids" in self.creator_request:
                 self.creator_request["app_ids"] = [app_id for app_id in self.creator_request["app_ids"] if app_id not in removed]
             self.data["total"] = max(0, self.data["total"] - count)
@@ -265,17 +284,21 @@ class CancellableHttpClient:
 
 class JobManager:
     def __init__(self, data_directory, *, api_key="", max_jobs=20, max_games=1000,
-                 runner=None, start_worker=True, batch_policy=BatchPolicy()):
+                 runner=None, start_worker=True, batch_policy=BatchPolicy(),
+                 max_completed_jobs=100, completed_bytes=32 * 1024 * 1024):
         self.data_directory = Path(data_directory)
         self.api_key = api_key
         self.max_jobs, self.max_games = max_jobs, max_games
         self.batch_policy = batch_policy
+        self.max_completed_jobs = max_completed_jobs
+        self.completed_bytes = completed_bytes
         self.jobs = {}
         self.lock = threading.Lock()
         self.queue = queue.Queue(maxsize=max_jobs)
         self.gate = RequestGate(1.5)
         self.catalogs = CreatorCatalogService(time.monotonic)
         self.creator_search = CreatorSearchService(time.monotonic)
+        self.game_search = GameSearch(time.monotonic)
         self.runner = runner or self._analyze
         self.thread = None
         if start_worker:
@@ -283,7 +306,7 @@ class JobManager:
             self.thread.start()
 
     def submit(self, identifier, config, owner, order="priority", creator_request=None, library=False,
-               *, source_job=None, excluded_app_ids=()):
+               *, source_job=None, excluded_app_ids=(), app_ids=None, added_app_ids=()):
         if order not in WISHLIST_ORDERS:
             raise ValueError(f"Unsupported wishlist order: {order!r}")
         with self.lock:
@@ -303,16 +326,17 @@ class JobManager:
                          if job.data["state"] not in TERMINAL or now - job.updated < 3600}
             if any(job.owner == owner and job.data["state"] not in TERMINAL for job in self.jobs.values()):
                 raise BusyError("A comparison is already running from this connection. Wait for it or cancel it first.")
-            # Limit submissions, independently of result updates or title cleanup.
-            recent = sum(job.owner == owner and now - job.created < 60 for job in self.jobs.values())
-            if recent >= 3:
-                raise BusyError("Please wait a minute before starting another comparison.")
-            if len(self.jobs) >= self.max_jobs or self.queue.full():
+            self._prune_completed(now)
+            if sum(job.data["state"] not in TERMINAL for job in self.jobs.values()) >= self.max_jobs or self.queue.full():
                 raise BusyError("The comparison service is busy. Please try again later.")
             job = Job(identifier, config, owner, order, creator_request, library)
+            job.request_app_ids = tuple(app_ids) if app_ids is not None else None
+            job.added_app_ids = tuple(added_app_ids)
             job.excluded_app_ids.update(excluded_app_ids)
             if source_job is not None:
                 with source_job.lock:
+                    job.request_app_ids = source_job.request_app_ids
+                    job.added_app_ids = source_job.added_app_ids
                     job.loaded_items = source_job.loaded_items
                     job.creator_membership = deepcopy(source_job.creator_membership)
                     job.catalog_warnings = list(source_job.catalog_warnings)
@@ -327,6 +351,18 @@ class JobManager:
             emit("job_queued", job_id=job.id)
             self.queue.put_nowait(job)
             return job
+
+    def _prune_completed(self, now):
+        """Retention never consumes active-work capacity. Caller holds manager lock."""
+        total = count = 0
+        completed = sorted((job for job in self.jobs.values() if job.data["state"] in TERMINAL),
+                           key=lambda job: job.updated, reverse=True)
+        for job in completed:
+            size = len(json.dumps(job.snapshot(), ensure_ascii=True).encode("utf-8"))
+            count += 1
+            total += size
+            if now - job.updated >= 3600 or count > self.max_completed_jobs or total > self.completed_bytes:
+                self.jobs.pop(job.id, None)
 
     def change_currencies(self, source_job, config, owner):
         """Queue a new comparison of a completed job's exact loaded selection."""
@@ -394,6 +430,8 @@ class JobManager:
                      state=result["state"], duration_ms=elapsed_ms(started), total=result["total"],
                      checked=len(result["items"]), **diagnostic)
                 job.identifier = ""  # Attribution remains only in the private, expiring result.
+                with self.lock:
+                    self._prune_completed(time.monotonic())
 
     def _analyze(self, job):
         job.update(state="loading", message="Updating comparison currencies…" if job.previous_job_id else
@@ -417,6 +455,8 @@ class JobManager:
             if not wishlist:
                 job.update(state="complete", message="No loaded products to compare.")
                 return
+        elif job.request_app_ids is not None:
+            wishlist = tuple(WishlistItem(app_id) for app_id in job.request_app_ids)
         elif job.creator_request:
             job.update(message="Loading catalog…")
             catalogs = {}
@@ -488,6 +528,10 @@ class JobManager:
                 return
             if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
                 raise ValueError("Invalid app ID")
+        if job.previous_job_id is None and job.request_app_ids is None:
+            wishlist = deduplicate_wishlist((*wishlist, *(WishlistItem(app_id) for app_id in job.added_app_ids)))
+        if len(wishlist) > self.max_games:
+            raise InputError("Too many games in this comparison.")
         with job.lock:
             wishlist = tuple(item for item in wishlist if item.app_id not in job.excluded_app_ids)
             job.loaded_items = wishlist
@@ -534,10 +578,11 @@ class JobManager:
             wishlist,
             rates_to_baseline(rates, job.config.home.currency),
             order=job.order,
-            preserve_order=job.previous_job_id is not None,
+            preserve_order=job.previous_job_id is not None or job.request_app_ids is not None,
         ):
             job.check_cancelled()
             item = asdict(progress)
+            item["manually_added"] = progress.app_id in job.added_app_ids
             if job.creator_request:
                 item["creator_ids"] = creator_membership.get(progress.app_id, [])
             item["source_summary"] = progress.source_summary
@@ -616,6 +661,24 @@ class WebApplication:
                 payload = json.loads(environ["wsgi.input"].read(length))
             except (ValueError, UnicodeDecodeError):
                 return respond("400 Bad Request", {"error": "Invalid request body."})
+            if path == "/api/games/search":
+                try:
+                    if not isinstance(payload, dict) or set(payload) != {"query", "home"} or payload["home"] not in STOREFRONTS:
+                        raise ValueError("Supply a game name and supported storefront.")
+                    service = self.manager.game_search
+                    if not service.lock.acquire(blocking=False):
+                        return respond("429 Too Many Requests", {"error": "A game search is in progress. Try again shortly."})
+                    try:
+                        client = RetryingJsonHttpClient(UrllibJsonHttpClient(timeout=15), gate=self.manager.gate,
+                                                       policy=RetryPolicy(max_attempts=2, maximum_delay=5))
+                        return respond("200 OK", service.search(client, payload["query"], payload["home"]))
+                    finally:
+                        service.lock.release()
+                except (ValueError, TypeError):
+                    return respond("400 Bad Request", {"error": "Enter a game name of 2 to 100 characters and a supported storefront."})
+                except HttpClientError as exc:
+                    return respond("503 Service Unavailable", {"error": NETWORK_ACCESS_MESSAGE if is_network_access_denied(exc)
+                                   else "Steam game search is unavailable. Try again, or enter an App ID."})
             if path == "/api/creators/search":
                 try:
                     if not isinstance(payload, dict) or set(payload) not in ({"query", "home"}, {"query", "home", "role"}):
@@ -659,6 +722,8 @@ class WebApplication:
                         creator_request=creator_request,
                         library=path == "/api/library-jobs",
                         excluded_app_ids=payload.get("excluded_app_ids", []),
+                        app_ids=payload.get("app_ids") if path == "/api/jobs" else None,
+                        added_app_ids=payload.get("added_app_ids", []) if path == "/api/jobs" else (),
                     )
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})

@@ -2679,3 +2679,186 @@ test("touch hold reveals removal without navigating; scrolling cancels and ordin
   link.listeners.pointerdown(down); link.listeners.pointercancel();
   assert.equal([...ctx.timerDelays.values()].includes(500),false);
 });
+
+function additionsSetup(options = {}) {
+  const calls = [], saved = new Map(Object.entries(options.saved || {})), timers = [], delays = [];
+  const ctx = setup({}, {URL, sessionStorage: {getItem: key => saved.get(key) || null,
+    setItem: (key, value) => saved.set(key, value), removeItem: key => saved.delete(key)},
+    setTimeout: (callback, delay) => { timers.push(callback); delays.push(delay); return timers.length; }, clearTimeout: id => { if (id) timers[id - 1] = null; },
+    fetch: async (url, init) => {
+      calls.push({url, body: init?.body ? JSON.parse(init.body) : null});
+      if (options.fetch) return options.fetch(url, init);
+      return {ok:true,json:async()=>({id:'a'.repeat(32),token:'b'.repeat(43)})};
+    }});
+  ctx.run(`lastRequest = {identifier:'76561198000000000',home:'pl',regions:['us'],order:'priority'};
+    items = [${JSON.stringify(game('20','Existing game'))}];
+    displayedWishlist = {request:lastRequest,data:{state:'complete',items,rates:[],total:1}};`);
+  ctx.run(fs.readFileSync('web/games.js','utf8'));
+  return {...ctx, calls, saved, timers, delays};
+}
+const settleAdditions = () => new Promise(resolve => setImmediate(resolve));
+
+test('name search waits four seconds after the last edit; IDs and profiles require submission', async () => {
+  const ctx=additionsSetup({fetch:async()=>({ok:true,json:async()=>({games:[]})})});
+  ctx.get('identifier').value='Ha'; ctx.get('identifier').listeners.input();
+  const first=ctx.timers.length-1;
+  assert.equal(ctx.delays[first],4000);
+  assert.equal(ctx.calls.length,0);
+  ctx.get('identifier').value='Hades'; ctx.get('identifier').listeners.input();
+  assert.equal(ctx.timers[first],null);
+  ctx.timers.at(-1)(); await settleAdditions();
+  assert.deepEqual(ctx.calls.map(call=>call.body.query),['Hades']);
+  for(const input of ['','H','1145360','https://store.steampowered.com/app/1145360/','76561198000000000']) {
+    const before=ctx.timers.length;
+    ctx.get('identifier').value=input; ctx.get('identifier').listeners.input();
+    assert.equal(ctx.timers.length,before);
+  }
+  assert.equal(ctx.calls.length,1);
+});
+
+test('manual search cancels the automatic timer', async () => {
+  const ctx=additionsSetup({fetch:async()=>({ok:true,json:async()=>({games:[]})})});
+  ctx.get('identifier').value='Hades'; ctx.get('identifier').listeners.input();
+  const pending=ctx.timers.length-1;
+  await ctx.run('window.gameAdditions.submit()');
+  assert.equal(ctx.timers[pending],null);
+  assert.equal(ctx.calls.length,1);
+});
+
+test('a newer automatic search waits for the old request and discards stale matches', async () => {
+  let finish;
+  const ctx=additionsSetup({fetch:async()=>({ok:true,json:()=>new Promise(resolve=>finish=resolve)})});
+  ctx.get('identifier').value='Hades'; ctx.get('identifier').listeners.input();
+  ctx.timers.at(-1)(); await settleAdditions();
+  ctx.get('identifier').value='Hollow Knight'; ctx.get('identifier').listeners.input();
+  ctx.timers.at(-1)(); await settleAdditions();
+  assert.equal(ctx.calls.length,1);
+  finish({games:[{app_id:'10',name:'Stale result',kind:'Game'}]}); await settleAdditions();
+  assert.equal(ctx.get('game-matches').children.length,0);
+  assert.deepEqual(ctx.calls.map(call=>call.body.query),['Hades','Hollow Knight']);
+  finish({games:[]}); await settleAdditions();
+});
+
+test('shared input distinguishes profiles, game URLs, IDs and names without confusing bundle links', () => {
+  const ctx=additionsSetup();
+  for(const [input,kind] of [['76561198000000000','profile'],['https://steamcommunity.com/id/example','profile'],
+    ['1145360','game'],['https://store.steampowered.com/app/1145360/Hades/?snr=x','game'],['Hades','search'],
+    ['https://store.steampowered.com/bundle/12/','invalid'],['https://evil.test/app/1145360/','invalid'],['4294967296','invalid']]) {
+    assert.equal(ctx.run(`window.gameAdditions.inputKind(${JSON.stringify(input)}).kind`),kind);
+  }
+});
+
+test('first addition submits immediately and later additions only batch while existing work is busy', async () => {
+  let finish;
+  const ctx=additionsSetup({fetch:async (url) => url==='/api/jobs'
+    ? {ok:true,json:async()=>({id:'a'.repeat(32),token:'b'.repeat(43)})}
+    : {ok:true,json:()=>new Promise(resolve=>finish=resolve)}});
+  ctx.run('window.gameAdditions.add("10", "First addition")');
+  assert.equal(ctx.calls.length,1); // No timeout/debounce before the POST.
+  assert.deepEqual(ctx.calls[0].body.app_ids,['20','10']);
+  ctx.run('window.gameAdditions.add("11"); window.gameAdditions.add("12"); window.gameAdditions.add("11")');
+  await settleAdditions();
+  assert.equal(ctx.calls.filter(call=>call.url==='/api/jobs').length,1);
+  finish({state:'complete',message:'Complete',items:[game('20','Existing'),{...game('10','New'),manually_added:true}],rates:[],total:2});
+  await settleAdditions();
+  const posts=ctx.calls.filter(call=>call.url==='/api/jobs');
+  assert.equal(posts.length,2);
+  assert.deepEqual(posts[1].body.app_ids,['20','10','11','12']);
+  assert.deepEqual(posts[1].body.added_app_ids,['10','11','12']);
+});
+
+test('additions use displayed currencies and preserve the old snapshot after a failed submission', async () => {
+  const ctx=additionsSetup({fetch:async()=>({ok:false,status:429,json:async()=>({error:'Service busy'})})});
+  ctx.run('window.gameAdditions.add("10")');
+  await settleAdditions();
+  assert.deepEqual(ctx.calls[0].body.regions,['us']);
+  assert.equal(ctx.run('items[0].app_id'),'20');
+  assert.equal(ctx.get('games-retry').hidden,false);
+  assert.match(ctx.get('games-status').textContent,/Service busy/);
+  assert.equal(JSON.parse(ctx.saved.get('polisher-game-additions')).queued[0][0],'10');
+});
+
+test('search does not start a comparison until a match is selected and renders names as text', async () => {
+  const ctx=additionsSetup({fetch:async(url)=>({ok:true,json:async()=>url==='/api/games/search'
+    ? {games:[{app_id:'10',name:'<b>Game</b>',kind:'Game'}]}
+    : {id:'a'.repeat(32),token:'b'.repeat(43)}})});
+  ctx.get('identifier').value='Game';
+  await ctx.run('window.gameAdditions.submit()');
+  assert.equal(ctx.calls.length,1);
+  assert.equal(ctx.calls[0].url,'/api/games/search');
+  assert.match(ctx.get('game-matches').children[0].children[1].textContent,/<b>Game<\/b>/);
+  assert.equal(ctx.get('game-matches').children[0].children[0].textContent,'Add');
+  ctx.get('game-matches').children[0].children[0].listeners.click();
+  assert.equal(ctx.calls[1].url,'/api/jobs');
+});
+
+test('permanently removed games can be explicitly re-added without exclusions on the fresh job', () => {
+  const ctx=additionsSetup();
+  ctx.run('wishlistRemovals.restore({removed:["10"],sources:[]}); window.gameAdditions.add("10")');
+  assert.equal(ctx.run('wishlistRemovals.has("10")'),false);
+  assert.deepEqual(ctx.calls[0].body.app_ids,['20','10']);
+  assert.equal(ctx.calls[0].body.excluded_app_ids,undefined);
+});
+
+test('manual unavailable games remain visible and their CSV never implies wishlist ownership', () => {
+  const ctx=additionsSetup();
+  ctx.run(`items=[${JSON.stringify({...skipped('10','no_regional_price'),manually_added:true})}]; render();`);
+  assert.equal(ctx.get('rows').children.length,1);
+  const csv=ctx.run(`buildPriceCsv(items,'pl',[],{sourceTab:'wishlist',includeOwner:true,profile:'secret-profile',regions:['us']})`);
+  assert.match(csv,/manually_added/);
+  assert.doesNotMatch(csv,/secret-profile/);
+});
+
+test('reloading an active addition reconnects without submitting the selection twice', async () => {
+  const request = {identifier:'example',home:'pl',regions:['us'],order:'priority',app_ids:['20','10'],added_app_ids:['10']};
+  const ctx=additionsSetup({saved:{'polisher-game-additions':JSON.stringify({queued:[['10','New']],
+    batch:{ids:['10'],request,job:{id:'a'.repeat(32),token:'b'.repeat(43)}},paused:false})},
+    fetch:async()=>({ok:true,json:async()=>({state:'complete',message:'Done',items:[game('20','Existing'),
+      {...game('10','New'),manually_added:true}],rates:[],total:2})})});
+  await settleAdditions();
+  assert.equal(ctx.calls.length,1);
+  assert.equal(ctx.calls[0].url,'/api/jobs/'+'a'.repeat(32));
+  assert.equal(ctx.run('items.length'),2);
+  assert.equal(ctx.run('window.gameAdditions.busy'),false);
+  assert.deepEqual(JSON.parse(ctx.saved.get('polisher-game-additions')).queued,[]);
+  assert.equal(ctx.get('results-title').textContent,'Example + added games');
+  assert.match(ctx.get('profile-attribution').textContent,/manually added/);
+});
+
+test('cancelled additions keep the previous comparison and an explicit retry queue', async () => {
+  const ctx=additionsSetup({fetch:async url=>({ok:true,json:async()=>url==='/api/jobs'
+    ? {id:'a'.repeat(32),token:'b'.repeat(43)}
+    : {state:'cancelled',message:'Cancelled',items:[],rates:[],total:2}})});
+  ctx.run('window.gameAdditions.add("10")');
+  await settleAdditions();
+  assert.equal(ctx.run('items.length'),1);
+  assert.equal(ctx.run('items[0].app_id'),'20');
+  assert.equal(ctx.get('games-retry').hidden,false);
+  const saved=JSON.parse(ctx.saved.get('polisher-game-additions'));
+  assert.equal(saved.paused,true);
+  assert.deepEqual(saved.queued,[['10','Steam app 10']]);
+});
+
+test('expired currency updates recreate the exact selection with manual provenance and exclusions', async () => {
+  const ctx=additionsSetup({fetch:async url=>({ok:true,json:()=>url==='/api/jobs'
+    ? Promise.resolve({id:'a'.repeat(32),token:'b'.repeat(43)}) : new Promise(()=>{})})});
+  ctx.run(`lastRequest.app_ids=['20','10']; lastRequest.added_app_ids=['10']; wishlistExpired=true;
+    wishlistRemovals.restore({removed:['20'],sources:[]});
+    updateWishlistCurrencies({home:'us',regions:['pl']});`);
+  await settleAdditions();
+  const post=ctx.calls.find(call=>call.url==='/api/jobs');
+  assert.deepEqual(post.body.app_ids,['20','10']);
+  assert.deepEqual(post.body.added_app_ids,['10']);
+  assert.deepEqual(post.body.excluded_app_ids,['20']);
+  assert.equal(post.body.home,'us');
+  assert.equal(ctx.run('items[0].app_id'),'20'); // The old snapshot remains until completion.
+});
+
+test('removal cleanup credentials survive more than twenty sequential additions', () => {
+  const ctx=additionsSetup();
+  ctx.run(`for(let i=0;i<25;i++) wishlistRemovals.register({id:String(i).padStart(32,'a'),token:'b'.repeat(43)});
+    window.restoredRemovals=createTitleRemovals('restored',()=>{},()=>{},()=>{});
+    window.restoredRemovals.restore(wishlistRemovals.serialize());`);
+  assert.equal(ctx.run('window.restoredRemovals.serialize().sources.length'),25);
+  assert.equal(ctx.run('window.restoredRemovals.serialize().sources[0].id'),'0'.padStart(32,'a'));
+});

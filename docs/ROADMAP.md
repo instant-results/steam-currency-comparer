@@ -5,6 +5,15 @@ release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
 
+## Implemented on feature/single-game-comparison (0.9.0)
+
+- Shared profile/game input, anonymous name search, additions and immediate-or-queued
+  execution with no batching timer. Persistent selections, manual CSV attribution
+  and removal/re-addition support.
+- Active-work capacity separated from completed-result retention. Public session
+  ownership, fair scheduling and measured abuse limits remain deployment work;
+  see DEPLOYMENT.md. No publication or deployment is implied.
+
 ## Completed in 0.8.0
 
 Individual title removal excludes rows from the current comparison and CSV

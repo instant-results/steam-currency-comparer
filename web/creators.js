@@ -586,6 +586,7 @@
     document.getElementById("currencies-step").textContent = catalog ? "01 / CURRENCIES" : "02 / CURRENCIES";
     document.getElementById("wishlist-panel").hidden = tab !== "wishlist";
     document.getElementById("compare-form").hidden = tab !== "wishlist";
+    document.getElementById("game-discovery").hidden = tab !== "wishlist";
     document.getElementById("library-panel").hidden = tab !== "library";
     document.getElementById("library-compare-form").hidden = tab !== "library";
     window.libraryPane?.activate(tab === "library");

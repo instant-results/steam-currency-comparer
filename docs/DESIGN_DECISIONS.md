@@ -202,3 +202,16 @@ every label or use text spaces to produce the alignment.
 Check desktop and narrow layouts for a consistent 6px caption inset, unchanged
 input text padding and no page overflow. Verify label associations and dropdown
 keyboard behavior. Keep the library control behind its existing feature flag.
+
+## Individual game additions
+
+Use the existing profile field for a public profile, game App ID, Steam app URL
+or game name. Change its submit label to match the detected input. Name matches
+appear below as text with product type and App ID, with an Add button on the left.
+Search names after four seconds without typing; reset the timer on each edit,
+discard stale responses, and keep explicit submission for profiles and App IDs.
+Keep the field usable during loading so additional selections can be queued.
+Start immediately while idle; batch only already queued selections. Do not add a
+debounce window to delay price comparisons. Keep prior results visible while the
+new selection is compared, and use its displayed currencies. Mark manual rows
+without introducing a new table column. Keep long matches wrapping at narrow widths.

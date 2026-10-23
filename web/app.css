@@ -1640,3 +1640,18 @@ td:first-child { min-width: 0; }
   .removal-notices { bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
   .removal-notice { padding-left: 16px; padding-right: 16px; gap: 10px; }
 }
+
+/* Shared profile/game input results keep long titles within the viewport. */
+.game-discovery { min-width: 0; padding: 0 24px 20px; grid-column: 1 / -1; }
+.game-discovery:not(:has(li)):has(#games-status:empty) { display: none; }
+.game-choices { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.game-choices li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.game-choices li span { min-width: 0; overflow-wrap: anywhere; }
+.game-choices button { flex-shrink: 0; }
+#game-matches li { display: grid; grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
+.game-discovery button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
+.game-discovery button:hover:not(:disabled) { background: var(--blue-subtle); }
+.manual-game-label { display: block; color: #8eaccd; font-size: 11px; font-weight: 400; margin-top: 4px; }
+@media (min-width: 1450px) { .game-discovery { padding-inline: 30px; } }
+@media (max-width: 1100px) { .game-discovery { padding-inline: 18px; } }
+@media (max-width: 600px) { .game-choices li { align-items: flex-start; flex-direction: column; } }

@@ -165,6 +165,66 @@ removal at the limit is refused with an explanation. Cleanup uses batches of
 a fresh wishlist comparison, clears removals and ends pending Undo notices.
 **Update currencies** and **Retry currency update** retain removals.
 
+## Add individual games
+
+Use the same field as the Steam profile. A 17-digit SteamID64 or profile URL
+loads a wishlist; a game App ID or Steam `/app/` URL adds a game to the current
+comparison. Enter a name and pause typing for four seconds (or press Search games),
+then choose Add to the left of the intended match. DLC and soundtracks are labeled
+separately. Package and bundle URLs are not accepted as App IDs. Search uses the displayed baseline
+storefront and needs no key, cookies or sign-in; availability and matches can vary
+by country. It is a bounded suggestion list, not an exhaustive catalog search.
+
+An idle comparison starts the addition immediately. Games selected while work is
+running appear in a queue below the field; selections already waiting are combined
+when the worker becomes available. There is no deliberate batching timer. Duplicate
+selections are ignored. Remove queued games before they start, or cancel an active
+addition and explicitly retry the saved queue later. Name search alone does not
+start a price comparison. Up to 1,000 games, including queued additions, are allowed.
+
+Additions use the displayed currencies, even when the setup panel contains unapplied
+choices. Existing results remain visible until the new complete/partial snapshot is
+ready. The worker compares the retained selection and new IDs together, reusing fresh
+observations and refreshing expired ones, so prices and exchange rates remain consistent.
+The original wishlist is not fetched again for an addition. Failed additions leave
+the prior snapshot intact. Reload reconnects active additions or offers retry after
+expiry. Restored queued work waits for any active comparison. Starting another
+wishlist replaces the comparison and clears its pending additions.
+
+Manual games carry a Manually added label; even missing-price manual rows stay visible
+unless hidden by an explicit filter. They participate in counts, sorting, currency
+updates, removal and CSV. Explicitly adding a removed game clears its exclusion for
+the new job; old-job cleanup cannot remove it from that new job. Undo remains available
+for seven seconds. No action modifies the actual Steam wishlist.
+
+CSV schema 1 appends `manually_added` (true/false). Manual rows have no wishlist-profile
+attribution, even when profile export is enabled, and are not labeled example data.
+Saved comparisons with explicit selections recreate those IDs after server expiry,
+including manual additions; they do not need to rediscover the wishlist. Retry comparison
+rechecks the retained selection. Submitting a profile again loads its current wishlist.
+
+### Backend game search and explicit selections
+
+Send a same-origin JSON POST to `/api/games/search` with
+`{"query":"Hades","home":"pl"}`. Names must contain 2 to 100 characters after
+trimming. The response contains `games`, with `app_id`, `name` and `kind` for each
+match. Steam SearchSuggestions supplies up to 20 app matches; packages and bundles
+are excluded. Successful searches are cached for ten minutes by case-insensitive
+query and storefront, with at most 128 cache entries. One game search runs at a
+time, sharing Steam request pacing with comparisons. Busy searches return 429;
+upstream failures return a controlled 503 error. No job token is required.
+
+To compare an exact selection, POST to `/api/jobs` with the usual `identifier`,
+`home`, `regions` and optional `order`, plus `app_ids` and `added_app_ids`.
+Each supplied ID list contains 1 to 1,000 unique canonical positive 32-bit App ID
+strings; `added_app_ids` must be a subset of `app_ids` when both are supplied.
+Use `identifier: "selection"` with a nonempty `app_ids` list when no profile is
+associated with the comparison. Explicit `app_ids` preserve list order and skip
+wishlist discovery. `added_app_ids` marks manual provenance; without `app_ids`,
+these IDs are appended to the discovered wishlist, subject to the total game limit.
+The existing job-token polling, cancellation, removal and currency-update routes
+apply. Currency updates retain the exact selection and manual provenance.
+
 ## Owned library
 
 **Deferred / hidden by default.** This prototype is retained for internal testing;
@@ -722,7 +782,8 @@ and remains available until its normal expiry. Clients should keep it displayed
 while the new job runs, then adopt the new result and currencies together. A failed
 or cancelled attempt can be retried by submitting against the original completed
 job. Concurrent currency changes for the same chain of comparisons are rejected,
-even from another connection; existing owner, capacity and start-rate limits apply.
+even from another connection; existing owner and capacity limits apply. Sequential comparisons have no
+per-minute start limit; Steam requests still share the 1.5-second pacing gate.
 
 The operation reuses the exact loaded selection and emitted game order. It does
 not reload a wishlist, owned library, catalog page or creator search. Catalog
