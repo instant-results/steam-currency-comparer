@@ -19,13 +19,37 @@
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
+    const removals = createTitleRemovals(kind, () => {
+      for (const group of groups.values()) group.products = group.products.filter(product => !removals.has(product.app_id));
+      for (const id of results.keys()) if (removals.has(id)) results.delete(id);
+      renderGroups(); save();
+    }, record => {
+      if (record.item && !record.item.pending) results.set(record.item.app_id, record.item);
+      for (const [id, product] of record.memberships) {
+        const group = groups.get(id);
+        if (!group || group.products.some(value => value.app_id === product.app_id)) continue;
+        group.products.push(product);
+        group.products.sort((a, b) => group.order.get(a.app_id) - group.order.get(b.app_id));
+      }
+    }, text => message(text, true));
+
+    function removeTitle(appId) {
+      const memberships = new Map();
+      for (const [id, group] of groups) {
+        const product = group.products.find(value => value.app_id === appId);
+        if (product) memberships.set(id, product);
+      }
+      if (!memberships.size) return;
+      const item = results.get(appId) || {...memberships.values().next().value, pending: true};
+      removals.remove(appId, item.name, {item, memberships});
+    }
 
     function save() {
       try {
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
-          results: [...results.values()], rates: creatorRates, currencyUpdating, currencyRetry, completedComparison}));
+          results: [...results.values()], rates: creatorRates, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize()}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
 
@@ -132,7 +156,8 @@
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
           discoveryHome: creatorHome,
-          expanded: !creator.examples.length, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map()});
+          expanded: !creator.examples.length, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map(),
+          order: new Map(creator.examples.map((product, index) => [product.app_id, index]))});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
       renderGroups();
@@ -219,7 +244,7 @@
         // Preserve unavailable paid products; missing prices alone do not mean free.
         group.products = group.products.filter(product => {
           const item = results.get(product.app_id);
-          return !item?.is_free && item?.comparison?.home_price?.amount !== 0;
+          return !removals.has(product.app_id) && !item?.is_free && item?.comparison?.home_price?.amount !== 0;
         });
         renderStatistics(group);
         group.columns.replaceChildren(...tableColumns());
@@ -235,7 +260,7 @@
           const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
-            const row = comparisonRow(item, creatorHome, false, creatorRegions);
+            const row = comparisonRow(item, creatorHome, false, creatorRegions, removeTitle);
             row.children[2].className += " catalog-foreign-price";
             const role = kind === "developer" ? "Publisher" : "Developer";
             const names = item[kind === "developer" ? "publishers" : "developers"];
@@ -261,13 +286,18 @@
         if (!group) continue;
         group.expanded = true;
         const known = new Set(group.products.map(item => item.app_id));
-        for (const product of page.products) if (!known.has(product.app_id)) {
-          group.products.push(product); known.add(product.app_id);
+        for (const product of page.products) {
+          if (!group.order.has(product.app_id)) group.order.set(product.app_id, group.order.size);
+          if (removals.has(product.app_id)) {
+            removals.pending(product.app_id)?.memberships.set(id, product);
+          } else if (!known.has(product.app_id)) {
+            group.products.push(product); known.add(product.app_id);
+          }
         }
         group.nextStart = page.next_start; group.hasMore = page.has_more; group.total = page.total;
         group.discoveryHome = savedRequest.home;
       }
-      for (const item of data.items) results.set(item.app_id, item);
+      for (const item of removals.filter(data.items)) results.set(item.app_id, item);
       if (data.rates?.length) creatorRates = data.rates;
       renderGroups(); save();
     }
@@ -287,7 +317,7 @@
               ? `Updated to ${currencyLabel(savedRequest)}. ${data.message}` : `Currency update ${data.state}.`;
             if (updating && ["complete", "partial"].includes(data.state)) {
               creatorHome = savedRequest.home; creatorRegions = [...savedRequest.regions]; creatorRates = data.rates || [];
-              results.clear(); for (const item of data.items) results.set(item.app_id, item);
+              results.clear(); for (const item of removals.filter(data.items)) results.set(item.app_id, item);
               currencyRetry = null; completedComparison = true; defaultsChanged = false;
               renderGroups();
             } else if (!updating && ["complete", "partial"].includes(data.state)) completedComparison = true;
@@ -329,7 +359,9 @@
       $("creators-progress").textContent = preserve ? `Updating to ${currencyLabel(body)}… Displayed results remain available.` : "Connecting to Steam…";
       save();
       try {
-        creatorJob = await request("/api/creator-jobs", {method: "POST", body: JSON.stringify(body)});
+        const excluded = removals.exclusions();
+        creatorJob = await request("/api/creator-jobs", {method: "POST", body: JSON.stringify({...body, ...(excluded.length ? {excluded_app_ids: excluded} : {})})});
+        removals.register(creatorJob);
         save(); refreshControls(); pollCreators();
       } catch (error) {
         currencyUpdating = false; setCreatorBusy(false); message(`${error.message}${preserve ? " Displayed results are unchanged. Retry the currency update." : ""}`, true); save();
@@ -339,7 +371,7 @@
 
     function updateCurrencies(selected = selections()) {
       if (!initialized || comparisonCoordinator.busy || !validCurrencies(selected)) return;
-      const appIds = [...new Set([...groups.values()].flatMap(group => group.products.map(item => item.app_id)))];
+      const appIds = loadedProductIds();
       if (!appIds.length || appIds.length > 1000) { message("Currency updates support 1 to 1,000 loaded products.", true); return; }
       startCreators({...selected, mode: "products", app_ids: appIds}, true);
     }
@@ -350,7 +382,7 @@
       if (results.size) { updateCurrencies(currencyRetry || selected); return; }
       if (!selected.regions.length) { message("Choose one or more comparison currencies.", true); return; }
       const mode = "products";
-      const appIds = [...new Set([...groups.values()].flatMap(group => group.products.map(item => item.app_id)))];
+      const appIds = loadedProductIds();
       if (!appIds.length) { message("No products loaded yet. Search for a catalog to compare."); return; }
       if (appIds.length > 1000) { message("Refresh supports up to 1,000 displayed products. Open the app in a new tab to start with the featured games.", true); return; }
       if (selected.home !== creatorHome) {
@@ -367,6 +399,13 @@
       const creator = creators.find(c => c.id === id);
       startCreators({home: creatorHome, regions: creatorRegions, mode: "catalog", creator_id: id,
         ...(creator.selector ? {selector: creator.selector} : {}), start: groups.get(id).discoveryHome === creatorHome ? groups.get(id).nextStart : 0});
+    }
+
+    function loadedProductIds() {
+      // Pending Undo entries still need fresh offers if currencies change within seven seconds.
+      const ids = [...groups.values()].flatMap(group => group.products.map(item => item.app_id));
+      for (const id of removals.serialize().removed) if (removals.pending(id)) ids.push(id);
+      return [...new Set(ids)];
     }
 
     function safeCreator(value) {
@@ -436,6 +475,7 @@
       defaultsChanged = oldDefaults.length > 0 && (oldDefaults.length !== defaultIds.size ||
         [...defaultIds].some(id => !oldDefaults.includes(id)));
       creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
+      removals.restore(saved.removals);
       completedComparison = saved.completedComparison ?? !!saved.results?.length;
       currencyRetry = validCurrencies(saved.currencyRetry) ? saved.currencyRetry : null;
       currencyUpdating = saved.currencyUpdating === true && validCurrencies(saved.request) && saved.request.mode === "products";
@@ -454,11 +494,12 @@
         updateSelections();
       }
       $("creator-show-credits").checked = saved.showCredits === true;
-      for (const item of saved.results || []) if (/^[0-9]{1,12}$/.test(item.app_id)) results.set(item.app_id, item);
+      for (const item of removals.filter(saved.results || [])) if (/^[0-9]{1,12}$/.test(item.app_id)) results.set(item.app_id, item);
       for (const catalog of saved.catalogs || []) {
         const group = groups.get(catalog.id);
         if (!group || !Array.isArray(catalog.products) || !Number.isInteger(catalog.nextStart) || catalog.nextStart < 0) continue;
-        group.products = catalog.products.filter(item => /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string");
+        group.order = new Map(catalog.products.map((product, index) => [product.app_id, index]));
+        group.products = catalog.products.filter(item => !removals.has(item.app_id) && /^[0-9]{1,12}$/.test(item.app_id) && typeof item.name === "string");
         group.nextStart = catalog.nextStart; group.hasMore = catalog.hasMore; group.total = catalog.total;
         group.discoveryHome = Object.hasOwn(storefronts, catalog.discoveryHome) ? catalog.discoveryHome : saved.home;
         group.statisticsExpanded = catalog.statisticsExpanded === true;
@@ -467,6 +508,7 @@
           group.products.some(product => !featuredIds.has(product.app_id));
       }
       if (saved.job && /^[A-Za-z0-9_-]{32}$/.test(saved.job.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.job.token)) {
+        removals.register(saved.job);
         creatorJob = saved.job; savedRequest = saved.request; setCreatorBusy(true); pollCreators();
       } else { currencyUpdating = false; $("creators-progress").textContent = "Restored catalog results. Refresh comparisons for a new price check."; }
       renderGroups(); return true;

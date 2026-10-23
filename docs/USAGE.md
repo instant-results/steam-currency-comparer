@@ -113,6 +113,58 @@ matches. The current tab's **Refresh comparisons** also preserves displayed resu
 until its loaded-product update finishes; after a failed update it retries that
 selection. Adding or expanding catalogs continues using their displayed currencies.
 
+## Remove titles from a comparison
+
+Hover over a game's thumbnail to reveal the circular × overlapping its top-right
+corner. Keyboard focus within the thumbnail reveals it too; on touch devices, hold the thumbnail for half a second, release, then tap ×.
+Scrolling or tapping elsewhere hides it. Ordinary taps still open Steam. A hint
+appears until the first successful hold in the browser tab. The button removes the entire title, including its default and best
+offers, from the current comparison. Rows, counts, catalog statistics and CSV
+update immediately. This differs from search and display filters: removed titles
+are excluded from exports even while Undo remains available.
+
+Each removal creates a pale-blue notice fixed near the bottom center of the
+viewport. It identifies the title and Steam App ID and offers **Undo** for seven
+seconds. Hovering or focusing a notice does not pause its timer. The stack holds
+at most four notices: three standard-height notices and an oldest notice at 65%
+height. A fifth removal immediately finalizes the oldest one. Each remaining
+notice keeps its own deadline. Undo restores original loading order and all
+applicable catalog memberships; current filters and sorting still apply.
+
+In Developers or Publishers, removing a title removes it from every selected
+catalog in that tab. Their counts, average/median differences and coverage update
+together. Other tabs retain their independent comparisons. Steam wishlist and
+account contents are not changed.
+
+The browser keeps removed row data only in the temporary Undo buffer, not in
+session storage or CSV. Expiry or early finalization releases that buffer and
+requests permanent cleanup of retained server-job records and loaded selections.
+Small ID-only exclusion lists prevent late results from reintroducing rows.
+Shared regional price and metadata caches retain their normal freshness rules.
+If server cleanup cannot connect, it retries using IDs and job credentials without
+keeping the deleted row data. Reload resumes pending cleanup from saved exclusions.
+
+Removal survives polling, currency updates, catalog expansion and reload
+in the same browser tab. Currency updates during Undo retain the pending title in
+their retrieval selection so Undo can restore prices in the newly displayed
+currencies. Reloading/leaving the page or explicitly starting a new wishlist
+comparison ends the previous Undo window. A new wishlist comparison starts with
+the full fetched list; previously removed titles may appear again.
+
+For programmatic cleanup, same-origin JSON POST `/api/jobs/{id}/remove` accepts
+`{"app_ids":["413150"]}` with that job's bearer token. This is a permanent,
+idempotent operation; it removes retained row records, source selections and
+catalog memberships, including before a running worker emits the title. It does
+not delete shared price caches. Recreated wishlist or catalog submissions can
+include an `excluded_app_ids` list; input validation permits up to 10,000 distinct
+numeric IDs. The browser applies the Undo window before invoking cleanup.
+
+Removal history retains up to 10,000 App IDs per comparison tab. Additional
+removal at the limit is refused with an explanation. Cleanup uses batches of
+1,000 IDs; fetched-product limits remain unchanged. **Retry comparison** starts
+a fresh wishlist comparison, clears removals and ends pending Undo notices.
+**Update currencies** and **Retry currency update** retain removals.
+
 ## Owned library
 
 **Deferred / hidden by default.** This prototype is retained for internal testing;

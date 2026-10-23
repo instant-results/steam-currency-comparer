@@ -54,6 +54,39 @@ usual identity widths when regional columns overflow, and retain fixed baseline,
 storefront and Difference widths. Share the region count with the scrollbar
 surface so pinned offsets and scrollbar padding follow the expanded identity.
 
+## Title removal and Undo notices
+
+The remove button is a circular blue × overlapping the thumbnail's top-right
+corner by 10px. Use the existing offer-help close-control palette and geometric
+cross; keep it independent from Steam artwork/title links. Reveal it on thumbnail
+hover and keyboard focus. Preserve the artwork dimensions, comparison column
+widths and credit alignment.
+
+Touch removal uses a 500 ms thumbnail hold to reveal the control, followed by a
+separate tap to remove. Movement cancels the hold; scrolling and outside taps
+hide the control. Mouse hover and keyboard focus remain supported.
+
+
+Use the established pale-blue bubble palette, dark text, rounded corners and
+blue buttons for Undo notices. Fix one shared stack near the viewport's
+bottom center, with safe-area and narrow-screen clearance. Show the title, Steam
+App ID and a separately labelled Undo button. Keep text and targets full size:
+the oldest fourth notice uses 65% of the standard 100px height rather than scaling
+its contents. The other three notices retain standard height. A fifth removal
+finalizes the oldest notice. A seven-second countdown strip is decorative;
+reduced-motion mode omits its animation. Hover/focus never pauses expiry.
+
+Remove rows, CSV data and statistical contributions immediately. Undo restores
+every occurrence within the current tab and original loading positions while
+respecting current filters/sorts. Use one stack across the three visible tabs,
+with independent removal state per tab. Do not add the feature to the deferred
+owned-library interface.
+
+Verify mouse, keyboard and touch access, table alignment, long titles, duplicate
+catalog memberships, independent deadlines, rapid fifth removals, late results,
+empty comparisons, reload, CSV and currency-update behavior. Keep the Undo buffer
+out of session storage and release row references at finalization.
+
 ## Currency picker flags
 
 Display a 24px circular flag at the end of every baseline and comparison card,
@@ -74,7 +107,8 @@ no flag CDN is needed at runtime. Rebuild web/flags.svg with
 
 Wishlist Retry comparison belongs beside Compare regional prices in the setup
 form, with the same button dimensions and typography and a secondary blue style.
-Keep it a non-submit button with its existing retry behavior and visibility rules.
+Keep it a non-submit button. Retry comparison starts fresh and clears removals;
+Retry currency update preserves the current selection and its removals.
 Wrap the pair on narrow screens; the results footer retains the result count.
 
 On wide layouts, place result filters, Show unavailable products and the Steam

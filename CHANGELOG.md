@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 — 2026-10-23
+
+- Remove individual titles with a circular × overlapping their thumbnail. Exclude
+  removed titles from rows, saved results, totals, catalog statistics and CSV
+  immediately. Offer seven seconds of Undo in a fixed stack of at most four
+  notices, identifying titles and Steam App IDs. Compact the oldest fourth notice
+  to 65% height; a fifth removal finalizes it early. Remove every occurrence in
+  the current catalog tab, with other tabs independent. Retain removals through
+  polling, reload, catalog expansion and currency updates.
+- Reveal removal controls with a half-second thumbnail hold on touch devices,
+  followed by a separate tap. Cancel holds on movement; hide controls on scroll
+  or outside taps. Keep mouse hover and keyboard access. Center Undo notices
+  horizontally at the bottom of the screen.
+- Retain up to 10,000 removed App IDs per tab, with bounded cleanup batches and
+  explicit overflow handling. Retry comparison starts fresh and clears removals;
+  currency updates and their retries retain them.
+- Count comparison submissions by their creation time so title cleanup does not
+  consume the three-submissions-per-minute allowance.
+
 ## 0.7.3 — 2026-10-23
 
 - Format currency summaries with commas and a final ", and" for three or four

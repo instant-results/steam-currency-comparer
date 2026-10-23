@@ -1,9 +1,16 @@
 # Development roadmap
 
-Updated: 2026-10-22. These are development directions, without delivery dates or
+Updated: 2026-10-23. These are development directions, without delivery dates or
 release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
+
+## Completed in 0.8.0
+
+Individual title removal excludes rows from the current comparison and CSV
+immediately, with seven seconds of Undo. Thumbnail controls, the bounded notice
+stack, catalog-wide membership removal and persistence are described in
+[the usage guide](USAGE.md#remove-titles-from-a-comparison).
 
 ## Completed in 0.7.3
 
@@ -23,13 +30,6 @@ compact directional indicators. Sticky storefront borders and spare desktop
 identity width are aligned with the price columns. See the changelog for details.
 
 ## Planned improvements
-
-### Game titles and artwork
-
-The currency panel now sits above the comparison and collapses during loading,
-freeing width for game identity. Desktop titles use a wider, adaptive column;
-narrow layouts retain identity above prices. Evaluate further thumbnail and
-title refinements against this layout without squeezing the price columns.
 
 ### Interface clarity
 
