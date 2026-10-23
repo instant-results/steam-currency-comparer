@@ -181,7 +181,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(self.request(path, token=job["token"])["json"]["state"], "cancelled")
 
     def test_cross_origin_and_invalid_bodies_do_not_create_jobs(self):
-        for overrides in [{"HTTP_ORIGIN": "https://evil.test"}, {"HTTP_ORIGIN": ""}, {"CONTENT_TYPE": "text/plain"}, {"CONTENT_LENGTH": "99999"}]:
+        for overrides in [{"HTTP_ORIGIN": "https://evil.test"}, {"HTTP_ORIGIN": ""}, {"CONTENT_TYPE": "text/plain"}, {"CONTENT_LENGTH": "262145"}]:
             self.assertIn(self.request("/api/jobs", "POST", {"identifier": PROFILE, "regions": ["de"]}, **overrides)["status"], {400, 403})
         self.assertEqual(len(self.manager.jobs), 0)
 

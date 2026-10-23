@@ -169,7 +169,7 @@ const savedLibrary = (items, extra = {}) => ({items, request:{identifier:"765611
 function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false, initialSnapshots = [], ownedLibraryEnabled = loadLibrary, registryWait = null, allStorefronts = false) {
   const examples = [{app_id:"1",name:"First"},{app_id:"2",name:"Second"},{app_id:"3",name:"Third"}];
   const registry = [{id:"studio",name:"Studio",selector:{kind,name:"Studio"},role:kind,homepage:"https://store.steampowered.com/developer/studio/",icon:"https://avatars.fastly.steamstatic.com/icon.jpg",examples}];
-  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], submissions = [], timers = new Map();
+  const storage = new Map(Object.entries(savedValues)), calls = [], snapshots = [...initialSnapshots], searches = [], submissions = [], timers = new Map(), timerDelays = new Map();
   let timerId = 0;
   const radios = Object.keys(allStorefronts ? JSON.parse(fs.readFileSync("steam_price_polisher/storefronts.json","utf8")) : {pl:1,us:1,de:1,no:1,gb:1}).map(value => { const el = new Element("input"); el.value = value; el.name = "home"; el.checked = value === "pl"; return el; });
   const regions = radios.map(radio => { const el = new Element("input"); el.value = radio.value; el.name = "region"; el.checked = ["us","de"].includes(el.value); const label = new Element("label"); el.closest = () => label; return el; });
@@ -179,7 +179,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
   selectors[".library-filter"] = libraryFilters; selectors[".library-sort"] = librarySorts;
   const testContext = setup(selectors, {
     sessionStorage:{getItem:key => storage.get(key) || null,setItem:(key,value) => storage.set(key,value)},
-    setTimeout:callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout:id => timers.delete(id),
+    setTimeout:(callback, delay) => { timers.set(++timerId, callback); timerDelays.set(timerId, delay); return timerId; }, clearTimeout:id => { timers.delete(id); timerDelays.delete(id); },
     fetch:async (path, options = {}) => {
       calls.push({path,body:options.body ? JSON.parse(options.body) : null, authorization:options.headers?.Authorization});
       let data;
@@ -194,6 +194,7 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
       }
       else if (path === "/api/jobs" || path === "/api/creator-jobs" || path === "/api/library-jobs" || path.endsWith("/currencies")) data = submissions.shift() || {id:(path.endsWith("/currencies") ? "u" : "a").repeat(32),token:(path.endsWith("/currencies") ? "v" : "b").repeat(43)};
       else if (path.endsWith("/cancel")) data = {state:"cancelling"};
+      else if (path.endsWith("/remove")) data = {removed:JSON.parse(options.body).app_ids};
       else data = snapshots.shift() || {state:"complete",message:"Checked 3 games.",catalogs:{},items:examples.map(item => game(item.app_id,item.name)),rates:[],warnings:[]};
       return {ok:!data.httpStatus,status:data.httpStatus || 200,json:async () => data};
     }
@@ -207,12 +208,184 @@ function creatorSetup(savedValues = {}, kind = "developer", loadLibrary = false,
   const get = id => testContext.get(id.replace(/^creators-/, kind + "s-").replace(/^creator-/, kind + "-"));
   const group = () => get("creator-groups").children[0];
   const body = () => group().children[1].children[0].children[0].children[2];
-  return {...testContext,get,calls,storage,snapshots,searches,submissions,radios,regions,timers,group,body,libraryFilters,librarySorts};
+  return {...testContext,get,calls,storage,snapshots,searches,submissions,radios,regions,timers,timerDelays,group,body,libraryFilters,librarySorts};
 }
 
 const wishlistSnapshot = (state = "complete", extra = {}) => ({...librarySnapshot([game("1", "Example game")], state), profile:"example", ...extra});
 const savedWishlist = (identifier = "76561198000000000") => JSON.stringify({id:"w".repeat(32),token:"t".repeat(43),
   request:{identifier,home:"gb",regions:["us"],order:"date_added"}});
+
+function removalWishlist(count = 3) {
+  const ctx = creatorSetup();
+  const data = Array.from({length:count}, (_, index) => game(String(index + 1), `Title ${index + 1}`));
+  ctx.run(`job = {id:"a".repeat(32), token:"b".repeat(43)};
+    lastRequest = {identifier:"example",home:"pl",regions:["us"],order:"priority"};
+    displayedWishlist = {request:lastRequest,data:{items:${JSON.stringify(data)},rates:[],state:"complete",total:${count}}};
+    applyWishlistSnapshot(displayedWishlist.data,lastRequest); wishlistRemovals.register(job);`);
+  return ctx;
+}
+function expireRemoval(ctx, owner, id) {
+  const timer = ctx.run(`removalNotices.find("${owner}", "${id}").timer`);
+  const callback = ctx.timers.get(timer); ctx.timers.delete(timer); callback();
+}
+const findRemovalButton = row => row.children[0].children[0].children[0].children[1];
+
+test("thumbnail removal excludes active and saved rows and CSV immediately, and Undo restores arrival order", async () => {
+  const ctx = removalWishlist();
+  const button = findRemovalButton(ctx.get("rows").children[1]);
+  assert.match(button.attributes["aria-label"], /Remove Title 2/);
+  assert.equal(button.parentElement.children[0].tagName, "a");
+  button.listeners.click({detail:1});
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["1", "3"]);
+  assert.equal(ctx.get("count-total").textContent, 2);
+  assert.ok(parseCsv(ctx.run("buildCsv(false)")).rows.every(row => row.game_id !== "2"));
+  const saved = JSON.parse(ctx.storage.get("polisher-job"));
+  assert.deepEqual(saved.displayed.data.items.map(row => row.app_id), ["1", "3"]);
+  assert.deepEqual(saved.removals.removed, ["2"]);
+  assert.equal(ctx.calls.filter(call => call.path.endsWith("/remove")).length, 0);
+  const popup = ctx.get("removal-notices").children[0];
+  assert.match(popup.children[0].children[1].textContent, /App ID 2/);
+  popup.children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["1", "2", "3"]);
+  assert.equal(ctx.get("count-total").textContent, 3);
+  assert.equal(ctx.get("removal-notices").children.length, 0);
+  assert.ok(parseCsv(ctx.run("buildCsv(false)")).rows.some(row => row.game_id === "2"));
+});
+
+test("removal timers are seven seconds, never pause, and release temporary payloads on expiry", async () => {
+  const ctx = removalWishlist();
+  ctx.run('removeWishlistTitle("1"); window.expiredEntry = removalNotices.find("wishlist", "1")');
+  assert.equal(ctx.timerDelays.get(ctx.run("window.expiredEntry.timer")), 7000);
+  const notice = ctx.get("removal-notices").children[0];
+  assert.equal(notice.listeners?.mouseenter, undefined);
+  assert.equal(notice.listeners?.focusin, undefined);
+  expireRemoval(ctx, "wishlist", "1"); await settle();
+  assert.equal(ctx.run("window.expiredEntry.data"), null);
+  assert.equal(ctx.run("window.expiredEntry.undo"), null);
+  assert.equal(ctx.run('wishlistRemovals.has("1")'), true);
+  assert.deepEqual(ctx.calls.find(call => call.path.endsWith("/remove")).body, {app_ids:["1"]});
+  assert.equal(ctx.get("removal-notices").children.length, 0);
+});
+
+test("a fifth removal commits the oldest notice, with four independently undoable entries at most", async () => {
+  const ctx = removalWishlist(6);
+  ctx.run(`const createNoticeElement = document.createElement;
+    document.createElement = tag => {const element = createNoticeElement(tag); element.classList.toggle = (name, value) => {
+      if (name === "removal-notice-compact") element.compact = value;
+    }; return element;};
+    for (const id of ["1","2","3","4"]) removeWishlistTitle(id);`);
+  let notices = ctx.get("removal-notices").children;
+  assert.equal(notices.length, 4);
+  assert.deepEqual(notices.map(notice => notice.compact), [true, false, false, false]);
+  ctx.run('removeWishlistTitle("5")'); await settle();
+  notices = ctx.get("removal-notices").children;
+  assert.equal(notices.length, 4);
+  assert.match(notices[0].children[0].children[1].textContent, /ID 2/);
+  assert.deepEqual(ctx.calls.find(call => call.path.endsWith("/remove")).body, {app_ids:["1"]});
+  notices[2].children[1].listeners.click(); notices[0].children[1].listeners.click();
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["2", "4", "6"]);
+});
+
+test("Undo refuses restoration after its deadline even if browser timers were delayed", async () => {
+  const ctx = removalWishlist();
+  ctx.run('window.testNow = 0; Date.now = () => window.testNow; removeWishlistTitle("1"); window.testNow = 7000');
+  ctx.get("removal-notices").children[0].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["2", "3"]);
+  assert.equal(ctx.calls.filter(call => call.path.endsWith("/remove")).length, 1);
+});
+
+test("polling never resurrects removed rows, but Undo receives the newest row observation", async () => {
+  const ctx = removalWishlist(); ctx.run('removeWishlistTitle("2")');
+  const latest = game("2", "Fresh title"); latest.comparison.home_price.amount = 99;
+  ctx.snapshots.push(wishlistSnapshot("complete", {items:[game("1","Title 1"),latest,game("3","Title 3")]}));
+  await ctx.run("poll()");
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["1", "3"]);
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  assert.equal(ctx.run('items.find(item => item.app_id === "2").comparison.home_price.amount'), 99);
+});
+
+test("reload keeps removals, discards the Undo buffer, and resumes permanent cleanup", async () => {
+  const ctx = removalWishlist(); ctx.run('removeWishlistTitle("2")');
+  const saved = ctx.storage.get("polisher-job");
+  const restored = creatorSetup({"polisher-job":saved}); await settle();
+  assert.deepEqual(restored.get("rows").children.map(row => row.dataset.appId), ["1", "3"]);
+  assert.equal(restored.get("removal-notices").children.length, 0);
+  assert.deepEqual(restored.calls.find(call => call.path.endsWith("/remove")).body, {app_ids:["2"]});
+});
+
+test("removing every title disables CSV and gives an accurate empty state", () => {
+  const ctx = removalWishlist(1); ctx.run('removeWishlistTitle("1")');
+  assert.equal(ctx.get("export-csv").disabled, true);
+  assert.equal(ctx.get("count-total").textContent, "0");
+  assert.match(ctx.get("empty").querySelector("h3").textContent, /All titles removed/);
+  assert.equal(parseCsv(ctx.run("buildCsv(false)")).rows.length, 0);
+});
+
+test("Undo during a currency update restores the row from the newly displayed snapshot", async () => {
+  const ctx = removalWishlist(); ctx.run('removeWishlistTitle("2")');
+  const fresh = [game("1","Title 1"),game("2","Title 2"),game("3","Title 3")];
+  fresh[1].comparison.home_price.amount = 88;
+  const body = {identifier:"example",home:"gb",regions:["us"],order:"priority"};
+  ctx.run(`displayedWishlist = {request:${JSON.stringify(body)},data:{items:${JSON.stringify(fresh)},rates:[],state:"complete",total:3}};
+    applyWishlistSnapshot(displayedWishlist.data,displayedWishlist.request);`);
+  assert.equal(ctx.get("rows").children.length, 2);
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  const row = ctx.get("rows").children.find(row => row.dataset.appId === "2");
+  assert.equal(row.children[1].textContent, "88.00 GBP");
+  assert.ok(parseCsv(ctx.run("buildCsv(false)")).rows.every(row => row.baseline_currency === "GBP"));
+});
+
+test("failed server cleanup releases row payloads, retries with IDs only, and never re-adds the title", async () => {
+  const ctx = removalWishlist();
+  ctx.run(`window.cleanupAttempts = 0; const realRemovalFetch = fetch;
+    fetch = async (path, options) => {
+      if (path.endsWith('/remove') && !window.cleanupAttempts++) return {ok:false,status:503,json:async()=>({error:'Unavailable'})};
+      return realRemovalFetch(path,options);
+    }; removeWishlistTitle("1"); window.failedEntry = removalNotices.find("wishlist","1");`);
+  expireRemoval(ctx,"wishlist","1"); await settle();
+  assert.equal(ctx.run("window.failedEntry.data"), null);
+  assert.match(ctx.get("notice").textContent, /Server cleanup will retry/);
+  const timer = [...ctx.timerDelays].find(([id, delay]) => delay === 4000)[0];
+  const callback = ctx.timers.get(timer); ctx.timers.delete(timer); await callback(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path.endsWith("/remove")).length, 1);
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["2","3"]);
+});
+
+test("permanent removals are sent to replacement jobs and fresh comparisons end the old Undo window", async () => {
+  const ctx = removalWishlist(); ctx.run('removeWishlistTitle("2")');
+  expireRemoval(ctx,"wishlist","2"); await settle();
+  ctx.run('wishlistRemovals.register({id:"u".repeat(32),token:"v".repeat(43)})'); await settle();
+  assert.ok(ctx.calls.some(call => call.path === `/api/jobs/${"u".repeat(32)}/remove`));
+  ctx.run('removeWishlistTitle("1")');
+  ctx.snapshots.push(wishlistSnapshot("complete", {items:[game("1","Title 1"),game("2","Title 2")]}));
+  ctx.get("retry").listeners.click(); await settle();
+  assert.equal(ctx.get("removal-notices").children.length, 0);
+  assert.equal(ctx.run("wishlistRemovals.size"), 0);
+  assert.deepEqual(ctx.get("rows").children.map(row => row.dataset.appId), ["1","2"]);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} removal affects all catalog memberships and statistics, and Undo restores both`, async () => {
+  const second = {id:`${kind}-` + "f".repeat(24),name:"Second studio",selector:{kind,name:"Second studio"},examples:[]};
+  const products = [{app_id:"1",name:"Shared title"},{app_id:"2",name:"Other title"}];
+  const saved = {home:"pl",regions:["us"],request:{mode:"products"},featuredIds:["studio"],creators:[second],
+    catalogs:[{id:"studio",products,nextStart:25,hasMore:false},{id:second.id,products:[products[0]],nextStart:25,hasMore:false}],
+    results:[game("1","Shared title"),game("2","Other title")],rates:[]};
+  const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(saved)}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.run('downloadCsv = contents => {window.exportContents = contents;}');
+  findRemovalButton(ctx.body().children[0]).listeners.click({detail:1});
+  let state = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.deepEqual(state.catalogs.map(group => group.products.length), [1, 0]);
+  assert.deepEqual(state.results.map(item => item.app_id), ["2"]);
+  assert.equal(ctx.group().children[0].children[1].children[0].children[2].textContent, "1 product compared");
+  ctx.get("creators-export").listeners.click();
+  assert.ok(parseCsv(ctx.run("window.exportContents")).rows.every(row => row.game_id !== "1"));
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  state = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.deepEqual(state.catalogs.map(group => group.products.map(item => item.app_id)), [["1","2"],["1"]]);
+  ctx.get("creators-export").listeners.click();
+  assert.equal(parseCsv(ctx.run("window.exportContents")).rows.filter(row => row.game_id === "1").length, 4);
+});
 
 for (const column of ["name","home","difference","percentage"]) test(`wishlist ${column} sorting cycles ascending, descending and original order`, () => {
   const differenceHead = new Element("th");
@@ -1220,8 +1393,8 @@ test("artwork loads lazily in a fixed slot and falls back without replacing the 
   const {get,run} = setup();
   run(`items = ${JSON.stringify([game("413150","Stardew Valley")])}; render();`);
   const row = get("rows").children[0];
-  const frame = row.children[0].children[0].children[0];
-  const gameTitle = row.children[0].children[0].children[1];
+  const frame = row.children[0].children[0].children[0].children[0].children[0];
+  const gameTitle = row.children[0].children[0].children[1].children[0];
   const img = frame.children[1];
   assert.equal(frame.title, "Steam App ID: 413150");
   assert.equal(gameTitle.title, "Steam App ID: 413150");
@@ -2298,7 +2471,7 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   assert.equal(titles.style.left,"500px");
   assert.equal(titles.style.width,"380px");
   assert.equal(titles.style.getPropertyValue("--region-width"),"360px");
-  sourceTop = 20; listeners[0]();
+  sourceTop = 20; listeners.forEach(listener => listener());
   assert.equal(titles.hidden, false);
   rail.scrollLeft = 340; rail.listeners.scroll();
   assert.equal(titles.firstElementChild.style.transform, "translateX(-340px)");
@@ -2306,7 +2479,7 @@ test("sticky currency titles follow scrolling, refresh their labels, and stop at
   source.innerHTML = "GBP JPY"; wrap.refreshScrollControls();
   assert.equal(clones, 2);
   assert.equal(titles.style.getPropertyValue("--region-count"), "2");
-  areaBottom = 80; listeners[0]();
+  areaBottom = 80; listeners.forEach(listener => listener());
   assert.equal(titles.hidden, true);
   // Currency context remains sticky even when all selected columns fit.
   areaBottom = 1000; wrap.scrollWidth = wrap.clientWidth; wrap.scrollLeft = 0;
@@ -2469,4 +2642,40 @@ for (const kind of ["developer","publisher"]) test(`${kind} full comparisons pre
   assert.equal(restored.get("creator-show-credits").checked,true);
   assert.equal(restored.body().children[0].children[3].children[0].children.length,36);
   assert.equal(restored.group().children[0].children[1].children[0].open,true);
+});
+
+ test("removal history retains 10,000 IDs and rejects overflow without hiding a row", () => {
+  const ctx = creatorSetup();
+  ctx.run(`window.removalError = ""; window.limitRemovals = createTitleRemovals("limit",()=>{},()=>{},text=>window.removalError=text);
+    window.limitRemovals.restore({removed:Array.from({length:10000},(_,i)=>String(i+1))});`);
+  assert.equal(ctx.run("window.limitRemovals.serialize().removed.length"),10000);
+  ctx.run('window.limitRemovals.remove("10001","Overflow",{item:{app_id:"10001"}})');
+  assert.equal(ctx.run('window.limitRemovals.has("10001")'),false);
+  assert.match(ctx.run("window.removalError"),/10,000/);
+ });
+
+test("touch hold reveals removal without navigating; scrolling cancels and ordinary taps navigate", () => {
+  const ctx = removalWishlist();
+  const control = ctx.get("rows").children[0].children[0].children[0].children[0];
+  const link = control.children[0];
+  let revealed = false, prevented = false;
+  control.classList.toggle = (name,value) => { if(name === "removal-revealed") revealed=value; };
+  const down = {pointerType:"touch",pointerId:1,clientX:20,clientY:20};
+  const click = {preventDefault(){prevented=true;},stopPropagation(){}};
+  link.listeners.pointerdown(down);
+  link.listeners.pointerup(); link.listeners.click(click);
+  assert.equal(prevented,false); assert.equal(revealed,false);
+  link.listeners.pointerdown(down);
+  const hold = [...ctx.timers].find(([id]) => ctx.timerDelays.get(id)===500);
+  ctx.timers.delete(hold[0]); ctx.timerDelays.delete(hold[0]); hold[1](); link.listeners.pointerup(); link.listeners.click(click);
+  assert.equal(prevented,true); assert.equal(revealed,true);
+  assert.equal(ctx.run("items.length"),3);
+  ctx.dispatchDocument("pointerdown",{target:ctx.get("search")});
+  assert.equal(revealed,false);
+  link.listeners.pointerdown(down);
+  link.listeners.pointermove({...down,clientY:40});
+  assert.equal([...ctx.timerDelays.values()].includes(500),false);
+  assert.equal(revealed,false);
+  link.listeners.pointerdown(down); link.listeners.pointercancel();
+  assert.equal([...ctx.timerDelays.values()].includes(500),false);
 });

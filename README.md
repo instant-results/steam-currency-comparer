@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.7.3** · Beta for local use.
+**Version: 0.8.0** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -67,6 +67,12 @@ change over time. No personal Steam profile is used.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.
+- Removes individual titles using the × overlapping a thumbnail's top-right
+  corner. Removed titles leave the grid, totals, catalog statistics and CSV
+  immediately. On touch devices, hold the thumbnail for half a second to reveal
+  ×. Bottom-center notices offer Undo for seven seconds.
+  See [title removal](docs/USAGE.md#remove-titles-from-a-comparison) for the
+  four-notice limit and behavior across reloads and currency updates.
 - Wishlist rows show compact Developer and Publisher credits beneath each game's
   artwork/title, including all reported names and labels for unavailable metadata.
 - Separate **Developers** and **Publishers** tabs compare featured games without

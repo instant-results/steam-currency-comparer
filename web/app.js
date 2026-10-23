@@ -4,6 +4,134 @@ let items = [], filter = "all", sort = "arrival", direction = 1, job = null, run
 let displayedWishlist = null, pendingCurrency = null, retryCurrency = null, wishlistExpired = false;
 const money = (value) => new Intl.NumberFormat("en-GB", {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 const node = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
+// One viewport stack across tabs. Row payloads exist only in these short-lived entries.
+const removalNotices = (() => {
+  const entries = [];
+  const key = (owner, id) => `${owner}:${id}`;
+  function layout() {
+    for (const [index, entry] of entries.entries()) entry.element.classList.toggle("removal-notice-compact", entries.length === 4 && index === 0);
+  }
+  function finish(entry, undo = false) {
+    if (!entries.includes(entry)) return;
+    const restore = undo && Date.now() < entry.deadline;
+    const focused = entry.element.contains(document.activeElement);
+    clearTimeout(entry.timer); entries.splice(entries.indexOf(entry), 1); entry.element.remove();
+    const callback = restore ? entry.undo : entry.commit, data = entry.data;
+    entry.data = entry.undo = entry.commit = entry.element = null;
+    callback(data); layout();
+    if (focused) (entries.at(-1)?.button || $("wishlist-tab")).focus({preventScroll: true});
+  }
+  return {
+    find(owner, id) { return entries.find(entry => entry.key === key(owner, id)); },
+    commitOwner(owner) { for (const entry of [...entries]) if (entry.key.startsWith(`${owner}:`)) finish(entry); },
+    commitAll() { for (const entry of [...entries]) finish(entry); },
+    add(owner, id, name, data, undo, commit) {
+      for (const entry of [...entries]) if (Date.now() >= entry.deadline) finish(entry);
+      if (entries.length === 4) finish(entries[0]);
+      const element = node("div", undefined, "removal-notice"), text = node("div", undefined, "removal-notice-text");
+      const title = node("strong", name || `Steam product ${id}`);
+      title.title = name || `Steam product ${id}`;
+      text.append(title, node("span", `Removed · App ID ${id}`));
+      const button = node("button", "Undo", "removal-undo"); button.type = "button";
+      button.setAttribute("aria-label", `Undo removal of ${name || id}, Steam App ID ${id}`);
+      const progress = node("span", undefined, "removal-countdown"); progress.setAttribute("aria-hidden", "true");
+      element.setAttribute("role", "status"); element.append(text, button, progress);
+      const entry = {key: key(owner, id), deadline: Date.now() + 7000, data, undo, commit, element, button};
+      button.addEventListener("click", () => finish(entry, true));
+      entry.timer = setTimeout(() => finish(entry), 7000); entries.push(entry);
+      $("removal-notices").append(element); layout();
+    }
+  };
+})();
+window.addEventListener?.("pagehide", () => removalNotices.commitAll());
+
+function createTitleRemovals(owner, changed, restoreRow, reportError) {
+  const removed = new Set(), committed = new Set(), sources = new Map();
+  let syncing = false, retryTimer = null;
+  const validId = id => typeof id === "string" && /^[0-9]{1,12}$/.test(id);
+  async function sync() {
+    if (syncing) return;
+    clearTimeout(retryTimer); retryTimer = null; syncing = true;
+    let failed = false;
+    try {
+      await Promise.all([...sources].map(async ([id, source]) => {
+        const appIds = [...committed].filter(value => !source.sent.has(value)).slice(0, 1000);
+        if (!appIds.length) return;
+        try {
+          await request(`/api/jobs/${id}/remove`, {method: "POST", keepalive: true, body: JSON.stringify({app_ids: appIds}), headers: {Authorization: `Bearer ${source.token}`}});
+          for (const value of appIds) source.sent.add(value);
+        } catch (error) {
+          if (error.status === 404) sources.delete(id);
+          else failed = true;
+        }
+      }));
+    } finally {
+      syncing = false;
+      const remaining = [...sources.values()].some(source => [...committed].some(id => !source.sent.has(id)));
+      if (remaining) retryTimer = setTimeout(sync, failed ? 4000 : 0);
+      if (failed) reportError("Title removed locally. Server cleanup will retry when the connection is available.");
+    }
+  }
+  return {
+    get size() { return removed.size; },
+    has: id => removed.has(id),
+    capture(item) {
+      const pending = removalNotices.find(owner, item.app_id);
+      if (pending) pending.data.item = item;
+    },
+    filter(items) {
+      return items.filter(item => { if (!removed.has(item.app_id)) return true; this.capture(item); return false; });
+    },
+    pending: id => removalNotices.find(owner, id)?.data,
+    remove(id, name, data) {
+      if (removed.has(id)) return;
+      if (removed.size >= 10000) { reportError("This comparison has reached its 10,000-title removal limit. Start a fresh comparison to reset it."); return; }
+      removed.add(id);
+      removalNotices.add(owner, id, name, data, record => { removed.delete(id); restoreRow(record); changed(); },
+        () => { committed.add(id); queueMicrotask(sync); changed(); });
+      changed();
+    },
+    register(source) {
+      if (!source?.id || !source.token || sources.has(source.id)) return;
+      // The server retains at most 20 jobs; older credentials cannot own live data.
+      if (sources.size >= 20) sources.delete(sources.keys().next().value);
+      sources.set(source.id, {token: source.token, sent: new Set()}); if (committed.size) sync();
+    },
+    exclusions: () => [...committed],
+    serialize: () => ({removed: [...removed], sources: [...sources].map(([id, source]) => ({id, token: source.token}))}),
+    restore(value) {
+      for (const id of Array.isArray(value?.removed) ? value.removed.slice(0, 10000) : []) if (validId(id)) { removed.add(id); committed.add(id); }
+      for (const source of Array.isArray(value?.sources) ? value.sources.slice(-20) : []) {
+        if (/^[A-Za-z0-9_-]{32}$/.test(source.id) && /^[A-Za-z0-9_-]{43}$/.test(source.token)) this.register(source);
+      }
+    }
+  };
+}
+const wishlistArrivalOrder = new Map();
+function newWishlistRemovals() {
+  return createTitleRemovals("wishlist", () => {
+    items = wishlistRemovals.filter(items);
+    if (displayedWishlist) displayedWishlist.data.items = items;
+    render();
+  }, record => {
+    items.push(record.item);
+    items.sort((a, b) => (wishlistArrivalOrder.get(a.app_id) ?? Infinity) - (wishlistArrivalOrder.get(b.app_id) ?? Infinity));
+  }, message => notice(message, true));
+}
+let wishlistRemovals = newWishlistRemovals();
+function filterWishlistSnapshot(data) {
+  for (const item of data.items) if (!wishlistArrivalOrder.has(item.app_id)) wishlistArrivalOrder.set(item.app_id, wishlistArrivalOrder.size);
+  const count = data.items.length;
+  data.items = wishlistRemovals.filter(data.items);
+  data.total = Math.max(data.items.length, (data.total || 0) - count + data.items.length);
+  return data;
+}
+function removeWishlistTitle(appId) {
+  const item = items.find(value => value.app_id === appId);
+  if (!item) return;
+  for (const value of items) if (!wishlistArrivalOrder.has(value.app_id)) wishlistArrivalOrder.set(value.app_id, wishlistArrivalOrder.size);
+  wishlistRemovals.remove(appId, item.name, {item});
+}
 const storefronts = JSON.parse(document.documentElement.dataset.storefronts);
 const maxComparisons = Object.keys(storefronts).length - 1;
 function buildStorefrontControls() {
@@ -388,11 +516,13 @@ function percentageLabel(value) {
 }
 function saveJob(value) { try { if(value) sessionStorage.setItem("polisher-job", JSON.stringify(value)); else sessionStorage.removeItem("polisher-job"); } catch (_) {} }
 function saveWishlist() {
-  if (!displayedWishlist) return;
+  if (!displayedWishlist && !job) return;
   saveJob({...job, request: lastRequest, displayed: displayedWishlist, pending: pendingCurrency, retryCurrency, expired: wishlistExpired,
+    removals: wishlistRemovals.serialize(),
     view: {search: $("search").value, filter, sort, direction, showUnavailable: $("show-unavailable").checked}});
 }
 function applyWishlistSnapshot(data, body) {
+  filterWishlistSnapshot(data);
   lastRequest = body; demoMode = body.identifier === "example";
   showBaseline(body.home); items = data.items; showRates(data.rates);
   $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison";
@@ -420,8 +550,10 @@ async function updateWishlistCurrencies(selection = currencySelection()) {
       const source = pendingCurrency.request.identifier === "example" ? "Recreating the example" : "Reloading the wishlist";
       $("progress-label").textContent = `${source} with ${currencyLabel(selection)}… Displayed results remain available.`;
       refreshCurrencyAction(); saveWishlist();
-      pendingCurrency.job = await request("/api/jobs", {method: "POST", body: JSON.stringify(pendingCurrency.request)});
+      const excluded = wishlistRemovals.exclusions();
+      pendingCurrency.job = await request("/api/jobs", {method: "POST", body: JSON.stringify({...pendingCurrency.request, ...(excluded.length ? {excluded_app_ids: excluded} : {})})});
     }
+    wishlistRemovals.register(pendingCurrency.job);
     saveWishlist(); $("cancel").disabled = false; pollWishlistCurrencies();
   } catch (error) {
     pendingCurrency = null;
@@ -543,7 +675,50 @@ function appendBestOffers(tr, item, home, regions) {
   } else delta.append(node("small", "Not all storefront offers could be compared", "offer-value offer-unavailable"));
   tr.children[3].append(delta);
 }
-function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null) {
+const touchRemoval = (() => {
+  let active = null, cancelHold = null;
+  function hide() {
+    cancelHold?.(); cancelHold = null;
+    active?.classList.toggle("removal-revealed", false); active = null;
+  }
+  document.addEventListener("pointerdown", event => {
+    if (active && !active.contains(event.target)) hide();
+  });
+  window.addEventListener?.("scroll", hide, true);
+  window.addEventListener?.("blur", hide);
+  return {hide, bind(control, link) {
+    let timer = null, origin = null, suppressClick = false, touch = false;
+    const cancel = () => { clearTimeout(timer); timer = null; origin = null; };
+    link.addEventListener("pointerdown", event => {
+      touch = event.pointerType === "touch" || event.pointerType === "pen";
+      if (!touch || event.isPrimary === false) return;
+      hide(); suppressClick = false;
+      link.setPointerCapture?.(event.pointerId);
+      origin = {x:event.clientX,y:event.clientY,id:event.pointerId}; cancelHold = cancel;
+      timer = setTimeout(() => {
+        timer = null; suppressClick = true; active = control;
+        control.classList.toggle("removal-revealed", true);
+        $("touch-removal-hint").hidden = true;
+        try { sessionStorage.setItem("polisher-touch-removal-hint", "seen"); } catch (_) {}
+      }, 500);
+    });
+    link.addEventListener("pointermove", event => {
+      if (origin && Math.hypot(event.clientX-origin.x,event.clientY-origin.y) > 10) {
+        suppressClick = true; hide();
+      }
+    });
+    link.addEventListener("pointerup", cancel);
+    link.addEventListener("pointercancel", () => { suppressClick = true; hide(); });
+    link.addEventListener("click", event => {
+      if (suppressClick) { event.preventDefault(); event.stopPropagation(); suppressClick = false; }
+    });
+    link.addEventListener("contextmenu", event => { if (touch) event.preventDefault(); });
+    if (window.matchMedia?.("(hover: none), (pointer: coarse)").matches) {
+      try { $("touch-removal-hint").hidden = sessionStorage.getItem("polisher-touch-removal-hint") === "seen"; } catch (_) {}
+    }
+  }};
+})();
+function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRegions = null, onRemove = null) {
   const regions = selectedRegions?.length ? selectedRegions : item.comparison?.alternatives.map(p => p.region)
     || Object.keys(item.best_offers || {}).filter(region => region !== resultHome);
   const baseline = () => storefronts[resultHome];
@@ -552,7 +727,27 @@ function comparisonRow(item, resultHome, showWishlistCredits = false, selectedRe
   const tr = node("tr"), title = node("td");
   tr.dataset.appId = item.app_id;
   const link = node("a", undefined, "game-name"), artwork = gameArtwork(item.app_id), gameTitle = node("span", (item.name || `Steam product ${item.app_id}`) + " ↗", "game-title"), appIdTooltip = `Steam App ID: ${item.app_id}`;
-  artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer"; title.append(link); tr.append(title);
+  artwork.title = appIdTooltip; gameTitle.title = appIdTooltip; link.append(artwork, gameTitle); link.href = `https://store.steampowered.com/app/${encodeURIComponent(item.app_id)}/`; link.target = "_blank"; link.rel = "noopener noreferrer";
+  if (onRemove) {
+    const identity = node("div", undefined, "game-name"), control = node("span", undefined, "game-artwork-control");
+    const artworkLink = node("a"); artworkLink.href = link.href; artworkLink.target = link.target; artworkLink.rel = link.rel;
+    artworkLink.setAttribute("aria-label", `Open ${item.name || item.app_id} on Steam`); artworkLink.append(artwork);
+    const button = node("button", undefined, "remove-title"); button.type = "button";
+    button.title = `Remove ${item.name || item.app_id} from comparison`;
+    button.setAttribute("aria-label", button.title);
+    button.append(node("span", undefined, "offer-help-close-icon")); button.children[0].setAttribute("aria-hidden", "true");
+    button.addEventListener("click", event => {
+      const keyboard = event.detail === 0;
+      const siblings = [...tr.parentElement.children], index = siblings.indexOf(tr);
+      const next = siblings[index + 1] || siblings[index - 1];
+      touchRemoval.hide();
+      onRemove(item.app_id);
+      if (keyboard) (next?.querySelector(".remove-title") || $("wishlist-tab")).focus({preventScroll: true});
+    });
+    control.append(artworkLink, button); touchRemoval.bind(control, artworkLink); link.className = "game-title-link"; link.replaceChildren(gameTitle);
+    identity.append(control, link); title.append(identity);
+  } else title.append(link);
+  tr.append(title);
   if (showWishlistCredits) {
     const credits = node("small", undefined, "catalog-credit wishlist-credits");
     for (const [field, label] of [["developers", "Developer"], ["publishers", "Publisher"]]) {
@@ -612,7 +807,7 @@ function render() {
   $("export-csv").disabled = !items.length;
   $("filter-help").hidden = filter !== "skipped";
   const comparable = items.filter(item => item.comparison);
-  $("count-total").textContent = items.length || (running || demoMode ? "0" : "—");
+  $("count-total").textContent = items.length || (running || demoMode || wishlistRemovals.size ? "0" : "—");
   $("count-fair").textContent = comparable.filter(item => item.comparison.is_fair).length;
   $("count-expensive").textContent = comparable.filter(item => !item.comparison.is_fair).length;
   const search = $("search").value.trim().toLocaleLowerCase();
@@ -634,7 +829,7 @@ function render() {
     const signature = resultHome + regions.join(",") + showBestOffers + JSON.stringify(item);
     let cached = rowCache.get(item.app_id);
     if (!cached || cached.signature !== signature) {
-    const tr = comparisonRow(item, resultHome, true, regions);
+    const tr = comparisonRow(item, resultHome, true, regions, removeWishlistTitle);
     if (cached) cached.row.remove();
     cached = {row: tr, signature};
     rowCache.set(item.app_id, cached);
@@ -645,6 +840,10 @@ function render() {
     position++;
   }
   $("empty").hidden = visible.length > 0;
+  if (!items.length && wishlistRemovals.size && !running) {
+    $("empty").querySelector("h3").textContent = "All titles removed from this comparison.";
+    $("empty").querySelector("p").textContent = "Use Undo while its notice is available, or start a new comparison.";
+  }
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? " · curated example" : ""}`;
   updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
@@ -680,18 +879,26 @@ function renderRates(rates, target) {
   if(!rates.length) target.append(node("p", "Loading exchange rates…", "rate-placeholder"));
 }
 async function request(path, options = {}) { const response = await fetch(path, {cache: "no-store", ...options, headers: {"Content-Type": "application/json", ...(options.headers || {})}}); const data = await response.json(); if(!response.ok) { const error = new Error(data.error || "The request could not be completed."); error.status = response.status; throw error; } return data; }
-async function start(body) {
+async function start(body, preserveRemovals = false) {
   automaticExampleDismissed = true;
   comparisonCoordinator.cancel("wishlist-example");
   if (!comparisonCoordinator.claim("wishlist")) { notice("A comparison is running. Wait for it or cancel it on its tab.", true); return; }
+  if (!preserveRemovals) {
+    removalNotices.commitOwner("wishlist"); wishlistRemovals = newWishlistRemovals(); wishlistArrivalOrder.clear();
+  }
   displayedWishlist = null; pendingCurrency = null; retryCurrency = null; wishlistExpired = false;
   $("wishlist-currencies").hidden = true; $("retry").textContent = "Retry comparison ↻";
   clearTimeout(timer); sort = "arrival"; job = null; saveJob(null); demoMode = body.identifier === "example"; items = []; lastRequest = body; showBaseline(body.home || "pl"); showProfile(body.identifier); $("search").value = ""; notice(""); setBusy(true); $("cancel").disabled = true; $("cancel-label").textContent = "Connecting…"; status("CONNECTING", true); $("results-title").textContent = demoMode ? "Example price comparison" : "Your price comparison"; $("progress-label").textContent = "Loading wishlist…"; $("progress").value = 0; showRates([]); render();
-  try { job = await request("/api/jobs", {method: "POST", body: JSON.stringify(body)}); saveJob({...job, request: body}); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll(); } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
+  try {
+    const excluded = wishlistRemovals.exclusions();
+    job = await request("/api/jobs", {method: "POST", body: JSON.stringify({...body, ...(excluded.length ? {excluded_app_ids: excluded} : {})})});
+    wishlistRemovals.register(job); saveWishlist(); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; poll();
+  } catch(error) { setBusy(false); status("COULD NOT START"); notice(error.message, true); }
 }
 async function poll() {
   try {
     const data = await request(`/api/jobs/${job.id}`, {headers: {Authorization: `Bearer ${job.token}`}});
+    filterWishlistSnapshot(data);
     if (data.profile && !lastRequest) {
       restoreRequest({request: {identifier: data.profile, regions: data.regions, home: data.home || "pl", order: data.order || "priority"}});
       saveJob({...job, request: lastRequest});
@@ -827,7 +1034,7 @@ $("update-currencies").addEventListener("click", () => {
 });
 $("cancel").addEventListener("click", async () => { const target = pendingCurrency?.job || job; if(!target) return; $("cancel").disabled = true; $("cancel-label").textContent = "Cancelling…"; try { await request(`/api/jobs/${target.id}/cancel`, {method: "POST", body: "{}", headers: {Authorization: `Bearer ${target.token}`}}); $("progress-label").textContent = "Cancelling — waiting for the current request to finish…"; } catch(error) { notice(error.message, true); $("cancel").disabled = false; $("cancel-label").textContent = "Cancel comparison"; } });
 $("retry").addEventListener("click", () => {
-  if (displayedWishlist) updateWishlistCurrencies(retryCurrency || {home: displayedWishlist.request.home, regions: displayedWishlist.request.regions});
+  if (displayedWishlist && retryCurrency) updateWishlistCurrencies(retryCurrency);
   else if(lastRequest) start(lastRequest);
 });
 $("search").addEventListener("input", render);
@@ -938,6 +1145,7 @@ try {
   const saved = JSON.parse(sessionStorage.getItem("polisher-job") || "null");
   if(saved && /^[A-Za-z0-9_-]{32}$/.test(saved.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.token)) {
     job = {id: saved.id, token: saved.token};
+    wishlistRemovals.restore(saved.removals); wishlistRemovals.register(job);
     if (saved.displayed && validCurrencies(saved.displayed.request) && typeof saved.displayed.request.identifier === "string"
         && Array.isArray(saved.displayed.data?.items) && Array.isArray(saved.displayed.data?.rates)) {
       restoreRequest({request: saved.displayed.request});

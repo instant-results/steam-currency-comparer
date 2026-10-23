@@ -1586,3 +1586,57 @@ td:first-child { min-width: 0; }
   transform: translateY(-50%) rotate(45deg);
 }
 .offer-help-close-icon::after { transform: translateY(-50%) rotate(-45deg); }
+
+/* Match offer-help bubbles and their overlapping geometric close controls. */
+.game-artwork-control { position: relative; display: block; flex: 0 0 var(--artwork-width); width: var(--artwork-width); }
+.game-artwork-control > a { display: block; border-radius: 5px; }
+.game-title-link { min-width: 0; overflow-wrap: anywhere; }
+.remove-title {
+  position: absolute; z-index: 3; top: -10px; right: -10px; display: grid; place-items: center;
+  width: 28px; height: 28px; padding: 0; border: 1px solid #9fc9eb; border-radius: 50%;
+  background: #527fa7; color: #f2f8ff; box-shadow: 0 3px 8px #0005;
+  opacity: 0; pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .game-artwork-control:hover .remove-title { opacity: 1; pointer-events: auto; }
+}
+.game-artwork-control:has(:focus-visible) .remove-title,
+.game-artwork-control.removal-revealed .remove-title { opacity: 1; pointer-events: auto; }
+.remove-title:hover { background: #3d6b94; border-color: #c3e1f8; }
+@media (hover: none), (pointer: coarse) {
+  .game-artwork-control > a { -webkit-touch-callout: none; user-select: none; }
+  .game-artwork-control img { -webkit-touch-callout: none; user-select: none; }
+}
+.touch-removal-hint { text-align: center; color: #a8c9e4; font-size: 13px; margin: 12px 20px; }
+.removal-notices {
+  position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px; width: min(380px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px); overflow-y: auto; padding: 4px; pointer-events: none;
+}
+.removal-notice {
+  position: relative; flex: none; display: flex; align-items: center; gap: 16px;
+  min-height: 100px; padding: 18px 20px; overflow: hidden; pointer-events: auto;
+  border: 1px solid #8bb8df; border-radius: 24px; background: #c3ddf3; color: #1b3957;
+  box-shadow: 0 8px 24px #0005; font-size: 13px; line-height: 1.5; color-scheme: light;
+}
+.removal-notice-text { flex: 1; min-width: 0; }
+.removal-notice-text strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; }
+.removal-notice-text > span { display: block; margin-top: 5px; font-size: 12px; }
+.removal-undo {
+  flex: none; min-height: 36px; padding: 5px 12px; border: 1px solid #527fa7; border-radius: 7px;
+  background: #527fa7; color: #f2f8ff; font-size: 13px; font-weight: 650;
+}
+.removal-undo:hover { background: #3d6b94; }
+.removal-undo:focus-visible, .remove-title:focus-visible { outline-color: #1b3957; outline-offset: 2px; }
+.removal-notice-compact { min-height: 65px; padding-top: 9px; padding-bottom: 9px; border-radius: 18px; }
+.removal-notice-compact .removal-notice-text > span { margin-top: 0; }
+.removal-countdown {
+  position: absolute; bottom: 0; left: 0; height: 3px; width: 100%; background: #527fa7;
+  transform-origin: left; animation: removal-countdown 7s linear forwards;
+}
+@keyframes removal-countdown { to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .removal-countdown { animation: none; } }
+@media (max-width: 600px) {
+  .removal-notices { bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); }
+  .removal-notice { padding-left: 16px; padding-right: 16px; gap: 10px; }
+}
