@@ -294,6 +294,8 @@ behavior independent, and number currencies 02 consistently.
 
 ## Organization URL input
 
+Introduced in 0.10.0.
+
 Reuse each role's search field, four-second search delay, explicit Search Steam
 submission and left-side Add results. Accept names and Steam organization URLs;
 resolve first and compare only after Add. Preserve the existing catalog identity

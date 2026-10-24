@@ -456,6 +456,8 @@ download below its catalog list. The CLI does not provide creator browsing.
 
 ### Organization URLs
 
+Available in 0.10.0.
+
 The developer/publisher search field accepts a name or a Steam organization URL.
 Resolution runs after four seconds without edits, or immediately with Search Steam.
 Verified credit names appear below the input with Add on the left. Resolution does
