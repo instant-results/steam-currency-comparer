@@ -291,6 +291,30 @@ Credentials never appear in CSV.
 
 ## Developer and publisher catalogs
 
+Remove an entire catalog with the × at the top-right of its organization's icon.
+Mouse hover, keyboard focus and a half-second touch hold reveal the control, as
+for individual games. A seven-second Undo notice identifies the organization by
+name and role instead of an App ID. The same four-notice stack covers titles and
+catalogs. Removal immediately excludes that catalog from display, statistics and
+CSV. Titles shared with retained catalogs remain there. Undo restores discovery
+position, loaded pages and current-currency results while respecting title removals.
+
+Catalog removal survives polling, expansion, currency updates and reload in the
+same tab. Reload finalizes pending Undo. Removed catalogs can be added again from
+search. Finalization releases the temporary group/row buffer and cleans private
+server results, memberships and source selections; shared Steam caches are retained.
+Only catalog/product IDs and job credentials are kept for cleanup retries, bounded
+to 1,000 removed catalogs, 10,000 product IDs and 120 job credentials per tab.
+
+Same-origin JSON POST `/api/jobs/{id}/remove-catalogs` requires the job's bearer
+token and `catalog_ids` (1–20 distinct IDs). Optional `app_ids` supplies up to 1,000
+orphan products for older jobs without membership metadata. Known memberships in
+retained catalogs protect shared titles. Repeated cleanup is idempotent and blocks
+late worker results. Explicit-products catalog jobs can supply `catalog_memberships`,
+a mapping of up to 20 catalog IDs to lists drawn from their selected `app_ids`, so
+currency updates preserve group ownership. No organization data is written to the
+shared price cache.
+
 Developer and publisher name searches run after four seconds without edits,
 matching wishlist game search. Search Steam submits immediately. Editing or
 clearing the query discards outdated matches; switching tabs cancels pending

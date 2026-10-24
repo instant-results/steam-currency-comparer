@@ -75,6 +75,9 @@ change over time. No personal Steam profile is used.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.
+- Removes entire developer/publisher catalogs using the × on their organization
+  icon, with seven-second Undo and persistent cleanup. Shared titles remain in
+  other selected catalogs.
 - Removes individual titles using the × overlapping a thumbnail's top-right
   corner. Removed titles leave the grid, totals, catalog statistics and CSV
   immediately. On touch devices, hold the thumbnail for half a second to reveal

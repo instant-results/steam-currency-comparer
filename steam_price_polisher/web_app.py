@@ -144,7 +144,7 @@ def validate_library_request(payload):
 
 
 def validate_creator_request(payload):
-    if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids", "selector", "excluded_app_ids"}:
+    if not isinstance(payload, dict) or not {"regions", "mode"} <= payload.keys() or payload.keys() - {"regions", "home", "mode", "creator_id", "start", "app_ids", "selector", "excluded_app_ids", "catalog_memberships"}:
         raise InputError("Supply catalog comparison settings.")
     if not isinstance(payload["mode"], str) or payload["mode"] not in {"featured", "catalog", "products"}:
         raise InputError("Choose featured games or a catalog.")
@@ -161,6 +161,16 @@ def validate_creator_request(payload):
                 len(set(app_ids)) != len(app_ids) or "creator_id" in payload or "start" in payload):
             raise InputError("Supply up to 1,000 unique product IDs.")
         source["app_ids"] = list(app_ids)
+        if "catalog_memberships" in payload:
+            memberships = payload["catalog_memberships"]
+            if (not isinstance(memberships, dict) or len(memberships) > 20 or
+                    any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", key)
+                        or not isinstance(ids, list) or len(ids) > 1000
+                        or any(not isinstance(value, str) for value in ids)
+                        or len(set(ids)) != len(ids) or not set(ids) <= set(app_ids)
+                        for key, ids in memberships.items())):
+                raise InputError("Supply up to 20 catalog memberships from the selected products.")
+            source["catalog_memberships"] = deepcopy(memberships)
     elif payload["mode"] == "catalog":
         creator_id, start = payload.get("creator_id"), payload.get("start", 0)
         if "selector" in payload:
@@ -179,6 +189,8 @@ def validate_creator_request(payload):
         raise InputError("This comparison does not take product IDs.")
     if payload["mode"] != "catalog" and "selector" in payload:
         raise InputError("Only catalog comparisons take a creator selection.")
+    if "catalog_memberships" in payload and payload["mode"] != "products":
+        raise InputError("Only explicit products accept catalog memberships.")
     return config, source
 
 
@@ -189,6 +201,7 @@ class Job:
         self.identifier, self.config, self.owner, self.order = identifier, config, owner, order
         self.creator_request = deepcopy(creator_request)
         self.excluded_app_ids = set()
+        self.excluded_catalog_ids = set()
         self.library = library
         self.request_app_ids = None
         self.added_app_ids = ()
@@ -199,7 +212,7 @@ class Job:
         self.comparison_id = self.id
         self.previous_job_id = None
         self.cancel = threading.Event()
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.updated = time.monotonic()
         self.created = self.updated
         self.data = {"state": "queued", "message": "Queued — waiting for the current comparison.",
@@ -213,6 +226,9 @@ class Job:
 
     def update(self, **values):
         with self.lock:
+            if "catalogs" in values:
+                values["catalogs"] = {key: page for key, page in values["catalogs"].items()
+                                      if key not in self.excluded_catalog_ids}
             self.data.update(values)
             self.updated = time.monotonic()
 
@@ -220,6 +236,8 @@ class Job:
         with self.lock:
             if item["app_id"] in self.excluded_app_ids:
                 return
+            if self.creator_request and "creator_ids" in item:
+                item = {**item, "creator_ids": [key for key in item["creator_ids"] if key not in self.excluded_catalog_ids]}
             self.data["items"].append(item)
             noun = "products" if self.creator_request else "games"
             self.data["message"] = f"Checked {len(self.data['items'])} of {self.data['total']} {noun}"
@@ -261,10 +279,44 @@ class Job:
             self.added_app_ids = tuple(value for value in self.added_app_ids if value not in removed)
             if self.creator_request and "app_ids" in self.creator_request:
                 self.creator_request["app_ids"] = [app_id for app_id in self.creator_request["app_ids"] if app_id not in removed]
+                for key, ids in self.creator_request.get("catalog_memberships", {}).items():
+                    self.creator_request["catalog_memberships"][key] = [app_id for app_id in ids if app_id not in removed]
             self.data["total"] = max(0, self.data["total"] - count)
             noun = "products" if self.creator_request else "games"
             self.data["message"] = f"Checked {len(self.data['items'])} of {self.data['total']} {noun}."
             self.updated = time.monotonic()
+
+    def remove_catalogs(self, catalog_ids, orphan_app_ids=()):
+        """Drop private catalog state and exclusive products, preserving shared titles."""
+        with self.lock:
+            removed = set(catalog_ids)
+            if len(removed | self.excluded_catalog_ids) > 1000:
+                raise InputError("This comparison supports up to 1,000 removed catalogs.")
+            memberships = deepcopy(self.creator_membership)
+            for key, page in self.data.get("catalogs", {}).items():
+                for product in page["products"]:
+                    memberships.setdefault(product["app_id"], []).append(key)
+            for key, ids in self.creator_request.get("catalog_memberships", {}).items():
+                for app_id in ids:
+                    memberships.setdefault(app_id, []).append(key)
+            excluded = self.excluded_catalog_ids | removed
+            retained = {app_id: [key for key in keys if key not in excluded] for app_id, keys in memberships.items()}
+            orphaned = {app_id for app_id, keys in retained.items() if not keys}
+            orphaned.update(app_id for app_id in orphan_app_ids if not retained.get(app_id))
+            if len(orphaned | self.excluded_app_ids) > 10000:
+                raise InputError("This comparison supports up to 10,000 removed product IDs.")
+            self.excluded_catalog_ids.update(removed)
+            self.creator_membership = {app_id: keys for app_id, keys in retained.items() if keys}
+            for key in removed:
+                self.data.get("catalogs", {}).pop(key, None)
+                self.creator_request.get("catalog_memberships", {}).pop(key, None)
+            for item in self.data["items"]:
+                if "creator_ids" in item:
+                    item["creator_ids"] = [key for key in item["creator_ids"] if key not in excluded]
+            if self.creator_request.get("creator_id") in excluded:
+                self.creator_request.clear()
+                self.creator_request.update(mode="products", app_ids=[item.app_id for item in self.loaded_items or () if item.app_id not in orphaned])
+            self.remove_titles(orphaned)
 
     def check_cancelled(self):
         if self.cancel.is_set():
@@ -341,6 +393,7 @@ class JobManager:
                     job.creator_membership = deepcopy(source_job.creator_membership)
                     job.catalog_warnings = list(source_job.catalog_warnings)
                     job.excluded_app_ids.update(source_job.excluded_app_ids)
+                    job.excluded_catalog_ids.update(source_job.excluded_catalog_ids)
                 job.comparison_id = source_job.comparison_id
                 job.previous_job_id = source_job.id
                 job.data.update(previous_job_id=source_job.id, total=len(job.loaded_items),
@@ -434,8 +487,10 @@ class JobManager:
                     self._prune_completed(time.monotonic())
 
     def _analyze(self, job):
+        with job.lock:
+            creator_request = deepcopy(job.creator_request)
         job.update(state="loading", message="Updating comparison currencies…" if job.previous_job_id else
-                   "Loading owned library…" if job.library else "Loading catalog products…" if job.creator_request else "Loading public wishlist…")
+                   "Loading owned library…" if job.library else "Loading catalog products…" if creator_request else "Loading public wishlist…")
         def sleep(seconds):
             if job.cancel.wait(seconds):
                 raise Cancelled()
@@ -457,25 +512,28 @@ class JobManager:
                 return
         elif job.request_app_ids is not None:
             wishlist = tuple(WishlistItem(app_id) for app_id in job.request_app_ids)
-        elif job.creator_request:
+        elif creator_request:
             job.update(message="Loading catalog…")
             catalogs = {}
-            if job.creator_request["mode"] == "products":
-                wishlist = tuple(WishlistItem(app_id) for app_id in job.creator_request["app_ids"])
-            elif job.creator_request["mode"] == "featured":
+            if creator_request["mode"] == "products":
+                wishlist = tuple(WishlistItem(app_id) for app_id in creator_request["app_ids"])
+                for creator_id, ids in creator_request.get("catalog_memberships", {}).items():
+                    for app_id in ids:
+                        creator_membership.setdefault(app_id, []).append(creator_id)
+            elif creator_request["mode"] == "featured":
                 for creator in FEATURED_CREATORS:
                     catalogs[creator.id] = {"products": [asdict(item) for item in creator.examples],
                                            "total": None, "next_start": 0, "has_more": True}
             else:
-                creator_id = job.creator_request["creator_id"]
-                creator = (self.creator_search.resolve(client(self.gate), job.creator_request["selector"], job.config.home.region)
-                           if "selector" in job.creator_request else CREATORS[creator_id])
-                page = self.catalogs.get_page(client(self.gate), creator if "selector" in job.creator_request else creator_id, job.config.home.region,
-                                              job.creator_request["start"])
+                creator_id = creator_request["creator_id"]
+                creator = (self.creator_search.resolve(client(self.gate), creator_request["selector"], job.config.home.region)
+                           if "selector" in creator_request else CREATORS[creator_id])
+                page = self.catalogs.get_page(client(self.gate), creator if "selector" in creator_request else creator_id, job.config.home.region,
+                                              creator_request["start"])
                 catalogs[creator_id] = {**page, "creator": creator.public()}
                 if page["source"] == "stale cache":
                     catalog_warnings.append("Steam's catalog could not be refreshed. Showing a cached catalog page.")
-            if job.creator_request["mode"] != "products":
+            if creator_request["mode"] != "products":
                 wishlist = []
                 for creator_id, page in catalogs.items():
                     for product in page["products"]:
@@ -533,16 +591,20 @@ class JobManager:
         if len(wishlist) > self.max_games:
             raise InputError("Too many games in this comparison.")
         with job.lock:
+            orphaned = {app_id for app_id, ids in creator_membership.items()
+                        if ids and not any(key not in job.excluded_catalog_ids for key in ids)}
+            job.remove_titles(orphaned)
             wishlist = tuple(item for item in wishlist if item.app_id not in job.excluded_app_ids)
             job.loaded_items = wishlist
             job.data["total"] = len(wishlist)
-            job.creator_membership = {key: value for key, value in creator_membership.items() if key not in job.excluded_app_ids}
+            job.creator_membership = {key: [catalog for catalog in value if catalog not in job.excluded_catalog_ids]
+                                      for key, value in creator_membership.items() if key not in job.excluded_app_ids}
             for page in job.data.get("catalogs", {}).values():
                 page["products"] = [item for item in page["products"] if item["app_id"] not in job.excluded_app_ids]
         if not wishlist and job.excluded_app_ids:
             job.update(state="complete", total=0, message="All titles have been removed from this comparison.")
             return
-        if job.creator_request and not wishlist:
+        if creator_request and not wishlist:
             job.loaded_items = ()
             job.catalog_warnings = list(catalog_warnings)
             job.update(state="complete", total=0, warnings=catalog_warnings,
@@ -571,7 +633,7 @@ class JobManager:
             "name": "Loading game names to prepare alphabetical order…",
         }
         job.update(state="running", rates=rate_rows, warnings=warnings,
-                   message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if job.creator_request else order_messages[job.order])
+                   message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if creator_request else order_messages[job.order])
         runner = AnalysisRunner(CachedBatchPriceService(SteamBatchProvider(steam_http, policy=self.batch_policy, check_cancelled=job.check_cancelled), cache), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
         for progress in runner.run(
@@ -583,7 +645,7 @@ class JobManager:
             job.check_cancelled()
             item = asdict(progress)
             item["manually_added"] = progress.app_id in job.added_app_ids
-            if job.creator_request:
+            if creator_request:
                 item["creator_ids"] = creator_membership.get(progress.app_id, [])
             item["source_summary"] = progress.source_summary
             if progress.skipped:
@@ -601,7 +663,7 @@ class JobManager:
                        for offer in (item.get("best_offers") or {}).values()) for item in job.snapshot()["items"]):
             warnings.append("Some Steam best purchase offers could not be retrieved. Default game comparisons remain available.")
             job.update(warnings=warnings)
-        noun = "products" if job.creator_request else "games"
+        noun = "products" if creator_request else "games"
         # Keep the emitted order even when new country metadata has different names.
         originals = {item.app_id: item for item in wishlist}
         with job.lock:
@@ -730,13 +792,32 @@ class WebApplication:
                 except BusyError as exc:
                     return respond("429 Too Many Requests", {"error": str(exc)})
                 return respond("202 Accepted", {"id": job.id, "token": job.token})
-        match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]{32})(/cancel|/currencies|/remove)?", path)
+        match = re.fullmatch(r"/api/jobs/([A-Za-z0-9_-]{32})(/cancel|/currencies|/remove|/remove-catalogs)?", path)
         if match and ((method == "GET" and not match[2]) or (method == "POST" and match[2])):
             authorization = environ.get("HTTP_AUTHORIZATION", "")
             token = authorization[7:] if authorization.startswith("Bearer ") else ""
             job = self.manager.get(match[1], token)
             if job is None:
                 return respond("404 Not Found", {"error": "This comparison is unavailable or has expired."})
+            if match[2] == "/remove-catalogs":
+                if not job.creator_request:
+                    return respond("400 Bad Request", {"error": "Only catalog comparisons support catalog cleanup."})
+                try:
+                    if (not isinstance(payload, dict) or not {"catalog_ids"} <= payload.keys()
+                            or payload.keys() - {"catalog_ids", "app_ids"}):
+                        raise InputError("Supply removed catalog IDs.")
+                    ids = payload["catalog_ids"]
+                    if (not isinstance(ids, list) or not 1 <= len(ids) <= 20
+                            or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", key) for key in ids)
+                            or len(set(ids)) != len(ids)):
+                        raise InputError("Supply 1 to 20 unique catalog IDs.")
+                    app_ids = validate_exclusions(payload.get("app_ids", []))
+                    if len(app_ids) > 1000:
+                        raise InputError("Cleanup accepts up to 1,000 product IDs per request.")
+                    job.remove_catalogs(ids, app_ids)
+                except ValueError as exc:
+                    return respond("400 Bad Request", {"error": str(exc)})
+                return respond("200 OK", {"removed_catalogs": ids})
             if match[2] == "/remove":
                 if job.library and not self.owned_library_enabled:
                     return respond("404 Not Found", {"error": "Owned-library comparisons are not enabled."})

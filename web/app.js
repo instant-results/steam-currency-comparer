@@ -26,15 +26,15 @@ const removalNotices = (() => {
     find(owner, id) { return entries.find(entry => entry.key === key(owner, id)); },
     commitOwner(owner) { for (const entry of [...entries]) if (entry.key.startsWith(`${owner}:`)) finish(entry); },
     commitAll() { for (const entry of [...entries]) finish(entry); },
-    add(owner, id, name, data, undo, commit) {
+    add(owner, id, name, data, undo, commit, description = `App ID ${id}`) {
       for (const entry of [...entries]) if (Date.now() >= entry.deadline) finish(entry);
       if (entries.length === 4) finish(entries[0]);
       const element = node("div", undefined, "removal-notice"), text = node("div", undefined, "removal-notice-text");
       const title = node("strong", name || `Steam product ${id}`);
       title.title = name || `Steam product ${id}`;
-      text.append(title, node("span", `Removed · App ID ${id}`));
+      text.append(title, node("span", `Removed · ${description}`));
       const button = node("button", "Undo", "removal-undo"); button.type = "button";
-      button.setAttribute("aria-label", `Undo removal of ${name || id}, Steam App ID ${id}`);
+      button.setAttribute("aria-label", `Undo removal of ${name || id}, ${description}`);
       const progress = node("span", undefined, "removal-countdown"); progress.setAttribute("aria-hidden", "true");
       element.setAttribute("role", "status"); element.append(text, button, progress);
       const entry = {key: key(owner, id), deadline: Date.now() + 7000, data, undo, commit, element, button};

@@ -16,18 +16,105 @@
     let searching = false, searchChoices = [], searchTimer = null, searchRevision = 0, searchPending = false;
     let catalogSort = "arrival", catalogDirection = 1;
     const groups = new Map(), results = new Map(), defaultIds = new Set();
+    const removedCatalogs = new Set(), finalizedCatalogs = new Set(), orphanedProducts = new Set(), catalogSources = new Map(), catalogOrder = new Map();
+    let cleanupRunning = false, cleanupTimer = null;
+    const catalogOwner = `${kind}-catalog`;
+    const pendingCatalog = id => removalNotices.find(catalogOwner, id)?.data;
+    function allGroups() {
+      const entries = new Map(groups);
+      for (const id of removedCatalogs) { const record = pendingCatalog(id); if (record) entries.set(id, record.group); }
+      return entries;
+    }
+    function referencedIds(includePending = false) {
+      return new Set([...(includePending ? allGroups() : groups).values()].flatMap(group => group.products.map(product => product.app_id)));
+    }
+    function cleanupProductIds() {
+      const ids = new Set(orphanedProducts), visible = referencedIds();
+      for (const id of removedCatalogs) for (const product of pendingCatalog(id)?.group.products || []) {
+        if (!visible.has(product.app_id)) ids.add(product.app_id);
+      }
+      return [...ids];
+    }
+    function acceptResults(items) {
+      const visible = referencedIds();
+      for (const item of removals.filter(items)) {
+        for (const id of removedCatalogs) {
+          const record = pendingCatalog(id);
+          if (record?.group.order.has(item.app_id)) record.results.set(item.app_id, item);
+        }
+        if (visible.has(item.app_id)) results.set(item.app_id, item);
+      }
+      for (const id of results.keys()) if (!visible.has(id)) results.delete(id);
+    }
+    function registerCatalogJob(job) {
+      if (!job?.id || !job.token || catalogSources.has(job.id)) return;
+      if (catalogSources.size >= 120) catalogSources.delete(catalogSources.keys().next().value);
+      catalogSources.set(job.id, {token: job.token, catalogs: new Set(), products: new Set()});
+      if (finalizedCatalogs.size) syncCatalogCleanup();
+    }
+    async function syncCatalogCleanup() {
+      if (cleanupRunning) return;
+      clearTimeout(cleanupTimer); cleanupRunning = true;
+      let failed = false, remaining = false;
+      try {
+        const retained = referencedIds(true);
+        await Promise.all([...catalogSources].map(async ([id, source]) => {
+          const catalogs = [...finalizedCatalogs].filter(key => !source.catalogs.has(key)).slice(0, 20);
+          const appIds = [...orphanedProducts].filter(key => !source.products.has(key) && !retained.has(key)).slice(0, 1000);
+          if (!catalogs.length && !appIds.length) return;
+          const batch = catalogs.length ? catalogs : [...finalizedCatalogs].slice(0, 1);
+          if (!batch.length) return;
+          try {
+            await request(`/api/jobs/${id}/remove-catalogs`, {method: "POST", keepalive: true,
+              headers: {Authorization: `Bearer ${source.token}`}, body: JSON.stringify({catalog_ids: batch, app_ids: appIds})});
+            for (const key of catalogs) source.catalogs.add(key);
+            for (const key of appIds) source.products.add(key);
+          } catch (error) { if (error.status === 404) catalogSources.delete(id); else failed = true; }
+          if (catalogSources.has(id)) remaining ||= [...finalizedCatalogs].some(key => !source.catalogs.has(key))
+            || [...orphanedProducts].some(key => !source.products.has(key) && !retained.has(key));
+        }));
+      } finally {
+        cleanupRunning = false;
+        if (remaining || failed) cleanupTimer = setTimeout(syncCatalogCleanup, failed ? 4000 : 0);
+        if (failed) message("Catalog removed locally. Server cleanup will retry when the connection is available.", true);
+      }
+    }
+    function removeCatalog(id) {
+      const creator = creators.find(value => value.id === id), group = groups.get(id);
+      if (!creator || !group) return;
+      if (removedCatalogs.size >= 1000) { message("This tab has reached its 1,000-catalog removal limit. Open a new tab to reset it.", true); return; }
+      if (new Set([...cleanupProductIds(), ...group.products.map(product => product.app_id)]).size > 10000) {
+        message("This tab has reached its 10,000-product catalog cleanup limit. Open a new tab to reset it.", true); return;
+      }
+      removedCatalogs.add(id); groups.delete(id); group.section.remove();
+      creators = creators.filter(value => value.id !== id);
+      const record = {creator, group, results: new Map(group.products.map(product => [product.app_id, results.get(product.app_id)]).filter(([, item]) => item))};
+      removalNotices.add(catalogOwner, id, creator.name, record, data => {
+        removedCatalogs.delete(id); creators.push(data.creator);
+        creators.sort((a, b) => catalogOrder.get(a.id) - catalogOrder.get(b.id)); groups.set(id, data.group);
+        for (const value of creators) $("creator-groups").append(groups.get(value.id).section);
+        acceptResults([...data.results.values()]); renderGroups(); save();
+      }, data => {
+        finalizedCatalogs.add(id);
+        const retained = referencedIds(true);
+        for (const product of data.group.products) if (!retained.has(product.app_id)) orphanedProducts.add(product.app_id);
+        data.group.section.replaceChildren(); data.group.rowCache.clear();
+        syncCatalogCleanup(); save();
+      }, `${kind === "developer" ? "Developer" : "Publisher"} catalog`);
+      acceptResults([]); renderGroups(); save();
+    }
     const synchronizedScrolls = new WeakMap();
     let defaultsChanged = false;
     const storageKey = `polisher-${kind}-job`;
     const terminal = new Set(["complete", "partial", "cancelled", "failed"]);
     const removals = createTitleRemovals(kind, () => {
-      for (const group of groups.values()) group.products = group.products.filter(product => !removals.has(product.app_id));
+      for (const group of allGroups().values()) group.products = group.products.filter(product => !removals.has(product.app_id));
       for (const id of results.keys()) if (removals.has(id)) results.delete(id);
       renderGroups(); save();
     }, record => {
       if (record.item && !record.item.pending) results.set(record.item.app_id, record.item);
       for (const [id, product] of record.memberships) {
-        const group = groups.get(id);
+        const group = allGroups().get(id);
         if (!group || group.products.some(value => value.app_id === product.app_id)) continue;
         group.products.push(product);
         group.products.sort((a, b) => group.order.get(a.app_id) - group.order.get(b.app_id));
@@ -36,7 +123,7 @@
 
     function removeTitle(appId) {
       const memberships = new Map();
-      for (const [id, group] of groups) {
+      for (const [id, group] of allGroups()) {
         const product = group.products.find(value => value.app_id === appId);
         if (product) memberships.set(id, product);
       }
@@ -50,7 +137,9 @@
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
-          results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize()}));
+          results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize(),
+          removedCatalogs: [...removedCatalogs], orphanedProducts: cleanupProductIds(),
+          catalogSources: [...catalogSources].map(([id, source]) => ({id, token: source.token}))}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
 
@@ -144,6 +233,8 @@
 
     function buildGroups() {
       for (const creator of creators) {
+        if (removedCatalogs.has(creator.id)) continue;
+        if (!catalogOrder.has(creator.id)) catalogOrder.set(creator.id, catalogOrder.size);
         if (groups.has(creator.id)) continue;
         const section = node("section", undefined, "creator-group");
         section.setAttribute("aria-labelledby", `creator-${creator.id}`);
@@ -156,7 +247,18 @@
         const title = node("h3"); title.id = `creator-${creator.id}`;
         const link = node("a", creator.name + " ↗");
         link.href = creator.homepage; link.target = "_blank"; link.rel = "noopener noreferrer";
-        title.append(link); identity.append(icon, title, node("p", creator.role, "hint"));
+        const control = node("span", undefined, "game-artwork-control creator-icon-control");
+        const iconLink = node("a"); iconLink.href = creator.homepage; iconLink.target = "_blank"; iconLink.rel = "noopener noreferrer";
+        iconLink.setAttribute("aria-label", `Open ${creator.name} on Steam`); iconLink.append(icon);
+        const remove = node("button", undefined, "remove-title"); remove.type = "button";
+        remove.title = `Remove ${creator.name} ${kind} catalog`; remove.setAttribute("aria-label", remove.title);
+        const cross = node("span", undefined, "offer-help-close-icon"); cross.setAttribute("aria-hidden", "true"); remove.append(cross);
+        remove.addEventListener("click", event => {
+          touchRemoval.hide(); removeCatalog(creator.id);
+          if (event.detail === 0) $("creator-query").focus({preventScroll: true});
+        });
+        control.append(iconLink, remove); touchRemoval.bind(control, iconLink);
+        title.append(link); identity.append(control, title, node("p", creator.role, "hint"));
         const heading = node("div", undefined, "creator-group-heading");
         const statistics = node("div", undefined, "creator-statistics");
         statistics.setAttribute("aria-label", `${creator.name} statistics for loaded products`);
@@ -177,7 +279,7 @@
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
           discoveryHome: creatorHome,
-          expanded: !creator.examples.length, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map(),
+          expanded: !creator.examples.length, section, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map(),
           order: new Map(creator.examples.map((product, index) => [product.app_id, index]))});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
@@ -315,7 +417,7 @@
 
     function mergeSnapshot(data) {
       for (const [id, page] of Object.entries(data.catalogs || {})) {
-        const group = groups.get(id);
+        const group = allGroups().get(id);
         if (!group) continue;
         group.expanded = true;
         const known = new Set(group.products.map(item => item.app_id));
@@ -330,7 +432,7 @@
         group.nextStart = page.next_start; group.hasMore = page.has_more; group.total = page.total;
         group.discoveryHome = savedRequest.home;
       }
-      for (const item of removals.filter(data.items)) results.set(item.app_id, item);
+      acceptResults(data.items);
       if (data.rates?.length) creatorRates = data.rates;
       renderGroups(); save();
     }
@@ -350,7 +452,7 @@
               ? `Updated to ${currencyLabel(savedRequest)}. ${data.message}` : `Currency update ${data.state}.`;
             if (updating && ["complete", "partial"].includes(data.state)) {
               creatorHome = savedRequest.home; creatorRegions = [...savedRequest.regions]; creatorRates = data.rates || [];
-              results.clear(); for (const item of removals.filter(data.items)) results.set(item.app_id, item);
+              results.clear(); acceptResults(data.items);
               currencyRetry = null; completedComparison = true; defaultsChanged = false;
               renderGroups();
             } else if (!updating && ["complete", "partial"].includes(data.state)) completedComparison = true;
@@ -393,8 +495,11 @@
       save();
       try {
         const excluded = removals.exclusions();
-        creatorJob = await request("/api/creator-jobs", {method: "POST", body: JSON.stringify({...body, ...(excluded.length ? {excluded_app_ids: excluded} : {})})});
+        const memberships = body.mode === "products" ? {catalog_memberships: Object.fromEntries([...allGroups()].map(([id, group]) =>
+          [id, group.products.map(product => product.app_id).filter(id => body.app_ids.includes(id))]))} : {};
+        creatorJob = await request("/api/creator-jobs", {method: "POST", body: JSON.stringify({...body, ...memberships, ...(excluded.length ? {excluded_app_ids: excluded} : {})})});
         removals.register(creatorJob);
+        registerCatalogJob(creatorJob);
         save(); refreshControls(); pollCreators();
       } catch (error) {
         currencyUpdating = false; setCreatorBusy(false); message(`${error.message}${preserve ? " Displayed results are unchanged. Retry the currency update." : ""}`, true); save();
@@ -436,7 +541,7 @@
 
     function loadedProductIds() {
       // Pending Undo entries still need fresh offers if currencies change within seven seconds.
-      const ids = [...groups.values()].flatMap(group => group.products.map(item => item.app_id));
+      const ids = [...allGroups().values()].flatMap(group => group.products.map(item => item.app_id));
       for (const id of removals.serialize().removed) if (removals.pending(id)) ids.push(id);
       return [...new Set(ids)];
     }
@@ -504,6 +609,8 @@
           button.addEventListener("click", () => {
             if (comparisonCoordinator.busy || groups.has(creator.id)) return;
             if (creators.length >= 20) { message("Up to 20 catalogs can be displayed in one tab. Open a new tab to start another selection.", true); return; }
+            if (pendingCatalog(creator.id)) { removalNotices.undo(catalogOwner, creator.id); return; }
+            removedCatalogs.delete(creator.id); finalizedCatalogs.delete(creator.id);
             creators.push(creator); buildGroups(); save(); loadMore(creator.id);
           });
           searchChoices.push({creator, button, action}); group.actions.append(button);
@@ -527,6 +634,14 @@
       defaultsChanged = oldDefaults.length > 0 && (oldDefaults.length !== defaultIds.size ||
         [...defaultIds].some(id => !oldDefaults.includes(id)));
       creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
+      for (const id of Array.isArray(saved.removedCatalogs) ? saved.removedCatalogs.slice(0, 1000) : []) {
+        if (typeof id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(id)) { removedCatalogs.add(id); finalizedCatalogs.add(id); }
+      }
+      for (const id of Array.isArray(saved.orphanedProducts) ? saved.orphanedProducts.slice(0, 10000) : []) {
+        if (typeof id === "string" && /^[0-9]{1,12}$/.test(id)) orphanedProducts.add(id);
+      }
+      creators = creators.filter(creator => !removedCatalogs.has(creator.id));
+      for (const [id, group] of groups) if (removedCatalogs.has(id)) { group.section.remove(); groups.delete(id); }
       catalogSort = ["name", "home", "difference", "percentage"].includes(saved.catalogSort) ? saved.catalogSort : "arrival";
       catalogDirection = saved.catalogDirection === -1 ? -1 : 1;
       removals.restore(saved.removals);
@@ -536,7 +651,7 @@
       for (const value of Array.isArray(saved.creators) ? saved.creators.slice(0, 20) : []) {
         if ((oldDefaults.includes(value.id) || value.examples?.length) && !defaultIds.has(value.id)) continue;
         const creator = safeCreator(value);
-        if (creator && !creators.some(c => c.id === creator.id)) creators.push(creator);
+        if (creator && !removedCatalogs.has(creator.id) && !creators.some(c => c.id === creator.id)) creators.push(creator);
       }
       buildGroups();
       savedRequest = saved.request;
@@ -561,8 +676,14 @@
         group.expanded = catalog.expanded === true || catalog.nextStart > 0 || catalog.total != null ||
           group.products.some(product => !featuredIds.has(product.app_id));
       }
+      acceptResults([]);
+      const cleanupSources = saved.catalogSources || saved.removals?.sources;
+      for (const source of Array.isArray(cleanupSources) ? cleanupSources.slice(-120) : []) {
+        if (/^[A-Za-z0-9_-]{32}$/.test(source.id) && /^[A-Za-z0-9_-]{43}$/.test(source.token)) registerCatalogJob(source);
+      }
       if (saved.job && /^[A-Za-z0-9_-]{32}$/.test(saved.job.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.job.token)) {
         removals.register(saved.job);
+        registerCatalogJob(saved.job);
         creatorJob = saved.job; savedRequest = saved.request; setCreatorBusy(true); pollCreators();
       } else { currencyUpdating = false; $("creators-progress").textContent = "Restored catalog results. Refresh comparisons for a new price check."; }
       renderGroups(); return true;

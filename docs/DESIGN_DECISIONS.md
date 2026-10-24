@@ -234,3 +234,11 @@ remember separate sorting choices; sorting starts no requests.
 Center Load more identically in both catalog tabs, regardless of credit-column
 visibility. Footer tracks are independent of table tracks. On phones keep the
 product count above the centered arrow.
+
+## Catalog removal
+
+Organization icons use the same overlapping remove control and touch hold as game
+artwork. Whole-catalog Undo notices name the organization and its developer/publisher
+role. Reuse the shared seven-second, four-notice stack. Remove memberships and
+exclusive products, preserving shared titles in retained groups. Group buffers
+exist only during Undo; session storage and retries retain bounded ID-only cleanup.

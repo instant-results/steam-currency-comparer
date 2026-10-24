@@ -1160,6 +1160,7 @@ td:first-child { min-width: 0; }
 .creator-group-heading { display: grid; grid-template-columns: var(--creator-game-width) var(--creator-home-width) calc(var(--creator-foreign-width) / 2) calc(var(--creator-foreign-width) / 2) var(--creator-difference-width); row-gap: 10px; align-items: start; margin-bottom: 22px; }
 .creator-identity { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 16px; min-width: 0; grid-column: 1 / 3; grid-row: 1 / 3; align-self: center; padding-right: 16px; }
 .creator-identity img { grid-row: 1 / 3; }
+.creator-identity .creator-icon-control { grid-row: 1 / 3; width: 64px; height: 64px; align-self: start; }
 .creator-statistics { display: contents; }
 .creator-statistic { display: flex; flex-direction: column; min-width: 0; padding: 0 8px; }
 .creator-statistic:first-child { grid-column: 3; padding-left: 16px; }
