@@ -458,16 +458,16 @@
             const row = node("div", undefined, "creator-search-result");
             const label = node("div"); label.append(node("strong", creator.name));
             const actions = node("div", undefined, "creator-search-actions");
-            row.append(label, actions); rows.set(key, {row, actions, ids: new Set()});
+            row.append(actions, label); rows.set(key, {row, actions, ids: new Set()});
             $("creator-search-results").append(row);
           }
           const group = rows.get(key);
           if (group.ids.has(creator.id)) continue;
           group.ids.add(creator.id);
-          const action = "Add & compare";
+          const action = "Add";
           const button = node("button", action); button.type = "button";
           button.title = `Compare products listing ${creator.name} as ${kind}`;
-          button.setAttribute("aria-label", `Add and compare ${creator.name}, ${creator.role}`);
+          button.setAttribute("aria-label", `Add ${creator.name}, ${creator.role}`);
           button.addEventListener("click", () => {
             if (comparisonCoordinator.busy || groups.has(creator.id)) return;
             if (creators.length >= 20) { message("Up to 20 catalogs can be displayed in one tab. Open a new tab to start another selection.", true); return; }

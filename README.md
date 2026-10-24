@@ -92,7 +92,7 @@ change over time. No personal Steam profile is used.
 - Each catalog's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
   Statistics cover the displayed selection rather than the entire catalog.
-- Developers and Publishers each search their own role and offer **Add & compare** for matching names.
+- Developers and Publishers each search their own role and offer **Add** for matching names.
   Developer and publisher selections, results, and catalog positions are saved
   independently in the same browser tab. Developer/publisher credits appear
   beneath each game, or in a separate column using **Show publisher column** /

@@ -26,7 +26,7 @@ Probes found Supergiant Games (3584665), Devolver Digital (6638525), ConcernedAp
 
 ## Exact-name fallback
 
-The Developers and Publishers tabs send a role with each search. Search checks the first product-search page for that role against suggested names and the entered exact name. Only nonempty regional catalogs are offered through Add & compare. Steam homepages help discover names internally; they are not a third role or a selectable catalog source in the interface. This confirms Steam attribution rather than a company's legal identity. Spelling and Steam's own filter semantics affect coverage. Role checks use a bounded six-hour catalog cache; failed or stale checks produce a search error rather than unverified buttons.
+The Developers and Publishers tabs send a role with each search. Search checks the first product-search page for that role against suggested names and the entered exact name. Only nonempty regional catalogs are offered through Add. Steam homepages help discover names internally; they are not a third role or a selectable catalog source in the interface. This confirms Steam attribution rather than a company's legal identity. Spelling and Steam's own filter semantics affect coverage. Role checks use a bounded six-hour catalog cache; failed or stale checks produce a search error rather than unverified buttons.
 
 `https://store.steampowered.com/search/results/` accepts `developer=NAME` or `publisher=NAME`, `start`, `count=12`, `cc`, `l=english`, `json=1`, `ignore_preferences=1`, and `infinite=1`. JSON contains `success`, `results_html`, `total_count`, and `start`, without `pagesize`. Empty searches returned `total_count: 0` and `start: -1`.
 

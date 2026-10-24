@@ -215,3 +215,9 @@ Start immediately while idle; batch only already queued selections. Do not add a
 debounce window to delay price comparisons. Keep prior results visible while the
 new selection is compared, and use its displayed currencies. Mark manual rows
 without introducing a new table column. Keep long matches wrapping at narrow widths.
+
+## Catalog search results
+
+Developer and publisher matches use an Add button before the name, in visual
+and keyboard order. Keep the action on the left on phones and let long names
+wrap beside it. Adding a catalog still starts its price comparison.

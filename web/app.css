@@ -1183,14 +1183,15 @@ td:first-child { min-width: 0; }
 .creator-search button:hover:not(:disabled) { background: var(--blue-subtle); }
 .creator-search .hint { margin: 10px 0 0; }
 .creator-search-results { display: grid; gap: 8px; }
-.creator-search-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; }
+.creator-search-result { display: flex; align-items: center; gap: 12px; padding-top: 10px; }
+.creator-search-actions { flex: 0 0 auto; }
 .creator-search-result > div { min-width: 0; overflow-wrap: anywhere; }
 .creator-search-result small { display: block; color: var(--muted); }
 .creator-search-result button { flex-shrink: 0; }
 .creator-search-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 @media (max-width: 600px) {
   .creator-search-controls { flex-direction: column; }
-  .creator-search-result { flex-direction: column; align-items: stretch; }
+  .creator-search-result { align-items: flex-start; }
   .creator-search-actions { justify-content: flex-start; }
 }
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }

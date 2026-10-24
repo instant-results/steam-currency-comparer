@@ -315,7 +315,7 @@ at the end. Free-only pages still advance; use Load more again to continue.
 
 Use **Find a developer** or **Find a publisher** in the corresponding tab.
 Only names with matching products for that role in the baseline region are
-returned. **Add & compare** appends that catalog beside the featured entries.
+returned. **Add** appends that catalog beside the featured entries.
 There is no Creator role or homepage-catalog button. Steam homepage suggestions
 are used internally to discover possible names, then their product credits are checked.
 Use the full credited name: spelling, regional availability, and Steam filters
