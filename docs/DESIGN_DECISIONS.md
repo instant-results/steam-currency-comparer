@@ -228,3 +228,9 @@ The shared catalog header uses the wishlist sort controls and direction indicato
 Sort each group independently without changing membership or group order. Retain
 original discovery order for the third click and exports. Developers and Publishers
 remember separate sorting choices; sorting starts no requests.
+
+## Catalog expansion footer
+
+Center Load more identically in both catalog tabs, regardless of credit-column
+visibility. Footer tracks are independent of table tracks. On phones keep the
+product count above the centered arrow.

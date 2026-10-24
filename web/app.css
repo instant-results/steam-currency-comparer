@@ -1268,12 +1268,8 @@ td:first-child { min-width: 0; }
   .credit-column-visible .creator-statistics-coverage { grid-column: 1 / -1; padding-left: 0; }
 }
 
-.credit-column-visible .creator-catalog-footer { grid-template-columns: var(--creator-game-width) var(--creator-credit-width) var(--creator-home-width) var(--creator-foreign-width) var(--creator-difference-width); }
-.credit-column-visible .creator-load-more { grid-column: 3 / 5; }
-@media (max-width: 600px) {
-  .credit-column-visible .creator-catalog-footer { grid-template-columns: 1fr; }
-  .credit-column-visible .creator-load-more { grid-column: 1; }
-}
+/* The footer is independent of optional table-credit columns. Both role tabs
+   keep the Load more arrow centered with the same narrow-screen placement. */
 
 /* Match the wishlist form while keeping library setup instructions bounded. */
 .library-actions { flex-direction: column; align-items: flex-start; width: 260px; gap: 8px; }
