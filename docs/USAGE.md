@@ -291,6 +291,11 @@ Credentials never appear in CSV.
 
 ## Developer and publisher catalogs
 
+Developer and publisher name searches run after four seconds without edits,
+matching wishlist game search. Search Steam submits immediately. Editing or
+clearing the query discards outdated matches; switching tabs cancels pending
+automatic search. Search does not start a price comparison.
+
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
 with three selected games each from Supergiant Games, CD PROJEKT RED, and Techland.
 Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios

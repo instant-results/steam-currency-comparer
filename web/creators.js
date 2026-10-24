@@ -13,7 +13,7 @@
     let creatorHome = "pl", creatorRegions = ["us", "de"], creatorRates = [];
     let savedRequest = null, cancelRequested = false;
     let currencyUpdating = false, currencyRetry = null, completedComparison = false;
-    let searching = false, searchChoices = [];
+    let searching = false, searchChoices = [], searchTimer = null, searchRevision = 0, searchPending = false;
     const groups = new Map(), results = new Map(), defaultIds = new Set();
     const synchronizedScrolls = new WeakMap();
     let defaultsChanged = false;
@@ -422,17 +422,33 @@
       return {id: value.id, name: value.name, selector, homepage, role, icon: "", examples: []};
     }
 
+    function scheduleSearch() {
+      clearTimeout(searchTimer); searchTimer = null; searchRevision++; searchPending = false;
+      searchChoices = []; $("creator-search-results").replaceChildren();
+      $("creator-search-status").textContent = "";
+      const length = $("creator-query").value.trim().length;
+      if (active && length >= 2 && length <= 100) searchTimer = setTimeout(() => {
+        searchTimer = null; searchCreators();
+      }, 4000);
+    }
+
     async function searchCreators(event) {
-      event.preventDefault();
-      if (searching || !initialized) return;
+      event?.preventDefault();
+      clearTimeout(searchTimer); searchTimer = null;
+      if (!initialized) return;
+      if (searching) { searchPending = true; return; }
+      searchPending = false;
       const query = $("creator-query").value.trim();
       if (query.length < 2 || query.length > 100) {
         $("creator-search-status").textContent = "Enter a name between 2 and 100 characters."; return;
       }
+      const revision = ++searchRevision, home = selectedHome();
+      const current = () => revision === searchRevision && query === $("creator-query").value.trim() && home === selectedHome();
       searching = true; searchChoices = []; $("creator-search-results").replaceChildren(); refreshControls();
       $("creator-search-status").textContent = "Searching Steam…";
       try {
-        const data = await request("/api/creators/search", {method: "POST", body: JSON.stringify({query, home: selectedHome(), role: kind})});
+        const data = await request("/api/creators/search", {method: "POST", body: JSON.stringify({query, home, role: kind})});
+        if (!current()) return;
         const rows = new Map();
         for (const candidate of data.exact_matches) {
           const creator = creators.find(c => c.id === candidate.id) || safeCreator(candidate);
@@ -462,8 +478,11 @@
         $("creator-search-status").textContent = rows.size
           ? `Choose a ${kind} to add and compare.`
           : `No matching ${plural} found. Try the full name from a game's store page.`;
-      } catch (error) { $("creator-search-status").textContent = error.message; }
-      finally { searching = false; refreshControls(); }
+      } catch (error) { if (current()) $("creator-search-status").textContent = error.message; }
+      finally {
+        searching = false; refreshControls();
+        if (searchPending && active) searchCreators();
+      }
     }
 
     function restore(saved) {
@@ -559,7 +578,10 @@
         renderRates(creatorRates, $("rates"));
         initialize();
         if (initialized && (!savedRequest || defaultsChanged) && !busy) scheduleFeatured();
-      } else comparisonCoordinator.cancel(`${kind}-featured`);
+      } else {
+        comparisonCoordinator.cancel(`${kind}-featured`);
+        clearTimeout(searchTimer); searchTimer = null; searchRevision++; searchPending = false;
+      }
     }
 
     $("creator-columns-scroll").addEventListener("scroll", () => syncColumns($("creator-columns-scroll")));
@@ -567,6 +589,7 @@
     $("creators-export").addEventListener("click", () => downloadCsv(catalogCsv(), `steam-${plural}-comparison.csv`));
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
+    $("creator-query").addEventListener("input", scheduleSearch);
     $("creator-show-credits").addEventListener("change", () => { renderGroups(); save(); });
     $("creators-cancel").addEventListener("click", async () => {
       if (!creatorJob) return;
