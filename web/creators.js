@@ -188,9 +188,11 @@
         button.setAttribute("aria-label", `Sort games within each ${kind} catalog by ${text}`);
         const arrow = node("span", "↕", "sort-arrow"); arrow.setAttribute("aria-hidden", "true");
         button.append(node("span", text), arrow);
-        button.addEventListener("click", () => {
+        button.addEventListener("click", event => {
+          const focused = document.activeElement === button;
           ({sort: catalogSort, direction: catalogDirection} = nextTableSort(catalogSort, catalogDirection, column));
           renderGroups(); save();
+          if (focused || event?.detail === 0) $("creator-columns-head").querySelector(`[data-sort="${column}"]`)?.focus({preventScroll: true});
         });
         buttons.push(button); return button;
       }
