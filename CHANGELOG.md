@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Accept Steam organization homepage aliases, numeric creator homepages and
+  developer/publisher search URLs in catalog search fields. Resolve verified credit
+  names below the input with explicit Add, reuse existing catalog identities, and
+  offer a role-warning popup with an option to open the other tab. Preserve normal
+  catalog comparisons, saved selections and recovery behavior.
+
 ## 0.9.2 — 2026-10-24
 
 - Add contextual catalog recovery for failed/cancelled/expired comparisons and

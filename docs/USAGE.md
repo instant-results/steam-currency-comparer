@@ -367,8 +367,9 @@ returned. **Add** appends that catalog beside the featured entries.
 There is no Creator role or homepage-catalog button. Steam homepage suggestions
 are used internally to discover possible names, then their product credits are checked.
 Use the full credited name: spelling, regional availability, and Steam filters
-can affect coverage. Searches take names, not pasted URLs, and need no Steam login
-or API key. Discovery uses a ten-minute bounded cache with six-hour role-page caching;
+can affect coverage. Searches accept names and supported Steam organization URLs,
+and need no Steam login or API key. See [organization URLs](#organization-urls).
+Discovery uses a ten-minute bounded cache with six-hour role-page caching;
 searching alone does not fetch regional prices.
 
 The two catalog tabs keep independent results, selections, catalog positions,
@@ -452,6 +453,47 @@ uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
 it is not a documented Steamworks API contract. Malformed pages fail visibly
 instead of executing or forwarding Steam HTML. Each catalog tab has a CSV
 download below its catalog list. The CLI does not provide creator browsing.
+
+### Organization URLs
+
+The developer/publisher search field accepts a name or a Steam organization URL.
+Resolution runs after four seconds without edits, or immediately with Search Steam.
+Verified credit names appear below the input with Add on the left. Resolution does
+not start a price comparison; Add uses the normal catalog workflow and displayed
+currencies. A catalog already selected by name cannot be added again by URL.
+
+Supported Steam store paths are `/developer/NAME`, `/dev/NAME`, `/publisher/NAME`,
+`/pub/NAME`, numeric `/curator/ID` homepages (including their display slugs), and
+`/search/?developer=NAME` or `/search/?publisher=NAME`. Homepage about, games, lists
+and numeric list subpages resolve to the organization. Steam's `store.steampowered.com`,
+`www.steampowered.com` and `steampowered.com` addresses normalize to HTTPS on the store
+host. Tracking, locale, fragments and unrelated search filters are discarded.
+Search links must identify exactly one developer or publisher. Names retain the
+100-character limit; URLs allow up to 1,024 characters. App, franchise, ordinary
+curator, community-group and external-company links are not supported.
+
+Steam documents all four named homepage prefixes as aliases, so a `/publisher/`
+URL can legitimately identify a developer too. Resolution verifies credits for
+the active tab. It uses the homepage ID and up to twelve product samples to find
+credit names linked to that same homepage; homepage labels and aliases are not
+assumed to be credit names. Newer pages without product links use one bounded
+homepage-catalog page to obtain samples. Each name must have a nonempty catalog
+for the selected role and storefront. Multiple verified names can be offered.
+This is bounded discovery, not an exhaustive list of every name linked to a page.
+If no catalog can be verified, try the exact credit name from a game's store page.
+
+When only the other role can be verified, a popup explains the result and offers
+Stay here or Open Developers/Publishers. Opening the other tab carries the URL
+into its search field; adding still requires Add. Escape closes the popup.
+Search errors and unverifiable pages remain visible below the input. Editing the
+query or switching tabs discards outdated responses and closes old warnings.
+
+URL resolution shares Steam pacing, retries and the ten-minute bounded search
+cache. It retrieves identity and credit metadata, not regional prices or best offers.
+Only supported Steam addresses are fetched; redirects are validated and bounded,
+and homepage HTML is size-limited and parsed without execution. Added catalogs
+retain existing sorting, filtering, pagination, currency updates, removal/Undo,
+CSV and reload behavior. No sign-in, cookie or API key is required.
 
 ### Retry catalog comparisons
 

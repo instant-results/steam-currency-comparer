@@ -33,7 +33,8 @@ from .steam_access import SteamClient
 from .owned_library import LibraryAccessError
 from .version import __version__
 from .creators import (CREATORS, FEATURED_CREATORS, CreatorCatalogService, CreatorSearchService, featured_by_role,
-                       validate_selector, validate_search_term, selector_id)
+                       validate_selector, validate_search_query, selector_id)
+from .organization_urls import OrganizationHttpClient
 from .event_log import (configure_event_logging, runtime_data_directory, emit,
                         job_context, elapsed_ms, error_metadata)
 
@@ -718,7 +719,9 @@ class WebApplication:
                 return respond("403 Forbidden", {"error": "Use this app to submit a comparison."})
             try:
                 length = int(environ.get("CONTENT_LENGTH", "0"))
-                if not 0 < length <= (262144 if path in {"/api/jobs", "/api/creator-jobs"} or path.endswith("/remove") else 2048):
+                body_limit = (262144 if path in {"/api/jobs", "/api/creator-jobs"} or path.endswith("/remove")
+                              else 8192 if path == "/api/creators/search" else 2048)
+                if not 0 < length <= body_limit:
                     raise ValueError()
                 payload = json.loads(environ["wsgi.input"].read(length))
             except (ValueError, UnicodeDecodeError):
@@ -748,7 +751,7 @@ class WebApplication:
                     role = payload.get("role")
                     if "role" in payload and role not in ("developer", "publisher"):
                         raise ValueError("Choose developers or publishers.")
-                    term = validate_search_term(payload["query"])
+                    term = validate_search_query(payload["query"])
                     home = payload["home"]
                     if not isinstance(home, str) or home not in STOREFRONTS:
                         raise ValueError("Choose a supported storefront.")
@@ -758,7 +761,7 @@ class WebApplication:
                 if not service.lock.acquire(blocking=False):
                     return respond("429 Too Many Requests", {"error": "A catalog search is in progress. Try again shortly."})
                 try:
-                    client = RetryingJsonHttpClient(UrllibJsonHttpClient(timeout=15), gate=self.manager.gate,
+                    client = RetryingJsonHttpClient(OrganizationHttpClient(timeout=15), gate=self.manager.gate,
                                                      policy=RetryPolicy(max_attempts=2, maximum_delay=5))
                     return respond("200 OK", service.search(client, term, home, role))
                 except HttpClientError as exc:

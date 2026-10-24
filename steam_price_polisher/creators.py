@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 
 from .http_client import HttpClientError, is_network_access_denied
 from .models import WishlistItem
+from .organization_urls import is_organization_url, parse_organization_url, HomepageRedirect
 
 CATALOG_PAGE_SIZE = 12
 CATALOG_CACHE_TTL = 6 * 3600
@@ -214,6 +215,13 @@ def validate_search_term(value):
     return value.strip()
 
 
+def validate_search_query(value):
+    if is_organization_url(value):
+        parse_organization_url(value)
+        return value.strip()
+    return validate_search_term(value)
+
+
 def selector_id(selector):
     if selector["kind"] == "homepage":
         return "steam-" + selector["clan_id"]
@@ -274,10 +282,15 @@ class CreatorSearchService:
     def search(self, client, term, region, role=None):
         if role is not None and role not in ("developer", "publisher"):
             raise ValueError("Choose developers or publishers.")
+        term = validate_search_query(term)
         key = (term.casefold(), region, role)
         cached = self.cache.get(key)
         if cached and self.clock() - cached[0] < 600:
             return cached[1]
+        if is_organization_url(term):
+            data = self._search_url(client, parse_organization_url(term), region, role)
+            self._cache(key, data)
+            return data
         payload = client.get_json(_api_url("IStoreQueryService/SearchSuggestions", {
             "search_term": term, "max_results": 20, "search_creators": True,
             "context": {"language": "english", "country_code": region.upper()},
@@ -307,9 +320,87 @@ class CreatorSearchService:
                 if page["total"] > 0:
                     matches.append(creator.public())
         data = {"creators": [] if role else list(creators.values()), "exact_matches": matches}
+        self._cache(key, data)
+        return data
+
+    def _cache(self, key, data):
         if len(self.cache) >= 128:
             self.cache.pop(next(iter(self.cache)))
         self.cache[key] = (self.clock(), data)
+
+    def _search_url(self, client, address, region, role):
+        names = {"developer": [], "publisher": []}
+        if address["kind"] == "credit":
+            # Verify both roles if necessary; a search link's role is explicit,
+            # whereas /developer/ and /publisher/ homepage prefixes are aliases.
+            names = {kind: [address["name"]] for kind in names}
+        else:
+            url = address["url"]
+            for attempt in range(4):
+                try:
+                    page = client.get_json(url + "?" + urlencode({"cc": region.upper(), "l": "english"}))
+                    break
+                except HomepageRedirect as redirect:
+                    if attempt == 3:
+                        raise HttpClientError("Steam redirected this homepage too many times.", invalid_response=True)
+                    url = redirect.url
+            clan = page["clan_id"]
+            if address.get("clan_id", clan) != clan:
+                raise HttpClientError("Steam returned a different organization homepage.", invalid_response=True)
+            # Resolving the numeric ID rejects ordinary curators and franchises.
+            homepage = self.resolve(client, {"kind": "homepage", "clan_id": clan}, region)
+            ids = page["app_ids"]
+            if not ids:
+                catalog = self.role_catalogs.get_page(client, homepage, region, 0)
+                if catalog["source"] == "stale cache":
+                    raise HttpClientError("Steam could not verify this homepage's products.", transient=True)
+                ids = [product["app_id"] for product in catalog["products"][:12]]
+            if ids:
+                payload = client.get_json(_api_url("IStoreBrowseService/GetItems", {
+                    "ids": [{"appid": int(app_id)} for app_id in ids],
+                    "context": {"language": "english", "country_code": region.upper()},
+                    "data_request": {"include_basic_info": True}}))
+                for item in _store_items(payload):
+                    if (not isinstance(item, dict) or item.get("item_type") != 0 or item.get("success") != 1
+                            or str(item.get("id")) not in ids):
+                        continue
+                    basic = item.get("basic_info")
+                    if not isinstance(basic, dict):
+                        continue
+                    for kind in names:
+                        credits = basic.get(kind + "s", [])
+                        if not isinstance(credits, list) or len(credits) > 50:
+                            raise HttpClientError("Steam returned unreadable organization credits.", invalid_response=True)
+                        for credit in credits:
+                            if (not isinstance(credit, dict) or type(credit.get("creator_clan_account_id")) is not int
+                                    or str(credit["creator_clan_account_id"]) != clan):
+                                continue
+                            try:
+                                name = validate_search_term(credit.get("name"))
+                            except ValueError as exc:
+                                raise HttpClientError("Steam returned unreadable organization credits.", invalid_response=True) from exc
+                            if name not in names[kind] and len(names[kind]) < 12:
+                                names[kind].append(name)
+        def matches(kind):
+            found = []
+            for name in names[kind]:
+                creator = credit_creator({"kind": kind, "name": name})
+                page = self.role_catalogs.get_page(client, creator, region, 0)
+                if page["source"] == "stale cache":
+                    raise HttpClientError("Steam could not verify matching catalogs.", transient=True)
+                if page["total"] > 0:
+                    found.append(creator.public())
+            return found
+        selected = matches(role) if role else matches("developer") + matches("publisher")
+        data = {"creators": [], "exact_matches": selected}
+        if role and not selected:
+            other = "publisher" if role == "developer" else "developer"
+            if matches(other):
+                data["role_warning"] = {
+                    "role": other,
+                    "message": f"This URL has verified {other} credits, but no {role} catalog could be verified in this storefront. Open the {other.title()}s tab to add it."}
+            else:
+                data["notice"] = "No matching catalog could be verified from this URL. Try the exact credit name from a game's store page."
         return data
 
     def resolve(self, client, selector, region):

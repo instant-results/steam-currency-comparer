@@ -323,3 +323,14 @@ layouts, and table-column alignment. Translation work should additionally check
 long localized labels, non-Latin text, right-to-left reading order, and the
 language/direction metadata. Record meaningful wording/layout decisions here;
 keep implementation history in Git and CHANGELOG.md.
+
+## Organization URL wording
+
+Catalog prompts read “Find a developer by name or Steam URL” and “Find a publisher
+by name or Steam URL”. Keep Search Steam and Add as separate actions. Resolution
+messages identify verified credit roles; a homepage URL prefix is not sufficient
+to call an organization a developer or publisher. The role warning is titled
+“Check the catalog tab” with “Stay here” and “Open Developers”/“Open Publishers”.
+An unverifiable URL offers exact-name search without claiming the organization
+has no products. Supported URL formats and bounded discovery are documented in
+USAGE.md rather than technical detail inside the comparison workflow.
