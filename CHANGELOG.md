@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.2 — 2026-10-24
+
+- Add contextual catalog recovery for failed/cancelled/expired comparisons and
+  technical partial results, interrupted catalog additions/expansion, and initial
+  catalog loading. Retain original currencies and page/selection through reload,
+  preserve displayed results and exclusions, and wrap long organization labels.
+
+- Align Wishlist and catalog prompts with their input borders and use the same
+  tighter 8px gap above each input, retaining loading-order field alignment.
+
+- Match catalog search forms to Wishlist's background, corner treatment, prompt
+  typography and primary-button styling. Bound input widths, align desktop actions
+  and use full-width phone actions.
+
+- Match catalog search results to Wishlist's separate results block, coloured
+  rows, left-side Add controls and "add to the current comparison" wording.
+
+- Add the five wishlist result filters to each catalog tab, applied within groups
+  with separate saved selections. Keep statistics and CSV based on all loaded
+  products, and explain empty groups with visible/loaded counts.
+
+- Match catalog credit-column and best-offer checkbox styling and label typography.
+
+## 0.9.1 — 2026-10-24
+
+- Search developer/publisher names after four seconds without edits, with immediate
+  Search Steam submission and protection against stale responses. Place Add before
+  each match, matching wishlist search.
+- Add catalog-header sorting by title, baseline price, absolute difference and
+  percentage difference. Cycle ascending, descending and original order within
+  each group; remember separate choices for Developers and Publishers.
+- Center Load more arrows consistently with compact or separate credit columns.
+- Remove entire catalogs through the × on organization icons. Show the organization
+  name and role in seven-second Undo notices, preserve shared titles in other
+  groups, and retain removals through loading, currency changes and reload.
+  Clean private backend memberships, results and selections with bounded retries.
+- Put credit-column and best-offer checkboxes together in a wrapping row.
+- Place each catalog's search/add step above currency selection and results.
+
 ## 0.9.0 — 2026-10-23
 
 - Add games to the wishlist comparison through the existing profile field using

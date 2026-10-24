@@ -291,6 +291,59 @@ Credentials never appear in CSV.
 
 ## Developer and publisher catalogs
 
+Remove an entire catalog with the × at the top-right of its organization's icon.
+Mouse hover, keyboard focus and a half-second touch hold reveal the control, as
+for individual games. A seven-second Undo notice identifies the organization by
+name and role instead of an App ID. The same four-notice stack covers titles and
+catalogs. Removal immediately excludes that catalog from display, statistics and
+CSV. Titles shared with retained catalogs remain there. Undo restores discovery
+position, loaded pages and current-currency results while respecting title removals.
+
+Catalog removal survives polling, expansion, currency updates and reload in the
+same tab. Reload finalizes pending Undo. Removed catalogs can be added again from
+search. Finalization releases the temporary group/row buffer and cleans private
+server results, memberships and source selections; shared Steam caches are retained.
+Only catalog/product IDs and job credentials are kept for cleanup retries, bounded
+to 1,000 removed catalogs, 10,000 product IDs and 120 job credentials per tab.
+
+Same-origin JSON POST `/api/jobs/{id}/remove-catalogs` requires the job's bearer
+token and `catalog_ids` (1–20 distinct IDs). Optional `app_ids` supplies up to 1,000
+orphan products for older jobs without membership metadata. Known memberships in
+retained catalogs protect shared titles. Repeated cleanup is idempotent and blocks
+late worker results. Explicit-products catalog jobs can supply `catalog_memberships`,
+a mapping of up to 20 catalog IDs to lists drawn from their selected `app_ids`, so
+currency updates preserve group ownership. No organization data is written to the
+shared price cache.
+
+Each catalog tab starts with its own search/add step above the shared currencies
+selector, followed by comparison results. Their queries and matches remain independent
+when switching tabs. Catalog search forms share the Wishlist form's background,
+prompt typography and primary-button treatment, with bounded input widths and
+aligned desktop actions.
+
+Developer and publisher name searches run after four seconds without edits,
+matching wishlist game search. Search Steam submits immediately. Editing or
+clearing the query discards outdated matches; switching tabs cancels pending
+automatic search. Search does not start a price comparison.
+Matches appear in a separate block below the input, with the same coloured rows
+and left-side Add buttons as Wishlist search. The prompt reads "Choose a developer
+to add to the current comparison." or "Choose a publisher to add to the current
+comparison." Each tab retains its own matches; clearing the query clears its
+results block.
+
+The catalog filter bar offers All games, Cheaper / equal, Pricier, Different
+discounts and Uncompared, using the same default-game-price rules as Wishlist.
+One selection applies within each group in the active tab; group order stays
+unchanged. Developers and Publishers remember separate selections through reload,
+expansion, currency updates and Undo. Pending products appear under All games;
+Uncompared covers checked products with missing prices or failed requests.
+
+Filtered groups show the visible count out of their loaded products, and remain
+visible with an explanation if nothing matches. Statistics and CSV always cover
+all loaded, checked products, including those hidden by these filters. Sorting
+applies to visible rows. The best-offer display choice does not affect filtering.
+Changing a filter performs no Steam requests.
+
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
 with three selected games each from Supergiant Games, CD PROJEKT RED, and Techland.
 Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios
@@ -310,7 +363,7 @@ at the end. Free-only pages still advance; use Load more again to continue.
 
 Use **Find a developer** or **Find a publisher** in the corresponding tab.
 Only names with matching products for that role in the baseline region are
-returned. **Add & compare** appends that catalog beside the featured entries.
+returned. **Add** appends that catalog beside the featured entries.
 There is no Creator role or homepage-catalog button. Steam homepage suggestions
 are used internally to discover possible names, then their product credits are checked.
 Use the full credited name: spelling, regional availability, and Steam filters
@@ -355,7 +408,12 @@ including paid DLC and soundtracks; they do not summarize the entire Steam catal
 Statistics use existing comparison results without additional requests, update
 when more products load, and retain the results' currencies until refreshed.
 
-One shared column-heading row sits above all creators. Regional headings and
+One shared column-heading row sits above all creators. Its sort buttons cycle
+ascending, descending and original order for game name, baseline price, absolute
+difference and percentage difference. Each catalog sorts its own titles; catalogs
+keep their positions. Missing numeric values stay last. Each role remembers its
+sort through reload, expansion and currency updates. Wishlist rank/date loading
+orders do not apply to catalogs. Regional headings and
 prices align in fixed-width slots and scroll together; game/title, baseline and
 DIFFERENCE stay pinned. Per-currency statistics are a separate overview, expandable
 when more than four alternatives are selected; expansion survives display changes
@@ -366,16 +424,17 @@ The arrow is shallow, has a flat top and no visible border, and fades most stron
 at its top center; its white label remains accessible to keyboard and screen-reader
 users. The introduction keeps the free-product note, progress status, and statistics
 explanation with consistent text sizing. The exclusion note sits on its own line.
-Currency choices appear in the shared currency panel above the comparison, numbered **01 / CURRENCIES** in
-this tab and **02 / CURRENCIES** in the wishlist tab.
+Currency choices appear in the shared currency panel above the comparison, numbered **02 / CURRENCIES** in every visible tab.
 
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current currency-panel
 choices to all displayed creator products, including expanded pages. Changing the
 baseline preserves existing cursor context and starts new-storefront discovery from
 the first page on the next Load more. Use it to
-retry incomplete prices after cancellation or a request failure. It reuses fresh
-cached prices, so refreshing does not force a new Steam request for every price.
+recheck loaded prices after success. Interrupted operations expose the contextual
+retry described above, preserving their original currencies and page/selection.
+Both actions reuse fresh cached prices, so they do not force new requests for
+every product.
 Only one comparison can run per connection; creator examples wait for an active
 wishlist comparison, and both use the same paced background worker.
 
@@ -393,6 +452,31 @@ uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
 it is not a documented Steamworks API contract. Malformed pages fail visibly
 instead of executing or forwarding Steam HTML. Each catalog tab has a CSV
 download below its catalog list. The CLI does not provide creator browsing.
+
+### Retry catalog comparisons
+
+The comparison control in each catalog results heading describes the available
+operation. Successful comparisons offer **Refresh comparisons**. Failed,
+cancelled, expired or partially failed price comparisons offer **Retry comparison**.
+An interrupted catalog addition or expansion offers **Retry loading NAME**, using
+the organization's name. Initial catalog-registry failures offer **Retry loading
+catalogs**, even though search is not ready yet. Currency-update recovery uses
+**Retry currency update**, including incomplete updates with technical failures.
+
+Retry repeats the original currencies and product selection or catalog page,
+ignoring subsequent unapplied currency edits. To apply a new currency selection,
+use **Update currencies**, including after an interrupted first comparison when
+products are already loaded. Expanded pages are deduplicated, so
+retrying a partially checked page does not skip its unchecked products or add
+rows twice. Completed results, filters, sorting, credit display and catalog
+positions remain available. Shared caches retain their normal freshness rules.
+The controls respect the same shared worker lock as other comparisons.
+
+Each role retains its pending comparison/currency retry through reload in the
+same tab; running jobs reconnect before retry is offered. Removed products stay
+excluded. Removing the target catalog clears its catalog-load retry. Starting
+another comparison, addition or expansion replaces the previous retry context; successful recovery
+restores Refresh comparisons. Name-search failures continue to use Search Steam.
 
 ## Run the command-line prototype
 
@@ -844,7 +928,7 @@ fetch additional prices or metadata. Both lists are already included in CSV.
 
 The Developers tab shows publishers, and the Publishers tab shows developers.
 By default, credits appear as small text below each product title. Check
-**Show publisher column** / **Show developer column** above search to move the
+**Show publisher column** / **Show developer column** beside the best-offer checkbox to move the
 credits into a separate labeled column. All reported names appear, including
 co-publishers. Each tab remembers its display mode;
 missing credits are labeled Unavailable. Credits come from the same Steam

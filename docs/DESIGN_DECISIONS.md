@@ -181,12 +181,11 @@ with the border made related search labels inconsistent with the revised dropdow
 | --- | --- | --- |
 | Loading order | Wishlist dropdown and hidden library dropdown | 13px |
 | Find a currency or country | Shared currency search | 11px |
-| Find a developer | Developers search | 13px |
-| Find a publisher | Publishers search | 13px |
 
 The 6px caption inset applies on desktop and narrow screens. It does not require
-all inputs to have identical text padding. Developer/publisher labels retain their
-existing heavier font style.
+all inputs to have identical text padding. The large Wishlist, developer and
+publisher prompts use a separate pattern: align their text with the field's
+outer start edge and leave 8px above the input. Their typography is 23px/550.
 
 For a label wrapping an input, put the caption in its own span so the inset does
 not move the input. Existing label associations, accessible names, native select
@@ -215,3 +214,80 @@ Start immediately while idle; batch only already queued selections. Do not add a
 debounce window to delay price comparisons. Keep prior results visible while the
 new selection is compared, and use its displayed currencies. Mark manual rows
 without introducing a new table column. Keep long matches wrapping at narrow widths.
+
+## Catalog search form
+
+Use the Wishlist profile form's dark background, square internal bottom corners,
+23px/550 prompt typography, input treatment and blue primary action. Keep the
+shared prompts aligned with their fields' outer start edges, with an 8px gap
+above the input. Align Search Steam
+with Compare regional prices on desktop using the same field/action tracks,
+including the space used when Wishlist's retry action is visible. Fields are
+bounded at 760px and primary actions at 200px on desktop; phone actions fill the
+available form width. Keep results in the separate block below the form.
+On desktop, Wishlist's loading-order caption occupies the prompt band above its
+select, while the large prompt stays within the adjacent input column. Both input
+fields remain aligned; the caption returns to normal flow when fields stack.
+Keep retry actions in the catalog results controls. Reuse the existing refresh
+button, switching its label to Retry comparison, Retry loading NAME, Retry loading
+catalogs or Retry currency update according to the interrupted operation. Bound
+and wrap long organization names. Avoid adding comparison recovery to Search Steam,
+which only searches names. Preserve the original request context through reload;
+keep current results and view settings available. Removed targets cannot be
+retried. Starting a new comparison, addition or expansion supersedes the previous
+retry context. Update currencies remains available after an interrupted first
+comparison with loaded products, allowing an explicit new currency selection.
+
+## Catalog search results
+
+Developer and publisher matches use an Add button before the name, in visual
+and keyboard order. Keep the action on the left on phones and let long names
+wrap beside it. Adding a catalog still starts its price comparison.
+Place catalog matches in a separate block immediately below the search form,
+using Wishlist's results background, rounded coloured rows, padding and Add
+button styling. Reuse the shared search-result classes so both stay aligned on
+desktop and phones. Empty results blocks take no space; status, errors and
+no-match explanations remain visible when present. Match the prompt wording:
+"Choose a developer/publisher to add to the current comparison."
+
+## Catalog sorting
+
+The shared catalog header uses the wishlist sort controls and direction indicators.
+Sort each group independently without changing membership or group order. Retain
+original discovery order for the third click and exports. Developers and Publishers
+remember separate sorting choices; sorting starts no requests.
+
+## Catalog expansion footer
+
+Center Load more identically in both catalog tabs, regardless of credit-column
+visibility. Footer tracks are independent of table tracks. On phones keep the
+product count above the centered arrow.
+
+## Catalog removal
+
+Organization icons use the same overlapping remove control and touch hold as game
+artwork. Whole-catalog Undo notices name the organization and its developer/publisher
+role. Reuse the shared seven-second, four-notice stack. Remove memberships and
+exclusive products, preserving shared titles in retained groups. Group buffers
+exist only during Undo; session storage and retries retain bounded ID-only cleanup.
+
+## Catalog display controls
+
+Place Show publisher/developer column beside the best-offers checkbox in a shared
+wrapping row above the tables. Retain each control's label association and state.
+Both use 16px native checkboxes with the blue accent, an 8px text gap and
+matching 14px, regular-weight muted labels with 24px line height. Align each
+checkbox with its label's first line, including when the offer text wraps.
+
+Place Wishlist's five result filters at the start of this wrapping row. Use the
+same button states, typography and keyboard behavior. Preserve group headings,
+statistics, expansion and removal controls when no rows match; explain the empty
+view and show visible/loaded counts. Filters change row visibility, leaving loaded
+membership, statistics and CSV intact. Keep a separate saved filter per role.
+
+## Catalog workflow order
+
+Use discovery/addition, currencies, then comparison results in all three visible
+tabs. Catalog search sections occupy the workspace above shared currency setup;
+show only the active role's section. Keep queries, matches, labels and keyboard
+behavior independent, and number currencies 02 consistently.

@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.9.0** · Beta for local use.
+**Version: 0.9.2** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -75,6 +75,9 @@ change over time. No personal Steam profile is used.
 - Exports wishlist, developer, and publisher results with one CSV schema, including
   both credit lists, regional prices, comparison details, and provenance.
   Wishlist profile attribution is optional and off by default.
+- Removes entire developer/publisher catalogs using the × on their organization
+  icon, with seven-second Undo and persistent cleanup. Shared titles remain in
+  other selected catalogs.
 - Removes individual titles using the × overlapping a thumbnail's top-right
   corner. Removed titles leave the grid, totals, catalog statistics and CSV
   immediately. On touch devices, hold the thumbnail for half a second to reveal
@@ -92,7 +95,15 @@ change over time. No personal Steam profile is used.
 - Each catalog's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
   Statistics cover the displayed selection rather than the entire catalog.
-- Developers and Publishers each search their own role and offer **Add & compare** for matching names.
+- Developers and Publishers each search their own role after four seconds without
+  edits, with **Add** on the left of each match. Their search/add step precedes
+  currency setup. Catalog headers sort titles within each group by name, baseline
+  price, absolute difference or percentage difference, retaining group order.
+  The same five result filters apply within each catalog, with separate remembered
+  selections per tab; statistics and CSV continue to cover all loaded products.
+  Contextual retry controls recover failed/cancelled comparisons, catalog additions
+  and page expansion using their original currencies and selections, including
+  after reload. Initial catalog-loading failures also have a retry action.
   Developer and publisher selections, results, and catalog positions are saved
   independently in the same browser tab. Developer/publisher credits appear
   beneath each game, or in a separate column using **Show publisher column** /

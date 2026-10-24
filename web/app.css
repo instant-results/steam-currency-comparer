@@ -457,7 +457,7 @@ h2 {
   gap: 4px;
   flex-wrap: wrap;
 }
-.filter {
+.filter, .catalog-filter {
   padding: 6px 9px;
   font-size: 14px;
   border: 1px solid transparent;
@@ -466,10 +466,10 @@ h2 {
   border-radius: 6px;
   transition: background .15s, color .15s;
 }
-.filter:hover {
+.filter:hover, .catalog-filter:hover {
   color: var(--text);
 }
-.filter.active {
+.filter.active, .catalog-filter.active {
   color: #ffffff;
   border-color: rgba(59, 130, 246, 0.4);
   background: rgba(59, 130, 246, 0.12);
@@ -883,7 +883,7 @@ progress::-webkit-progress-value {
   .summary span { font-size: 14px; }
   .summary > div { padding: 12px 8px; }
   .summary strong, .summary .count-completion { font-size: 26px; }
-  .filter { font-size: 14px; padding: 6px; }
+  .filter, .catalog-filter { font-size: 14px; padding: 6px; }
   .results-panel { padding: 20px 14px 0; }
   .foreign { display: block; }
   .foreign span { display: block; }
@@ -951,15 +951,15 @@ td:first-child { min-width: 0; }
 
 /* Starting and stopping share one action slot; status belongs to progress. */
 .comparison-action .primary { min-height: 48px; align-items: center; }
-#compare-form .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
-#compare-form, #compare-form .profile-field { min-width: 0; }
-#compare-form .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
-#compare-form .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
-#compare-form #analyze { border-color: transparent; }
-#compare-form .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
-#compare-form .retry-button:hover { background: #203654; border-color: var(--blue); }
+:is(#compare-form, .catalog-search-form) .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
+:is(#compare-form, .catalog-search-form), :is(#compare-form, .catalog-search-form) .profile-field { min-width: 0; }
+:is(#compare-form, .catalog-search-form) .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
+:is(#compare-form, .catalog-search-form) .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
+:is(#compare-form, .catalog-search-form) #analyze { border-color: transparent; }
+:is(#compare-form, .catalog-search-form) .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
+:is(#compare-form, .catalog-search-form) .retry-button:hover { background: #203654; border-color: var(--blue); }
 @media (max-width: 800px) {
-  #compare-form { grid-template-columns: minmax(0, 1fr); }
+  :is(#compare-form, .catalog-search-form) { grid-template-columns: minmax(0, 1fr); }
 }
 .cancel-button {
   background: #38291f;
@@ -1144,10 +1144,10 @@ td:first-child { min-width: 0; }
 .creator-panel-heading { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
 .creator-panel-heading h2 { font-size: 26px; letter-spacing: -.7px; margin: 0; }
 .creator-panel-heading .eyebrow { margin-bottom: 9px; }
-.creator-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.creator-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; min-width: 0; max-width: min(50%, 400px); }
 .creator-actions button {
   background: transparent; border: 1px solid var(--blue-border); color: var(--blue-light);
-  font-size: 13px; padding: 9px 12px;
+  font-size: 13px; padding: 9px 12px; max-width: 100%; overflow-wrap: anywhere;
 }
 .creator-actions button:hover:not(:disabled) { background: var(--blue-subtle); }
 #creators-progress { margin: 12px 0 0; }
@@ -1160,6 +1160,7 @@ td:first-child { min-width: 0; }
 .creator-group-heading { display: grid; grid-template-columns: var(--creator-game-width) var(--creator-home-width) calc(var(--creator-foreign-width) / 2) calc(var(--creator-foreign-width) / 2) var(--creator-difference-width); row-gap: 10px; align-items: start; margin-bottom: 22px; }
 .creator-identity { display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 16px; min-width: 0; grid-column: 1 / 3; grid-row: 1 / 3; align-self: center; padding-right: 16px; }
 .creator-identity img { grid-row: 1 / 3; }
+.creator-identity .creator-icon-control { grid-row: 1 / 3; width: 64px; height: 64px; align-self: start; }
 .creator-statistics { display: contents; }
 .creator-statistic { display: flex; flex-direction: column; min-width: 0; padding: 0 8px; }
 .creator-statistic:first-child { grid-column: 3; padding-left: 16px; }
@@ -1174,25 +1175,8 @@ td:first-child { min-width: 0; }
 .creator-statistics-coverage { grid-column: 3 / -1; padding-left: 16px; color: var(--muted); font-size: 11px; margin: 0; }
 /* Keep each table's semantic column labels without repeating visible headings. */
 .creator-accessible-head { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
-.creator-search { margin: 20px 0; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.creator-search label { display: block; margin-bottom: 8px; font-weight: 600; }
-.creator-search-controls { display: flex; gap: 10px; }
-.creator-search-controls input { min-width: 0; flex: 1; width: 100%; padding: 11px 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
-.creator-search-controls button { white-space: nowrap; }
-.creator-search button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
-.creator-search button:hover:not(:disabled) { background: var(--blue-subtle); }
-.creator-search .hint { margin: 10px 0 0; }
-.creator-search-results { display: grid; gap: 8px; }
-.creator-search-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; }
 .creator-search-result > div { min-width: 0; overflow-wrap: anywhere; }
-.creator-search-result small { display: block; color: var(--muted); }
-.creator-search-result button { flex-shrink: 0; }
-.creator-search-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-@media (max-width: 600px) {
-  .creator-search-controls { flex-direction: column; }
-  .creator-search-result { flex-direction: column; align-items: stretch; }
-  .creator-search-actions { justify-content: flex-start; }
-}
+.creator-search-actions { display: flex; gap: 8px; }
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }
 .creator-identity h3 { margin: 5px 0 0; font-size: 18px; line-height: 1.35; letter-spacing: -.3px; overflow-wrap: anywhere; }
 .creator-identity a:hover { color: var(--blue-light); }
@@ -1232,13 +1216,13 @@ td:first-child { min-width: 0; }
   .comparison-tabs { gap: 6px; }
   .comparison-tabs button { padding: 10px; font-size: 13px; }
   .creator-panel-heading { flex-direction: column; gap: 14px; }
-  .creator-actions { flex-direction: row; flex-wrap: wrap; }
+  .creator-actions { flex-direction: row; flex-wrap: wrap; max-width: 100%; }
   .creator-catalog-footer { grid-template-columns: 1fr; gap: 8px; }
   .creator-catalog-footer > span { grid-column: 1; }
   .creator-load-more { grid-column: 1; grid-row: 2; width: 52.5%; }
 }
 
-.catalog-credit-toggle { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.catalog-credit-toggle { display: flex; align-items: flex-start; gap: 8px; margin: 1rem 0; cursor: pointer; }
 .catalog-credit { display: block; color: var(--muted); margin-top: 0.4rem; overflow-wrap: anywhere; }
 .wishlist-credits {
   display: grid;
@@ -1267,12 +1251,8 @@ td:first-child { min-width: 0; }
   .credit-column-visible .creator-statistics-coverage { grid-column: 1 / -1; padding-left: 0; }
 }
 
-.credit-column-visible .creator-catalog-footer { grid-template-columns: var(--creator-game-width) var(--creator-credit-width) var(--creator-home-width) var(--creator-foreign-width) var(--creator-difference-width); }
-.credit-column-visible .creator-load-more { grid-column: 3 / 5; }
-@media (max-width: 600px) {
-  .credit-column-visible .creator-catalog-footer { grid-template-columns: 1fr; }
-  .credit-column-visible .creator-load-more { grid-column: 1; }
-}
+/* The footer is independent of optional table-credit columns. Both role tabs
+   keep the Load more arrow centered with the same narrow-screen placement. */
 
 /* Match the wishlist form while keeping library setup instructions bounded. */
 .library-actions { flex-direction: column; align-items: flex-start; width: 260px; gap: 8px; }
@@ -1556,8 +1536,8 @@ td:first-child { min-width: 0; }
 .result-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--blue); }
 .results-panel .offer-toggle { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-width: 100%; margin: 0 0 16px; }
 .comparison-toolbar .offer-toggle { margin: 0; }
-.offer-toggle > input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--blue); }
-.offer-label-with-info { min-width: 0; font-size: 14px; line-height: 24px; color: var(--muted); }
+.offer-toggle > input, .catalog-credit-toggle > input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--blue); }
+.offer-label-with-info, .catalog-credit-toggle { min-width: 0; font-size: 14px; font-weight: 400; line-height: 24px; color: var(--muted); }
 .offer-label-with-info label { display: inline; font-size: inherit; cursor: pointer; }
 .offer-info-button {
   display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; transform: translateY(-2px);
@@ -1643,15 +1623,41 @@ td:first-child { min-width: 0; }
 
 /* Shared profile/game input results keep long titles within the viewport. */
 .game-discovery { min-width: 0; padding: 0 24px 20px; grid-column: 1 / -1; }
-.game-discovery:not(:has(li)):has(#games-status:empty) { display: none; }
+.game-discovery:not(:has(li)):has(> [role="status"]:empty) { display: none; }
 .game-choices { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
 .game-choices li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .game-choices li span { min-width: 0; overflow-wrap: anywhere; }
 .game-choices button { flex-shrink: 0; }
-#game-matches li { display: grid; grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
+.search-matches li { display: grid; grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
 .game-discovery button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
 .game-discovery button:hover:not(:disabled) { background: var(--blue-subtle); }
 .manual-game-label { display: block; color: #8eaccd; font-size: 11px; font-weight: 400; margin-top: 4px; }
 @media (min-width: 1450px) { .game-discovery { padding-inline: 30px; } }
 @media (max-width: 1100px) { .game-discovery { padding-inline: 18px; } }
 @media (max-width: 600px) { .game-choices li { align-items: flex-start; flex-direction: column; } }
+
+.catalog-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; }
+.catalog-display-controls .catalog-credit-toggle, .catalog-display-controls .offer-toggle { margin: 0; }
+
+/* Catalog discovery shares Wishlist's form tracks, surface and action styling. */
+.workspace > .catalog-discovery { grid-column: 1 / -1; min-width: 0; }
+.workspace:has(#retry:not([hidden])) { --catalog-reference-actions: 412px; }
+.catalog-search-form { grid-template-columns: minmax(0, min(760px, calc(100% - var(--catalog-reference-actions, 200px) - 12px))) auto; }
+:is(#compare-form, .catalog-search-form) .profile-field > label { margin-bottom: 8px; }
+/* Keep loading-order captions above their field without adding space below the
+   Wishlist prompt. Its label reserves that caption's column on desktop. */
+#compare-form .profile-field > label { max-width: calc(100% - 202px); }
+#compare-form .profile-input { padding-top: 0; }
+#compare-form .wishlist-order { position: relative; }
+#compare-form .wishlist-order > span:first-child { position: absolute; inset-inline: 0; bottom: 100%; margin-bottom: 6px; }
+.catalog-search-form .profile-step { margin-top: 0; }
+.catalog-search-form .primary { border-color: transparent; }
+@media (max-width: 600px) {
+  :is(#compare-form, .catalog-search-form) .profile-actions,
+  :is(#compare-form, .catalog-search-form) .comparison-action { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  #compare-form .profile-field > label { max-width: none; }
+  #compare-form .wishlist-order > span:first-child { position: static; inset-inline: auto; bottom: auto; }
+}

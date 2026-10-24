@@ -95,6 +95,16 @@ Keep these captions in the existing hint typography. The currency-panel action u
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
 alignment, horizontal table scrolling and both compact and separate credit layouts.
 
+## Catalog recovery wording
+
+Use Refresh comparisons after a successful run. An interrupted price comparison
+uses Retry comparison; catalog discovery/expansion uses Retry loading NAME, where
+NAME is the supplied organization name rendered as text. Registry initialization
+uses Retry loading catalogs. Currency updates use Retry currency update, including
+partial technical failures. The action repeats original settings, so notices must
+not imply it applies subsequent currency-panel edits. Search Steam remains the
+name-search action. Wrap long retry labels within the results heading.
+
 ## Many-currency comparisons
 
 Currency selection cards include decorative circular flags near their right edge.
@@ -258,10 +268,13 @@ missing-value semantics, and spreadsheet formula escaping. See
 
 ## Field captions and loading-order controls
 
-Loading order and the currency/developer/publisher search labels share the 6px
+Loading order and the currency search label share the 6px
 caption inset documented in [frontend design decisions](DESIGN_DECISIONS.md).
-Keep field borders, text padding, font styles and label associations intact.
-The large profile prompt, legends, checkboxes and inline filters use their own
+Wishlist, developer and publisher prompts share 23px, weight-550 typography.
+Align them with the input border's outer start edge and leave 8px to the input. Search Steam shares the blue
+primary-action design and desktop position of Compare regional prices.
+Keep field borders, text padding and label associations intact.
+The wishlist profile prompt, legends, checkboxes and inline filters use their own
 patterns. The hidden library dropdown shares the Loading order treatment.
 
 Keep the dropdown chevron inset from its rounded right edge and vertically
@@ -295,7 +308,10 @@ The submit label follows the input: "Compare regional prices", "Search games" or
 through explicit submission. Search-match buttons say "Add" and precede the name
 visually and in keyboard order, including on phones. Their accessible names include
 the product name and App ID. Manual rows use "Manually added". Developer/publisher
-catalog actions retain "Add & compare".
+catalog actions retain "Add".
+Catalog matches use the same separate results block and row styling as Wishlist.
+Use "Choose a developer to add to the current comparison." and "Choose a publisher
+to add to the current comparison." above their respective lists.
 
 The required-field validation popup is browser-native. Its warning icon and
 typography are controlled by the browser; app CSS does not position them.

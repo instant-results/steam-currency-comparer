@@ -26,15 +26,15 @@ const removalNotices = (() => {
     find(owner, id) { return entries.find(entry => entry.key === key(owner, id)); },
     commitOwner(owner) { for (const entry of [...entries]) if (entry.key.startsWith(`${owner}:`)) finish(entry); },
     commitAll() { for (const entry of [...entries]) finish(entry); },
-    add(owner, id, name, data, undo, commit) {
+    add(owner, id, name, data, undo, commit, description = `App ID ${id}`) {
       for (const entry of [...entries]) if (Date.now() >= entry.deadline) finish(entry);
       if (entries.length === 4) finish(entries[0]);
       const element = node("div", undefined, "removal-notice"), text = node("div", undefined, "removal-notice-text");
       const title = node("strong", name || `Steam product ${id}`);
       title.title = name || `Steam product ${id}`;
-      text.append(title, node("span", `Removed · App ID ${id}`));
+      text.append(title, node("span", `Removed · ${description}`));
       const button = node("button", "Undo", "removal-undo"); button.type = "button";
-      button.setAttribute("aria-label", `Undo removal of ${name || id}, Steam App ID ${id}`);
+      button.setAttribute("aria-label", `Undo removal of ${name || id}, ${description}`);
       const progress = node("span", undefined, "removal-countdown"); progress.setAttribute("aria-hidden", "true");
       element.setAttribute("role", "status"); element.append(text, button, progress);
       const entry = {key: key(owner, id), deadline: Date.now() + 7000, data, undo, commit, element, button};
@@ -864,7 +864,7 @@ function render() {
   }
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? manualGames ? " · example + added games" : " · curated example" : ""}`;
-  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
+  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort):not(.catalog-sort)'), sort, direction);
   saveWishlist();
 }
 function formatRateTime(isoString) {
@@ -1120,7 +1120,7 @@ for (const control of bestOfferControls) {
   });
 }
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
-document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
+document.querySelectorAll('.sort:not(.library-sort):not(.catalog-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
 $("identifier").addEventListener("input", () => { automaticExampleDismissed = true; comparisonCoordinator.cancel("wishlist-example"); });
 
 // Deferred scripts restore their tabs before DOMContentLoaded. Catalog restoration
