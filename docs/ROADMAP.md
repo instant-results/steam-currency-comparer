@@ -10,7 +10,9 @@ release commitments. See the [README](../README.md) for current features, the
 Catalog tabs share wishlist-style search timing, left-side Add actions and result
 sorting within groups. Entire catalogs support removal, Undo and private backend
 cleanup. Search precedes currencies, display controls share a row, and expansion
-arrows stay centered in both credit modes. See the usage and design references.
+arrows stay centered in both credit modes. Contextual retries recover interrupted
+comparisons, additions, page expansion and initial catalog loading with retained
+settings. See the usage and design references.
 
 ## Completed in 0.9.0
 

@@ -1144,10 +1144,10 @@ td:first-child { min-width: 0; }
 .creator-panel-heading { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
 .creator-panel-heading h2 { font-size: 26px; letter-spacing: -.7px; margin: 0; }
 .creator-panel-heading .eyebrow { margin-bottom: 9px; }
-.creator-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+.creator-actions { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; min-width: 0; max-width: min(50%, 400px); }
 .creator-actions button {
   background: transparent; border: 1px solid var(--blue-border); color: var(--blue-light);
-  font-size: 13px; padding: 9px 12px;
+  font-size: 13px; padding: 9px 12px; max-width: 100%; overflow-wrap: anywhere;
 }
 .creator-actions button:hover:not(:disabled) { background: var(--blue-subtle); }
 #creators-progress { margin: 12px 0 0; }
@@ -1216,7 +1216,7 @@ td:first-child { min-width: 0; }
   .comparison-tabs { gap: 6px; }
   .comparison-tabs button { padding: 10px; font-size: 13px; }
   .creator-panel-heading { flex-direction: column; gap: 14px; }
-  .creator-actions { flex-direction: row; flex-wrap: wrap; }
+  .creator-actions { flex-direction: row; flex-wrap: wrap; max-width: 100%; }
   .creator-catalog-footer { grid-template-columns: 1fr; gap: 8px; }
   .creator-catalog-footer > span { grid-column: 1; }
   .creator-load-more { grid-column: 1; grid-row: 2; width: 52.5%; }

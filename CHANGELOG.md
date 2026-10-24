@@ -2,6 +2,11 @@
 
 ## 0.9.1 — 2026-10-24
 
+- Add contextual catalog recovery for failed/cancelled/expired comparisons and
+  technical partial results, interrupted catalog additions/expansion, and initial
+  catalog loading. Retain original currencies and page/selection through reload,
+  preserve displayed results and exclusions, and wrap long organization labels.
+
 - Align Wishlist and catalog prompts with their input borders and use the same
   tighter 8px gap above each input, retaining loading-order field alignment.
 

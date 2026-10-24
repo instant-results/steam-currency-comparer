@@ -431,8 +431,10 @@ used for that comparison; **Refresh comparisons** applies the current currency-p
 choices to all displayed creator products, including expanded pages. Changing the
 baseline preserves existing cursor context and starts new-storefront discovery from
 the first page on the next Load more. Use it to
-retry incomplete prices after cancellation or a request failure. It reuses fresh
-cached prices, so refreshing does not force a new Steam request for every price.
+recheck loaded prices after success. Interrupted operations expose the contextual
+retry described above, preserving their original currencies and page/selection.
+Both actions reuse fresh cached prices, so they do not force new requests for
+every product.
 Only one comparison can run per connection; creator examples wait for an active
 wishlist comparison, and both use the same paced background worker.
 
@@ -450,6 +452,31 @@ uses Steam's public storefront JSON/HTML endpoint, verified on 2026-10-02;
 it is not a documented Steamworks API contract. Malformed pages fail visibly
 instead of executing or forwarding Steam HTML. Each catalog tab has a CSV
 download below its catalog list. The CLI does not provide creator browsing.
+
+### Retry catalog comparisons
+
+The comparison control in each catalog results heading describes the available
+operation. Successful comparisons offer **Refresh comparisons**. Failed,
+cancelled, expired or partially failed price comparisons offer **Retry comparison**.
+An interrupted catalog addition or expansion offers **Retry loading NAME**, using
+the organization's name. Initial catalog-registry failures offer **Retry loading
+catalogs**, even though search is not ready yet. Currency-update recovery uses
+**Retry currency update**, including incomplete updates with technical failures.
+
+Retry repeats the original currencies and product selection or catalog page,
+ignoring subsequent unapplied currency edits. To apply a new currency selection,
+use **Update currencies**, including after an interrupted first comparison when
+products are already loaded. Expanded pages are deduplicated, so
+retrying a partially checked page does not skip its unchecked products or add
+rows twice. Completed results, filters, sorting, credit display and catalog
+positions remain available. Shared caches retain their normal freshness rules.
+The controls respect the same shared worker lock as other comparisons.
+
+Each role retains its pending comparison/currency retry through reload in the
+same tab; running jobs reconnect before retry is offered. Removed products stay
+excluded. Removing the target catalog clears its catalog-load retry. Starting
+another comparison, addition or expansion replaces the previous retry context; successful recovery
+restores Refresh comparisons. Name-search failures continue to use Search Steam.
 
 ## Run the command-line prototype
 

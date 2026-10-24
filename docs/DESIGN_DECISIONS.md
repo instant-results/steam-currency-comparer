@@ -228,7 +228,15 @@ available form width. Keep results in the separate block below the form.
 On desktop, Wishlist's loading-order caption occupies the prompt band above its
 select, while the large prompt stays within the adjacent input column. Both input
 fields remain aligned; the caption returns to normal flow when fields stack.
-The catalog retry-action decision remains deferred.
+Keep retry actions in the catalog results controls. Reuse the existing refresh
+button, switching its label to Retry comparison, Retry loading NAME, Retry loading
+catalogs or Retry currency update according to the interrupted operation. Bound
+and wrap long organization names. Avoid adding comparison recovery to Search Steam,
+which only searches names. Preserve the original request context through reload;
+keep current results and view settings available. Removed targets cannot be
+retried. Starting a new comparison, addition or expansion supersedes the previous
+retry context. Update currencies remains available after an interrupted first
+comparison with loaded products, allowing an explicit new currency selection.
 
 ## Catalog search results
 

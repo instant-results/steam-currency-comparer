@@ -95,6 +95,16 @@ Keep these captions in the existing hint typography. The currency-panel action u
 existing primary-button styling and a wrapping caption. Preserve column-header/cell
 alignment, horizontal table scrolling and both compact and separate credit layouts.
 
+## Catalog recovery wording
+
+Use Refresh comparisons after a successful run. An interrupted price comparison
+uses Retry comparison; catalog discovery/expansion uses Retry loading NAME, where
+NAME is the supplied organization name rendered as text. Registry initialization
+uses Retry loading catalogs. Currency updates use Retry currency update, including
+partial technical failures. The action repeats original settings, so notices must
+not imply it applies subsequent currency-panel edits. Search Steam remains the
+name-search action. Wrap long retry labels within the results heading.
+
 ## Many-currency comparisons
 
 Currency selection cards include decorative circular flags near their right edge.
