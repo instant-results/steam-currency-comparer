@@ -1643,10 +1643,21 @@ td:first-child { min-width: 0; }
 .workspace > .catalog-discovery { grid-column: 1 / -1; min-width: 0; }
 .workspace:has(#retry:not([hidden])) { --catalog-reference-actions: 412px; }
 .catalog-search-form { grid-template-columns: minmax(0, min(760px, calc(100% - var(--catalog-reference-actions, 200px) - 12px))) auto; }
-.catalog-search-form .profile-field > label { margin-bottom: 8px; }
+:is(#compare-form, .catalog-search-form) .profile-field > label { margin-bottom: 8px; }
+/* Keep loading-order captions above their field without adding space below the
+   Wishlist prompt. Its label reserves that caption's column on desktop. */
+#compare-form .profile-field > label { max-width: calc(100% - 202px); }
+#compare-form .profile-input { padding-top: 0; }
+#compare-form .wishlist-order { position: relative; }
+#compare-form .wishlist-order > span:first-child { position: absolute; inset-inline: 0; bottom: 100%; margin-bottom: 6px; }
 .catalog-search-form .profile-step { margin-top: 0; }
 .catalog-search-form .primary { border-color: transparent; }
 @media (max-width: 600px) {
   :is(#compare-form, .catalog-search-form) .profile-actions,
   :is(#compare-form, .catalog-search-form) .comparison-action { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  #compare-form .profile-field > label { max-width: none; }
+  #compare-form .wishlist-order > span:first-child { position: static; inset-inline: auto; bottom: auto; }
 }

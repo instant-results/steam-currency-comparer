@@ -2,6 +2,9 @@
 
 ## 0.9.1 — 2026-10-24
 
+- Align Wishlist and catalog prompts with their input borders and use the same
+  tighter 8px gap above each input, retaining loading-order field alignment.
+
 - Match catalog search forms to Wishlist's background, corner treatment, prompt
   typography and primary-button styling. Bound input widths, align desktop actions
   and use full-width phone actions.

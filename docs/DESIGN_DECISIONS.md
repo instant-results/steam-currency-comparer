@@ -181,12 +181,11 @@ with the border made related search labels inconsistent with the revised dropdow
 | --- | --- | --- |
 | Loading order | Wishlist dropdown and hidden library dropdown | 13px |
 | Find a currency or country | Shared currency search | 11px |
-| Find a developer | Developers search | 13px |
-| Find a publisher | Publishers search | 13px |
 
 The 6px caption inset applies on desktop and narrow screens. It does not require
-all inputs to have identical text padding. Developer/publisher labels use the
-shared profile-prompt typography: 23px text at weight 550.
+all inputs to have identical text padding. The large Wishlist, developer and
+publisher prompts use a separate pattern: align their text with the field's
+outer start edge and leave 8px above the input. Their typography is 23px/550.
 
 For a label wrapping an input, put the caption in its own span so the inset does
 not move the input. Existing label associations, accessible names, native select
@@ -220,11 +219,15 @@ without introducing a new table column. Keep long matches wrapping at narrow wid
 
 Use the Wishlist profile form's dark background, square internal bottom corners,
 23px/550 prompt typography, input treatment and blue primary action. Keep the
-catalog prompt's 6px inset and tighter 8px gap above its input. Align Search Steam
+shared prompts aligned with their fields' outer start edges, with an 8px gap
+above the input. Align Search Steam
 with Compare regional prices on desktop using the same field/action tracks,
 including the space used when Wishlist's retry action is visible. Fields are
 bounded at 760px and primary actions at 200px on desktop; phone actions fill the
 available form width. Keep results in the separate block below the form.
+On desktop, Wishlist's loading-order caption occupies the prompt band above its
+select, while the large prompt stays within the adjacent input column. Both input
+fields remain aligned; the caption returns to normal flow when fields stack.
 The catalog retry-action decision remains deferred.
 
 ## Catalog search results
