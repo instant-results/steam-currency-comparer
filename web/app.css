@@ -1653,3 +1653,6 @@ td:first-child { min-width: 0; }
 @media (min-width: 1450px) { .game-discovery { padding-inline: 30px; } }
 @media (max-width: 1100px) { .game-discovery { padding-inline: 18px; } }
 @media (max-width: 600px) { .game-choices li { align-items: flex-start; flex-direction: column; } }
+
+.catalog-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; }
+.catalog-display-controls .catalog-credit-toggle, .catalog-display-controls .offer-toggle { margin: 0; }

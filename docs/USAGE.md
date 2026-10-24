@@ -878,7 +878,7 @@ fetch additional prices or metadata. Both lists are already included in CSV.
 
 The Developers tab shows publishers, and the Publishers tab shows developers.
 By default, credits appear as small text below each product title. Check
-**Show publisher column** / **Show developer column** above search to move the
+**Show publisher column** / **Show developer column** beside the best-offer checkbox to move the
 credits into a separate labeled column. All reported names appear, including
 co-publishers. Each tab remembers its display mode;
 missing credits are labeled Unavailable. Credits come from the same Steam

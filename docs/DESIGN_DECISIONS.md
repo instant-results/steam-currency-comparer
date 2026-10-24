@@ -242,3 +242,8 @@ artwork. Whole-catalog Undo notices name the organization and its developer/publ
 role. Reuse the shared seven-second, four-notice stack. Remove memberships and
 exclusive products, preserving shared titles in retained groups. Group buffers
 exist only during Undo; session storage and retries retain bounded ID-only cleanup.
+
+## Catalog display controls
+
+Place Show publisher/developer column beside the best-offers checkbox in a shared
+wrapping row above the tables. Retain each control's label association and state.
