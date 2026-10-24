@@ -718,7 +718,10 @@
         } catch (_) { /* Ignore invalid saved state. */ }
         if (active && (!restored || (defaultsChanged && !creatorJob))) scheduleFeatured();
       } catch (error) { message(error.message, true); }
-      finally { initializing = false; release(); refreshControls(); }
+      finally {
+        initializing = false; release(); refreshControls();
+        if (active && initialized && !searchTimer && !searching && $("creator-query").value.trim()) scheduleSearch();
+      }
     }
 
     function scheduleFeatured() {
