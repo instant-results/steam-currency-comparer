@@ -620,8 +620,8 @@
           if (!creator) continue;
           const key = creator.name.trim().toLowerCase();
           if (!rows.has(key)) {
-            const row = node("div", undefined, "creator-search-result");
-            const label = node("div"); label.append(node("strong", creator.name));
+            const row = node("li", undefined, "creator-search-result");
+            const label = node("div"); label.append(node("span", creator.name));
             const actions = node("div", undefined, "creator-search-actions");
             row.append(actions, label); rows.set(key, {row, actions, ids: new Set()});
             $("creator-search-results").append(row);
@@ -643,7 +643,7 @@
           searchChoices.push({creator, button, action}); group.actions.append(button);
         }
         $("creator-search-status").textContent = rows.size
-          ? `Choose a ${kind} to add and compare.`
+          ? `Choose a ${kind} to add to the current comparison.`
           : `No matching ${plural} found. Try the full name from a game's store page.`;
       } catch (error) { if (current()) $("creator-search-status").textContent = error.message; }
       finally {
@@ -805,6 +805,7 @@
     for (const [kind, pane] of panes) {
       document.getElementById(kind + "s-panel").hidden = tab !== kind;
       document.getElementById(kind + "-discovery").hidden = tab !== kind;
+      document.getElementById(kind + "-search-discovery").hidden = tab !== kind;
       pane.activate(tab === kind);
     }
     if (tab === "wishlist") { renderRates(currentRates, document.getElementById("rates")); document.getElementById("wishlist-scroll").refreshScrollControls?.(); }

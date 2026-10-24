@@ -1183,17 +1183,10 @@ td:first-child { min-width: 0; }
 .creator-search button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
 .creator-search button:hover:not(:disabled) { background: var(--blue-subtle); }
 .creator-search .hint { margin: 10px 0 0; }
-.creator-search-results { display: grid; gap: 8px; }
-.creator-search-result { display: flex; align-items: center; gap: 12px; padding-top: 10px; }
-.creator-search-actions { flex: 0 0 auto; }
 .creator-search-result > div { min-width: 0; overflow-wrap: anywhere; }
-.creator-search-result small { display: block; color: var(--muted); }
-.creator-search-result button { flex-shrink: 0; }
-.creator-search-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.creator-search-actions { display: flex; gap: 8px; }
 @media (max-width: 600px) {
   .creator-search-controls { flex-direction: column; }
-  .creator-search-result { align-items: flex-start; }
-  .creator-search-actions { justify-content: flex-start; }
 }
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }
 .creator-identity h3 { margin: 5px 0 0; font-size: 18px; line-height: 1.35; letter-spacing: -.3px; overflow-wrap: anywhere; }
@@ -1641,12 +1634,12 @@ td:first-child { min-width: 0; }
 
 /* Shared profile/game input results keep long titles within the viewport. */
 .game-discovery { min-width: 0; padding: 0 24px 20px; grid-column: 1 / -1; }
-.game-discovery:not(:has(li)):has(#games-status:empty) { display: none; }
+.game-discovery:not(:has(li)):has(> [role="status"]:empty) { display: none; }
 .game-choices { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
 .game-choices li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .game-choices li span { min-width: 0; overflow-wrap: anywhere; }
 .game-choices button { flex-shrink: 0; }
-#game-matches li { display: grid; grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
+.search-matches li { display: grid; grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
 .game-discovery button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
 .game-discovery button:hover:not(:disabled) { background: var(--blue-subtle); }
 .manual-game-label { display: block; color: #8eaccd; font-size: 11px; font-weight: 400; margin-top: 4px; }

@@ -323,6 +323,11 @@ Developer and publisher name searches run after four seconds without edits,
 matching wishlist game search. Search Steam submits immediately. Editing or
 clearing the query discards outdated matches; switching tabs cancels pending
 automatic search. Search does not start a price comparison.
+Matches appear in a separate block below the input, with the same coloured rows
+and left-side Add buttons as Wishlist search. The prompt reads "Choose a developer
+to add to the current comparison." or "Choose a publisher to add to the current
+comparison." Each tab retains its own matches; clearing the query clears its
+results block.
 
 The catalog filter bar offers All games, Cheaper / equal, Pricier, Different
 discounts and Uncompared, using the same default-game-price rules as Wishlist.

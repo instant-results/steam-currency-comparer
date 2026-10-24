@@ -221,6 +221,12 @@ without introducing a new table column. Keep long matches wrapping at narrow wid
 Developer and publisher matches use an Add button before the name, in visual
 and keyboard order. Keep the action on the left on phones and let long names
 wrap beside it. Adding a catalog still starts its price comparison.
+Place catalog matches in a separate block immediately below the search form,
+using Wishlist's results background, rounded coloured rows, padding and Add
+button styling. Reuse the shared search-result classes so both stay aligned on
+desktop and phones. Empty results blocks take no space; status, errors and
+no-match explanations remain visible when present. Match the prompt wording:
+"Choose a developer/publisher to add to the current comparison."
 
 ## Catalog sorting
 

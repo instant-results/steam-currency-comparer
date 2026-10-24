@@ -296,6 +296,9 @@ through explicit submission. Search-match buttons say "Add" and precede the name
 visually and in keyboard order, including on phones. Their accessible names include
 the product name and App ID. Manual rows use "Manually added". Developer/publisher
 catalog actions retain "Add".
+Catalog matches use the same separate results block and row styling as Wishlist.
+Use "Choose a developer to add to the current comparison." and "Choose a publisher
+to add to the current comparison." above their respective lists.
 
 The required-field validation popup is browser-native. Its warning icon and
 typography are controlled by the browser; app CSS does not position them.
