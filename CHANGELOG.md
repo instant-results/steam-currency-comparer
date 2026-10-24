@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 — 2026-10-24
+## 0.9.2 — 2026-10-24
 
 - Add contextual catalog recovery for failed/cancelled/expired comparisons and
   technical partial results, interrupted catalog additions/expansion, and initial
@@ -20,6 +20,10 @@
 - Add the five wishlist result filters to each catalog tab, applied within groups
   with separate saved selections. Keep statistics and CSV based on all loaded
   products, and explain empty groups with visible/loaded counts.
+
+- Match catalog credit-column and best-offer checkbox styling and label typography.
+
+## 0.9.1 — 2026-10-24
 
 - Search developer/publisher names after four seconds without edits, with immediate
   Search Steam submission and protection against stale responses. Place Add before

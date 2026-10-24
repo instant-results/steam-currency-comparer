@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.9.1** · Beta for local use.
+**Version: 0.9.2** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
