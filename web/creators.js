@@ -46,10 +46,10 @@
       }
       for (const id of results.keys()) if (!visible.has(id)) results.delete(id);
     }
-    function registerCatalogJob(job) {
+    function registerCatalogJob(job, legacyProducts = false) {
       if (!job?.id || !job.token || catalogSources.has(job.id)) return;
       if (catalogSources.size >= 120) catalogSources.delete(catalogSources.keys().next().value);
-      catalogSources.set(job.id, {token: job.token, catalogs: new Set(), products: new Set()});
+      catalogSources.set(job.id, {token: job.token, catalogs: new Set(), products: new Set(), legacyProducts});
       if (finalizedCatalogs.size) syncCatalogCleanup();
     }
     async function syncCatalogCleanup() {
@@ -60,7 +60,8 @@
         const retained = referencedIds(true);
         await Promise.all([...catalogSources].map(async ([id, source]) => {
           const catalogs = [...finalizedCatalogs].filter(key => !source.catalogs.has(key)).slice(0, 20);
-          const appIds = [...orphanedProducts].filter(key => !source.products.has(key) && !retained.has(key)).slice(0, 1000);
+          const appIds = source.legacyProducts
+            ? [...orphanedProducts].filter(key => !source.products.has(key) && !retained.has(key)).slice(0, 1000) : [];
           if (!catalogs.length && !appIds.length) return;
           const batch = catalogs.length ? catalogs : [...finalizedCatalogs].slice(0, 1);
           if (!batch.length) return;
@@ -71,7 +72,7 @@
             for (const key of appIds) source.products.add(key);
           } catch (error) { if (error.status === 404) catalogSources.delete(id); else failed = true; }
           if (catalogSources.has(id)) remaining ||= [...finalizedCatalogs].some(key => !source.catalogs.has(key))
-            || [...orphanedProducts].some(key => !source.products.has(key) && !retained.has(key));
+            || source.legacyProducts && [...orphanedProducts].some(key => !source.products.has(key) && !retained.has(key));
         }));
       } finally {
         cleanupRunning = false;
@@ -140,7 +141,7 @@
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
           results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize(),
           removedCatalogs: [...removedCatalogs], orphanedProducts: cleanupProductIds(),
-          catalogSources: [...catalogSources].map(([id, source]) => ({id, token: source.token}))}));
+          catalogSources: [...catalogSources].map(([id, source]) => ({id, token: source.token, legacyProducts: source.legacyProducts}))}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
 
@@ -682,11 +683,11 @@
       acceptResults([]);
       const cleanupSources = saved.catalogSources || saved.removals?.sources;
       for (const source of Array.isArray(cleanupSources) ? cleanupSources.slice(-120) : []) {
-        if (/^[A-Za-z0-9_-]{32}$/.test(source.id) && /^[A-Za-z0-9_-]{43}$/.test(source.token)) registerCatalogJob(source);
+        if (/^[A-Za-z0-9_-]{32}$/.test(source.id) && /^[A-Za-z0-9_-]{43}$/.test(source.token)) registerCatalogJob(source, source.legacyProducts !== false);
       }
       if (saved.job && /^[A-Za-z0-9_-]{32}$/.test(saved.job.id) && /^[A-Za-z0-9_-]{43}$/.test(saved.job.token)) {
         removals.register(saved.job);
-        registerCatalogJob(saved.job);
+        registerCatalogJob(saved.job, !saved.catalogSources);
         creatorJob = saved.job; savedRequest = saved.request; setCreatorBusy(true); pollCreators();
       } else { currencyUpdating = false; $("creators-progress").textContent = "Restored catalog results. Refresh comparisons for a new price check."; }
       renderGroups(); return true;
