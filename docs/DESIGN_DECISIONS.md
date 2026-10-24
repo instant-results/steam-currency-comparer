@@ -221,3 +221,10 @@ without introducing a new table column. Keep long matches wrapping at narrow wid
 Developer and publisher matches use an Add button before the name, in visual
 and keyboard order. Keep the action on the left on phones and let long names
 wrap beside it. Adding a catalog still starts its price comparison.
+
+## Catalog sorting
+
+The shared catalog header uses the wishlist sort controls and direction indicators.
+Sort each group independently without changing membership or group order. Retain
+original discovery order for the third click and exports. Developers and Publishers
+remember separate sorting choices; sorting starts no requests.

@@ -14,6 +14,7 @@
     let savedRequest = null, cancelRequested = false;
     let currencyUpdating = false, currencyRetry = null, completedComparison = false;
     let searching = false, searchChoices = [], searchTimer = null, searchRevision = 0, searchPending = false;
+    let catalogSort = "arrival", catalogDirection = 1;
     const groups = new Map(), results = new Map(), defaultIds = new Set();
     const synchronizedScrolls = new WeakMap();
     let defaultsChanged = false;
@@ -49,7 +50,7 @@
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
-          results: [...results.values()], rates: creatorRates, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize()}));
+          results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize()}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
     }
 
@@ -88,22 +89,42 @@
       return columnNames().map(name => node("col", undefined, `${name}-column`));
     }
 
-    function tableHeading(home) {
+    function tableHeading(home, interactive = false) {
       const row = node("tr");
+      const buttons = [];
+      function sortButton(text, column) {
+        const button = node("button", undefined, "sort catalog-sort"); button.type = "button";
+        button.dataset.sort = column;
+        button.setAttribute("aria-label", `Sort games within each ${kind} catalog by ${text}`);
+        const arrow = node("span", "↕", "sort-arrow"); arrow.setAttribute("aria-hidden", "true");
+        button.append(node("span", text), arrow);
+        button.addEventListener("click", () => {
+          ({sort: catalogSort, direction: catalogDirection} = nextTableSort(catalogSort, catalogDirection, column));
+          renderGroups(); save();
+        });
+        buttons.push(button); return button;
+      }
       const labels = ["GAME NAME", `PRICE IN ${storefronts[home].name.toUpperCase()}`, "OTHER STOREFRONTS", "DIFFERENCE"];
       if ($("creator-show-credits").checked) labels.splice(1, 0, kind === "developer" ? "PUBLISHER" : "DEVELOPER");
       for (const label of labels) {
         const th = node("th", undefined, label === "OTHER STOREFRONTS" ? "catalog-foreign-heading storefront-group-heading" : ""); th.scope = "col";
         const stack = node("span", undefined, "header-stack");
-        stack.append(node("span", label));
+        if (interactive && label === "GAME NAME") stack.append(sortButton(label, "name"));
+        else if (interactive && label.startsWith("PRICE IN ")) stack.append(sortButton(label, "home"));
+        else stack.append(node("span", label));
         if (label === "OTHER STOREFRONTS") stack.append(node("small", `CONVERTED TO ${storefronts[home].currency}`));
         if (label === "DIFFERENCE") {
           stack.className += " header-stack-right";
-          stack.append(node("small", `${storefronts[home].currency} / %`));
+          if (interactive) {
+            const controls = node("span", undefined, "difference-sorts");
+            controls.append(sortButton(storefronts[home].currency, "difference"), sortButton("%", "percentage"));
+            stack.append(controls);
+          } else stack.append(node("small", `${storefronts[home].currency} / %`));
         }
         th.append(stack);
         row.append(th);
       }
+      if (interactive) updateSortIndicators(buttons, catalogSort, catalogDirection);
       return row;
     }
 
@@ -238,7 +259,7 @@
       $("creators-currencies").textContent = `Displayed: ${currencyLabel({home: creatorHome, regions: creatorRegions})}`;
       $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
       $("creator-columns-colgroup").replaceChildren(...tableColumns());
-      $("creator-columns-head").replaceChildren(tableHeading(creatorHome), storefrontLabelRow());
+      $("creator-columns-head").replaceChildren(tableHeading(creatorHome, true), storefrontLabelRow());
       setComparisonLayout($("creator-columns-table"), creatorRegions, $("creator-show-credits").checked);
       for (const group of groups.values()) {
         // Preserve unavailable paid products; missing prices alone do not mean free.
@@ -253,8 +274,20 @@
         const displayedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
         for (const id of group.rowCache.keys()) if (!displayedIds.has(id)) group.rowCache.delete(id);
-        for (let index = 0; index < group.products.length; index++) {
-          const product = group.products[index];
+        const sortedProducts = [...group.products];
+        if (catalogSort !== "arrival") sortedProducts.sort((a, b) => {
+          const left = results.get(a.app_id), right = results.get(b.app_id);
+          if (catalogSort === "name") return catalogDirection * (left?.name || a.name).localeCompare(right?.name || b.name);
+          const value = item => !item?.comparison ? null : catalogSort === "home" ? item.comparison.home_price.amount
+            : catalogSort === "percentage" ? percentageDifference(item.comparison)
+            : item.comparison.home_price.amount - Math.min(...item.comparison.alternatives.map(price => price.amount_in_home));
+          const av = value(left), bv = value(right);
+          if (av == null) return bv == null ? 0 : 1;
+          if (bv == null) return -1;
+          return catalogDirection * (av - bv);
+        });
+        for (let index = 0; index < sortedProducts.length; index++) {
+          const product = sortedProducts[index];
           const item = results.get(product.app_id) || {...product, pending: true};
           const showCredits = $("creator-show-credits").checked;
           const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + JSON.stringify(item);
@@ -494,6 +527,8 @@
       defaultsChanged = oldDefaults.length > 0 && (oldDefaults.length !== defaultIds.size ||
         [...defaultIds].some(id => !oldDefaults.includes(id)));
       creatorHome = saved.home; creatorRegions = saved.regions; creatorRates = saved.rates || [];
+      catalogSort = ["name", "home", "difference", "percentage"].includes(saved.catalogSort) ? saved.catalogSort : "arrival";
+      catalogDirection = saved.catalogDirection === -1 ? -1 : 1;
       removals.restore(saved.removals);
       completedComparison = saved.completedComparison ?? !!saved.results?.length;
       currencyRetry = validCurrencies(saved.currencyRetry) ? saved.currencyRetry : null;

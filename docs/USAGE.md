@@ -360,7 +360,12 @@ including paid DLC and soundtracks; they do not summarize the entire Steam catal
 Statistics use existing comparison results without additional requests, update
 when more products load, and retain the results' currencies until refreshed.
 
-One shared column-heading row sits above all creators. Regional headings and
+One shared column-heading row sits above all creators. Its sort buttons cycle
+ascending, descending and original order for game name, baseline price, absolute
+difference and percentage difference. Each catalog sorts its own titles; catalogs
+keep their positions. Missing numeric values stay last. Each role remembers its
+sort through reload, expansion and currency updates. Wishlist rank/date loading
+orders do not apply to catalogs. Regional headings and
 prices align in fixed-width slots and scroll together; game/title, baseline and
 DIFFERENCE stay pinned. Per-currency statistics are a separate overview, expandable
 when more than four alternatives are selected; expansion survives display changes

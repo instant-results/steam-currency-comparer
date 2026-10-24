@@ -864,7 +864,7 @@ function render() {
   }
   if(!visible.length && (items.length || running)) { $("empty").querySelector("h3").textContent = items.length ? "No games match these filters." : demoMode ? "Checking the example wishlist…" : "Checking your wishlist…"; $("empty").querySelector("p").textContent = items.length ? "Try another filter or game name." : "Results appear as each game is checked. Steam requests are paced to respect its limits."; }
   $("row-count").textContent = `${visible.length} of ${items.length} games${hiddenCount ? ` · ${hiddenCount} unavailable hidden` : ""}${demoMode ? manualGames ? " · example + added games" : " · curated example" : ""}`;
-  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort)'), sort, direction);
+  updateSortIndicators(document.querySelectorAll('.sort:not(.library-sort):not(.catalog-sort)'), sort, direction);
   saveWishlist();
 }
 function formatRateTime(isoString) {
@@ -1120,7 +1120,7 @@ for (const control of bestOfferControls) {
   });
 }
 document.querySelectorAll('.filter:not(.library-filter)').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; document.querySelectorAll('.filter:not(.library-filter)').forEach(el => { el.classList.toggle('active', el === button); el.setAttribute('aria-pressed', String(el === button)); }); render(); }));
-document.querySelectorAll('.sort:not(.library-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
+document.querySelectorAll('.sort:not(.library-sort):not(.catalog-sort)').forEach(button => button.addEventListener('click', () => { ({sort, direction} = nextTableSort(sort, direction, button.dataset.sort)); render(); }));
 $("identifier").addEventListener("input", () => { automaticExampleDismissed = true; comparisonCoordinator.cancel("wishlist-example"); });
 
 // Deferred scripts restore their tabs before DOMContentLoaded. Catalog restoration
