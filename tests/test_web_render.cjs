@@ -415,6 +415,29 @@ test("title Undo after its only catalog was finalized cannot resurrect orphan re
   assert.deepEqual(saved.catalogs, []);
 });
 
+test("historical catalog orphans cannot remove overlapping titles from a newly added catalog", async () => {
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(savedCatalogPair("developer"))});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  expireRemoval(ctx,"developer-catalog","studio"); await settle();
+  const id = "developer-"+"d".repeat(24);
+  ctx.get("creator-query").value = "New studio";
+  ctx.searches.push({exact_matches:[{id,name:"New studio",selector:{kind:"developer",name:"New studio"}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  ctx.submissions.push({id:"n".repeat(32),token:"t".repeat(43)});
+  ctx.snapshots.push({state:"running",message:"Discovering",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.get("creator-search-results").children[0].children[0].children[0].listeners.click(); await settle();
+  const cleanup = ctx.calls.find(call => call.path === `/api/jobs/${"n".repeat(32)}/remove-catalogs`);
+  assert.deepEqual(cleanup.body, {catalog_ids:["studio"],app_ids:[]});
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.equal(saved.catalogSources.find(source => source.id === "n".repeat(32)).legacyProducts, false);
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  restored.get("creators-tab").listeners.click(); await settle();
+  fireCatalogTimer(restored,0); await settle();
+  const replay = restored.calls.find(call => call.path === `/api/jobs/${"n".repeat(32)}/remove-catalogs`);
+  assert.deepEqual(replay.body, {catalog_ids:["studio"],app_ids:[]});
+});
+
 test("both catalog workflows show discovery ahead of shared currencies and retain independent queries", async () => {
   const ctx = creatorSetup();
   ctx.get("creators-tab").listeners.click(); await settle();
