@@ -260,8 +260,11 @@ missing-value semantics, and spreadsheet formula escaping. See
 
 Loading order and the currency/developer/publisher search labels share the 6px
 caption inset documented in [frontend design decisions](DESIGN_DECISIONS.md).
-Keep field borders, text padding, font styles and label associations intact.
-The large profile prompt, legends, checkboxes and inline filters use their own
+Developer/publisher prompts share Wishlist's 23px, weight-550 typography while
+retaining their 6px inset and 8px gap to the input. Search Steam shares the blue
+primary-action design and desktop position of Compare regional prices.
+Keep field borders, text padding and label associations intact.
+The wishlist profile prompt, legends, checkboxes and inline filters use their own
 patterns. The hidden library dropdown shares the Loading order treatment.
 
 Keep the dropdown chevron inset from its rounded right edge and vertically

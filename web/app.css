@@ -951,15 +951,15 @@ td:first-child { min-width: 0; }
 
 /* Starting and stopping share one action slot; status belongs to progress. */
 .comparison-action .primary { min-height: 48px; align-items: center; }
-#compare-form .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
-#compare-form, #compare-form .profile-field { min-width: 0; }
-#compare-form .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
-#compare-form .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
-#compare-form #analyze { border-color: transparent; }
-#compare-form .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
-#compare-form .retry-button:hover { background: #203654; border-color: var(--blue); }
+:is(#compare-form, .catalog-search-form) .profile-actions { width: max-content; max-width: 100%; min-width: 0; }
+:is(#compare-form, .catalog-search-form), :is(#compare-form, .catalog-search-form) .profile-field { min-width: 0; }
+:is(#compare-form, .catalog-search-form) .comparison-action { display: flex; flex-wrap: wrap; gap: 12px; width: auto; max-width: 100%; min-width: 0; }
+:is(#compare-form, .catalog-search-form) .comparison-action > .primary { flex: 1 1 200px; width: 200px; justify-content: center; border-width: 1px; border-style: solid; }
+:is(#compare-form, .catalog-search-form) #analyze { border-color: transparent; }
+:is(#compare-form, .catalog-search-form) .comparison-action > .retry-button { background: var(--surface); border-color: var(--blue-border); color: var(--blue-light); }
+:is(#compare-form, .catalog-search-form) .retry-button:hover { background: #203654; border-color: var(--blue); }
 @media (max-width: 800px) {
-  #compare-form { grid-template-columns: minmax(0, 1fr); }
+  :is(#compare-form, .catalog-search-form) { grid-template-columns: minmax(0, 1fr); }
 }
 .cancel-button {
   background: #38291f;
@@ -1175,19 +1175,8 @@ td:first-child { min-width: 0; }
 .creator-statistics-coverage { grid-column: 3 / -1; padding-left: 16px; color: var(--muted); font-size: 11px; margin: 0; }
 /* Keep each table's semantic column labels without repeating visible headings. */
 .creator-accessible-head { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); white-space: nowrap; }
-.creator-search { margin: 20px 0; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.creator-search label { display: block; margin-bottom: 8px; font-weight: 600; }
-.creator-search-controls { display: flex; gap: 10px; }
-.creator-search-controls input { min-width: 0; flex: 1; width: 100%; padding: 11px 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
-.creator-search-controls button { white-space: nowrap; }
-.creator-search button { padding: 10px 14px; border: 1px solid var(--blue-border); background: var(--panel); color: var(--text); font-size: 13px; }
-.creator-search button:hover:not(:disabled) { background: var(--blue-subtle); }
-.creator-search .hint { margin: 10px 0 0; }
 .creator-search-result > div { min-width: 0; overflow-wrap: anywhere; }
 .creator-search-actions { display: flex; gap: 8px; }
-@media (max-width: 600px) {
-  .creator-search-controls { flex-direction: column; }
-}
 .creator-identity img { display: block; border-radius: 10px; background: var(--surface); object-fit: contain; }
 .creator-identity h3 { margin: 5px 0 0; font-size: 18px; line-height: 1.35; letter-spacing: -.3px; overflow-wrap: anywhere; }
 .creator-identity a:hover { color: var(--blue-light); }
@@ -1650,8 +1639,14 @@ td:first-child { min-width: 0; }
 .catalog-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; }
 .catalog-display-controls .catalog-credit-toggle, .catalog-display-controls .offer-toggle { margin: 0; }
 
-/* Discovery precedes the shared currencies step in every visible tab. */
-.workspace > .catalog-discovery { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 24px; border: 0; }
-.catalog-discovery .profile-step { margin-top: 0; }
-@media (min-width: 1450px) { .workspace > .catalog-discovery { padding-inline: 30px; } }
-@media (max-width: 1100px) { .workspace > .catalog-discovery { padding-inline: 18px; } }
+/* Catalog discovery shares Wishlist's form tracks, surface and action styling. */
+.workspace > .catalog-discovery { grid-column: 1 / -1; min-width: 0; }
+.workspace:has(#retry:not([hidden])) { --catalog-reference-actions: 412px; }
+.catalog-search-form { grid-template-columns: minmax(0, min(760px, calc(100% - var(--catalog-reference-actions, 200px) - 12px))) auto; }
+.catalog-search-form .profile-field > label { margin-bottom: 8px; }
+.catalog-search-form .profile-step { margin-top: 0; }
+.catalog-search-form .primary { border-color: transparent; }
+@media (max-width: 600px) {
+  :is(#compare-form, .catalog-search-form) .profile-actions,
+  :is(#compare-form, .catalog-search-form) .comparison-action { width: 100%; }
+}

@@ -317,7 +317,9 @@ shared price cache.
 
 Each catalog tab starts with its own search/add step above the shared currencies
 selector, followed by comparison results. Their queries and matches remain independent
-when switching tabs.
+when switching tabs. Catalog search forms share the Wishlist form's background,
+prompt typography and primary-button treatment, with bounded input widths and
+aligned desktop actions.
 
 Developer and publisher name searches run after four seconds without edits,
 matching wishlist game search. Search Steam submits immediately. Editing or

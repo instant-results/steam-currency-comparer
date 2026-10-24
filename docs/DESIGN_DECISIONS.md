@@ -185,8 +185,8 @@ with the border made related search labels inconsistent with the revised dropdow
 | Find a publisher | Publishers search | 13px |
 
 The 6px caption inset applies on desktop and narrow screens. It does not require
-all inputs to have identical text padding. Developer/publisher labels retain their
-existing heavier font style.
+all inputs to have identical text padding. Developer/publisher labels use the
+shared profile-prompt typography: 23px text at weight 550.
 
 For a label wrapping an input, put the caption in its own span so the inset does
 not move the input. Existing label associations, accessible names, native select
@@ -215,6 +215,17 @@ Start immediately while idle; batch only already queued selections. Do not add a
 debounce window to delay price comparisons. Keep prior results visible while the
 new selection is compared, and use its displayed currencies. Mark manual rows
 without introducing a new table column. Keep long matches wrapping at narrow widths.
+
+## Catalog search form
+
+Use the Wishlist profile form's dark background, square internal bottom corners,
+23px/550 prompt typography, input treatment and blue primary action. Keep the
+catalog prompt's 6px inset and tighter 8px gap above its input. Align Search Steam
+with Compare regional prices on desktop using the same field/action tracks,
+including the space used when Wishlist's retry action is visible. Fields are
+bounded at 760px and primary actions at 200px on desktop; phone actions fill the
+available form width. Keep results in the separate block below the form.
+The catalog retry-action decision remains deferred.
 
 ## Catalog search results
 

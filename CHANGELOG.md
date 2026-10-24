@@ -2,6 +2,10 @@
 
 ## 0.9.1 — 2026-10-24
 
+- Match catalog search forms to Wishlist's background, corner treatment, prompt
+  typography and primary-button styling. Bound input widths, align desktop actions
+  and use full-width phone actions.
+
 - Match catalog search results to Wishlist's separate results block, coloured
   rows, left-side Add controls and "add to the current comparison" wording.
 
