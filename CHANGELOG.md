@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-10-24
 
 - Accept Steam organization homepage aliases, numeric creator homepages and
   developer/publisher search URLs in catalog search fields. Resolve verified credit

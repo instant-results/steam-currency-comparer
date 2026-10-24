@@ -5,7 +5,7 @@ release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
 
-## Unreleased: organization URL input
+## Completed in 0.10.0
 
 Developer/publisher fields accept supported Steam homepage and exact-credit search
 URLs. Verified credit names appear below with Add; wrong-role warnings offer to
@@ -16,8 +16,7 @@ open the other tab. See [usage and limits](USAGE.md#organization-urls).
 Catalog forms, search results, prompts and display controls share Wishlist's
 styling and alignment. Five result filters apply within each catalog group.
 Contextual retries recover interrupted comparisons, additions, page expansion
-and initial catalog loading with retained settings. Developer/publisher URL
-input was deferred from this milestone; see the unreleased work above.
+and initial catalog loading with retained settings.
 
 ## Completed in 0.9.1
 

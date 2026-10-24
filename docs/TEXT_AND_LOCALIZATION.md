@@ -1,6 +1,6 @@
 # Text and localization decisions
 
-Updated: 2026-10-22. This is the current reference for user-facing wording,
+Updated: 2026-10-24. This is the current reference for user-facing wording,
 typography, and text alignment. Update the relevant decision when changing copy
 or its presentation. English is the current interface language; a translation
 system and language selector have not been implemented.

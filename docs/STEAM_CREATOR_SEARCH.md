@@ -1,6 +1,7 @@
 # Steam creator search
 
-Verified on 2026-10-03. This describes the implemented integration and its limits.
+Name-search findings verified on 2026-10-03; organization URL resolution verified
+on 2026-10-24. This describes the implemented integration and its limits.
 
 ## Sources and prior work
 
@@ -52,7 +53,7 @@ Consider a locally maintained searchable developer/publisher directory with alia
 
 The frontend keeps independent developer and publisher state and session keys. Featured registry role entries have exact-name selectors, so expansion uses product credits. Old homepage selectors are excluded from migration; explicit role selections retain their compatible catalog positions. Internal creator filenames and legacy API routes remain for compatibility.
 
-## Organization URL resolution (unreleased)
+## Organization URL resolution (0.10.0)
 
 Verified 2026-10-24. Valve documents `/developer/`, `/dev/`, `/publisher/` and
 `/pub/` as interchangeable homepage aliases. Their prefixes are not role evidence.
