@@ -247,3 +247,10 @@ exist only during Undo; session storage and retries retain bounded ID-only clean
 
 Place Show publisher/developer column beside the best-offers checkbox in a shared
 wrapping row above the tables. Retain each control's label association and state.
+
+## Catalog workflow order
+
+Use discovery/addition, currencies, then comparison results in all three visible
+tabs. Catalog search sections occupy the workspace above shared currency setup;
+show only the active role's section. Keep queries, matches, labels and keyboard
+behavior independent, and number currencies 02 consistently.

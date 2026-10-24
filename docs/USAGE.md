@@ -315,6 +315,10 @@ a mapping of up to 20 catalog IDs to lists drawn from their selected `app_ids`, 
 currency updates preserve group ownership. No organization data is written to the
 shared price cache.
 
+Each catalog tab starts with its own search/add step above the shared currencies
+selector, followed by comparison results. Their queries and matches remain independent
+when switching tabs.
+
 Developer and publisher name searches run after four seconds without edits,
 matching wishlist game search. Search Steam submits immediately. Editing or
 clearing the query discards outdated matches; switching tabs cancels pending
@@ -400,8 +404,7 @@ The arrow is shallow, has a flat top and no visible border, and fades most stron
 at its top center; its white label remains accessible to keyboard and screen-reader
 users. The introduction keeps the free-product note, progress status, and statistics
 explanation with consistent text sizing. The exclusion note sits on its own line.
-Currency choices appear in the shared currency panel above the comparison, numbered **01 / CURRENCIES** in
-this tab and **02 / CURRENCIES** in the wishlist tab.
+Currency choices appear in the shared currency panel above the comparison, numbered **02 / CURRENCIES** in every visible tab.
 
 Currency selections are shared between tabs. Existing results keep the currencies
 used for that comparison; **Refresh comparisons** applies the current currency-panel

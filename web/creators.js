@@ -761,8 +761,7 @@
   function selectTab(tab) {
     if (tab === "library" && !libraryEnabled) tab = "wishlist";
     selectedTab = tab;
-    const catalog = tab === "developer" || tab === "publisher";
-    document.getElementById("currencies-step").textContent = catalog ? "01 / CURRENCIES" : "02 / CURRENCIES";
+    document.getElementById("currencies-step").textContent = "02 / CURRENCIES";
     document.getElementById("wishlist-panel").hidden = tab !== "wishlist";
     document.getElementById("compare-form").hidden = tab !== "wishlist";
     document.getElementById("game-discovery").hidden = tab !== "wishlist";
@@ -771,6 +770,7 @@
     window.libraryPane?.activate(tab === "library");
     for (const [kind, pane] of panes) {
       document.getElementById(kind + "s-panel").hidden = tab !== kind;
+      document.getElementById(kind + "-discovery").hidden = tab !== kind;
       pane.activate(tab === kind);
     }
     if (tab === "wishlist") { renderRates(currentRates, document.getElementById("rates")); document.getElementById("wishlist-scroll").refreshScrollControls?.(); }

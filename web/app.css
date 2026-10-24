@@ -1656,3 +1656,9 @@ td:first-child { min-width: 0; }
 
 .catalog-display-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-bottom: 16px; }
 .catalog-display-controls .catalog-credit-toggle, .catalog-display-controls .offer-toggle { margin: 0; }
+
+/* Discovery precedes the shared currencies step in every visible tab. */
+.workspace > .catalog-discovery { grid-column: 1 / -1; min-width: 0; margin: 0; padding: 24px; border: 0; }
+.catalog-discovery .profile-step { margin-top: 0; }
+@media (min-width: 1450px) { .workspace > .catalog-discovery { padding-inline: 30px; } }
+@media (max-width: 1100px) { .workspace > .catalog-discovery { padding-inline: 18px; } }
