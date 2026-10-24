@@ -55,7 +55,7 @@
     async function syncCatalogCleanup() {
       if (cleanupRunning) return;
       clearTimeout(cleanupTimer); cleanupRunning = true;
-      let failed = false, remaining = false;
+      let failed = false;
       try {
         const retained = referencedIds(true);
         await Promise.all([...catalogSources].map(async ([id, source]) => {
@@ -71,11 +71,12 @@
             for (const key of catalogs) source.catalogs.add(key);
             for (const key of appIds) source.products.add(key);
           } catch (error) { if (error.status === 404) catalogSources.delete(id); else failed = true; }
-          if (catalogSources.has(id)) remaining ||= [...finalizedCatalogs].some(key => !source.catalogs.has(key))
-            || source.legacyProducts && [...orphanedProducts].some(key => !source.products.has(key) && !retained.has(key));
         }));
       } finally {
         cleanupRunning = false;
+        const retained = referencedIds(true);
+        const remaining = [...catalogSources.values()].some(source => [...finalizedCatalogs].some(key => !source.catalogs.has(key))
+          || source.legacyProducts && [...orphanedProducts].some(key => !source.products.has(key) && !retained.has(key)));
         if (remaining || failed) cleanupTimer = setTimeout(syncCatalogCleanup, failed ? 4000 : 0);
         if (failed) message("Catalog removed locally. Server cleanup will retry when the connection is available.", true);
       }
