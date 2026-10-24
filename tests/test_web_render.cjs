@@ -2650,6 +2650,202 @@ for (const kind of ["developer","publisher"]) test(`${kind} switch preserves gro
   assert.equal(ctx.body().children.length,4);
 });
 
+for (const kind of ["developer", "publisher"]) for (const outcome of ["failed", "cancelled", "partial", 429, 404]) {
+  test(`${kind} catalog ${outcome} recovery repeats the original catalog and page while retaining other results`, async () => {
+    const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+    const retained = ctx.body().children[0], id = kind+"-"+"d".repeat(24), name = "New studio";
+    ctx.searches.push({exact_matches:[{id,name,selector:{kind,name}}]}); ctx.get("creator-query").value = name;
+    await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+    if (outcome === 429) ctx.submissions.push({httpStatus:429,error:"Busy"});
+    else ctx.snapshots.push(outcome === 404 ? {httpStatus:404,error:"Expired"} : {
+      state:outcome, message:"Stopped",error:outcome === "failed" ? "Discovery failed" : null,
+      catalogs:outcome === "partial" ? {[id]:{products:[{app_id:"4",name:"New game"}],next_start:25,has_more:true,total:50}} : {},
+      items:outcome === "partial" ? [skipped("4","request_failure")] : [],rates:[],warnings:[]});
+    ctx.get("creator-search-results").children[0].children[0].children[0].listeners.click(); await settle();
+    const original = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+    assert.equal(ctx.get("creators-refresh").textContent,"Retry loading New studio ↻");
+    assert.equal(ctx.get("creators-refresh").disabled,false);
+    assert.equal(ctx.body().children[0], retained);
+    ctx.radios.forEach(radio => radio.checked = radio.value === "gb");
+    ctx.snapshots.push({state:"complete",message:"Done",catalogs:{[id]:{products:[{app_id:"4",name:"New game"}],next_start:25,has_more:true,total:50}},
+      items:[game("4","New game")],rates:[],warnings:[]});
+    ctx.get("creators-refresh").listeners.click(); await settle();
+    assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body, original);
+    const saved = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+    assert.deepEqual(saved.catalogs.find(group => group.id === id).products.map(item => item.app_id),["4"]);
+    assert.equal(saved.comparisonRetry,null);
+    assert.equal(ctx.get("creators-refresh").textContent,"Refresh comparisons ↻");
+    assert.equal(ctx.body().children[0],retained);
+  });
+}
+
+for (const kind of ["developer", "publisher"]) for (const state of ["failed", "cancelled", "partial"]) {
+  test(`${kind} ${state} initial price retry keeps original currencies through reload and ignores later drafts`, async () => {
+    const snapshot = {state,message:"Stopped",error:state === "failed" ? "Upstream failed" : null,
+      catalogs:{},items:state === "partial" ? [game("1","First"),skipped("2","request_failure")] : [],rates:[],warnings:[]};
+    const ctx = creatorSetup({},kind,false,[snapshot]); ctx.get("creators-tab").listeners.click(); await settle();
+    assert.equal(ctx.get("creators-refresh").textContent,"Retry comparison ↻");
+    const original = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+    const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
+    restored.get("creators-tab").listeners.click(); await settle();
+    assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+    assert.equal(restored.get("creators-refresh").textContent,"Retry comparison ↻");
+    restored.radios.forEach(radio => radio.checked = radio.value === "gb");
+    restored.get("creator-filter-fair").listeners.click();
+    restored.get("creator-show-credits").checked = true; restored.get("creator-show-credits").listeners.change();
+    restored.get("creators-refresh").listeners.click(); await settle();
+    assert.deepEqual(restored.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body,original);
+    const saved = JSON.parse(restored.storage.get(`polisher-${kind}-job`));
+    assert.equal(saved.home,"pl"); assert.equal(saved.catalogFilter,"fair"); assert.equal(saved.showCredits,true);
+    assert.equal(saved.comparisonRetry,null);
+  });
+}
+
+for (const kind of ["developer", "publisher"]) test(`${kind} interrupted expansion retries its original page after reload without advancing or duplicating products`, async () => {
+  const ctx = creatorSetup({},kind); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"partial",message:"Incomplete",items:[skipped("4","request_failure")],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:"4",name:"Fourth"}],next_start:25,has_more:true,total:100}}});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  const stored = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.equal(stored.catalogs[0].nextStart,25);
+  assert.equal(stored.comparisonRetry.start,0);
+  const restored = creatorSetup(Object.fromEntries(ctx.storage),kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  restored.radios.forEach(radio => radio.checked = radio.value === "gb");
+  restored.snapshots.push({state:"complete",message:"Done",items:[game("4","Fourth")],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:"4",name:"Fourth"}],next_start:25,has_more:true,total:100}}});
+  restored.get("creators-refresh").listeners.click(); await settle();
+  const replay = restored.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(replay.mode,"catalog"); assert.equal(replay.start,0); assert.equal(replay.home,"pl");
+  assert.deepEqual(restored.body().children.map(row => row.dataset.appId),["1","2","3","4"]);
+});
+
+test("initial catalog registry failures have an enabled recovery action that respects the shared worker lock", async () => {
+  const ctx = creatorSetup();
+  ctx.run(`const registryFetch = fetch; window.registryAttempts = 0;
+    fetch = async (path, options) => path === '/api/creators' && ++window.registryAttempts <= 2
+      ? {ok:false,status:503,json:async()=>({error:'Registry unavailable'})} : registryFetch(path,options);`);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry loading catalogs ↻");
+  assert.equal(ctx.get("creators-refresh").disabled,false);
+  assert.equal(ctx.get("creator-search-submit").disabled,true);
+  ctx.run('setBusy(true)'); ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(ctx.run("window.registryAttempts"),1);
+  assert.equal(ctx.get("creators-refresh").disabled,true);
+  ctx.run('setBusy(false)'); ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(ctx.run("window.registryAttempts"),2);
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry loading catalogs ↻");
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(ctx.run("window.registryAttempts"),3);
+  assert.equal(ctx.get("creators-refresh").textContent,"Refresh comparisons ↻");
+  assert.equal(ctx.get("creator-search-submit").disabled,false);
+  assert.equal(ctx.body().children.length,3);
+});
+
+test("retrying a price comparison excludes removed products and retains Undo behavior", async () => {
+  const ctx = creatorSetup({},"developer",false,[{state:"partial",message:"Partial",catalogs:{},
+    items:[game("1","First"),skipped("2","request_failure"),game("3","Third")],rates:[],warnings:[]}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  findRemovalButton(ctx.body().children[1]).listeners.click({detail:1});
+  expireRemoval(ctx,"developer","2"); await settle();
+  ctx.snapshots.push({state:"complete",message:"Done",items:[game("1","First"),game("3","Third")],catalogs:{},rates:[],warnings:[]});
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  const replay = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(replay.app_ids,["1","3"]); assert.deepEqual(replay.excluded_app_ids,["2"]);
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId),["1","3"]);
+});
+
+test("removing a catalog clears its pending retry instead of rediscovering it", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"failed",message:"Failed",error:"Discovery unavailable",items:[],catalogs:{},rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry loading Studio ↻");
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).comparisonRetry,null);
+  assert.equal(ctx.get("creators-refresh").textContent,"Refresh comparisons ↻");
+});
+
+test("partial currency updates retain a contextual retry for the displayed selection", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  chooseCurrencies(ctx,"gb",["us"]);
+  ctx.snapshots.push({state:"partial",message:"Partial",catalogs:{},items:[skipped("1","request_failure")],rates:[],warnings:[]});
+  ctx.get("update-currencies").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry currency update ↻");
+  chooseCurrencies(ctx,"no",["de"]); ctx.get("creators-refresh").listeners.click(); await settle();
+  const replay = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(replay.home,"gb"); assert.deepEqual(replay.regions,["us"]);
+});
+
+test("expired restored catalog jobs recover the original request from older saved state", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"running",message:"Checking",items:[game("4","Fourth")],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:"4",name:"Fourth"}],next_start:25,has_more:true,total:50}}});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job")); delete saved.comparisonRetry;
+  const restored = creatorSetup({"polisher-developer-job":JSON.stringify(saved)},"developer",false,[{httpStatus:404,error:"Expired"}]);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creators-refresh").textContent,"Retry loading Studio ↻");
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+  restored.get("creators-refresh").listeners.click(); await settle();
+  const replay = restored.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(replay.mode,"catalog"); assert.equal(replay.start,0); assert.equal(replay.home,"pl");
+});
+
+test("removing all retry products ends recovery without submitting an empty comparison", async () => {
+  const ctx = creatorSetup({},"developer",false,[{state:"partial",message:"Partial",items:[skipped("1","request_failure")],catalogs:{},rates:[],warnings:[]}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const count = ctx.calls.filter(call => call.path === "/api/creator-jobs").length;
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1}); expireRemoval(ctx,"developer-catalog","studio"); await settle();
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,count);
+  assert.match(ctx.get("creators-notice").textContent,/products.*removed/);
+  assert.equal(ctx.get("creators-refresh").textContent,"Refresh comparisons ↻");
+});
+
+test("saved retry payloads validate currencies IDs and page bounds, and reconstruct trusted selectors", async () => {
+  const base = savedCatalogPair("developer");
+  const good = {mode:"products",home:"pl",regions:["us"],app_ids:["1","2","3"]};
+  for (const comparisonRetry of [{...good,home:"invalid"},{...good,app_ids:["../bad"]},
+    {...good,app_ids:["1","1"]},{mode:"catalog",home:"pl",regions:["us"],creator_id:"studio",start:100001}]) {
+    const ctx = creatorSetup({"polisher-developer-job":JSON.stringify({...base,comparisonRetry})});
+    ctx.get("creators-tab").listeners.click(); await settle();
+    assert.equal(ctx.get("creators-refresh").textContent,"Refresh comparisons ↻");
+    assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,0);
+  }
+  const comparisonRetry = {mode:"catalog",home:"pl",regions:["us"],creator_id:"studio",start:0,
+    selector:{kind:"publisher",name:"Untrusted"},url:"https://untrusted.test",token:"not-a-job-token"};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify({...base,comparisonRetry})});
+  ctx.get("creators-tab").listeners.click(); await settle(); ctx.get("creators-refresh").listeners.click(); await settle();
+  const replay = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.deepEqual(replay.selector,{kind:"developer",name:"Studio"});
+  assert.equal(replay.url,undefined); assert.equal(replay.token,undefined);
+});
+
+test("catalog retry state stays independent between role tabs and name-search failures", async () => {
+  const ctx = creatorSetup({},"developer",false,[{state:"failed",message:"Failed",error:"Temporary problem",items:[],catalogs:{},rates:[],warnings:[]}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("publishers-refresh").textContent,"Refresh comparisons ↻");
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry comparison ↻");
+  ctx.searches.push({error:"Search unavailable"}); ctx.get("creator-query").value = "Valve";
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry comparison ↻");
+  assert.equal(ctx.get("creator-search-status").textContent,"Search unavailable");
+});
+
+test("an initial failed comparison can explicitly switch currencies instead of repeating its original settings", async () => {
+  const ctx = creatorSetup({},"developer",false,[{state:"failed",message:"Failed",error:"Temporary problem",items:[],catalogs:{},rates:[],warnings:[]}]);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creators-refresh").textContent,"Retry comparison ↻");
+  chooseCurrencies(ctx,"gb",["us"]);
+  assert.equal(ctx.get("update-currencies").disabled,false);
+  ctx.get("update-currencies").listeners.click(); await settle();
+  const submitted = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.equal(submitted.home,"gb"); assert.deepEqual(submitted.app_ids,["1","2","3"]);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).comparisonRetry,null);
+});
+
 for (const outcome of ["failed","cancelled",429,404,"partial"]) test(`catalog update outcome ${outcome} keeps snapshots and retry coherent`, async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
   chooseCurrencies(ctx,"gb",["us"]);
