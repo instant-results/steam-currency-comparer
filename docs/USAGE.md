@@ -324,6 +324,19 @@ matching wishlist game search. Search Steam submits immediately. Editing or
 clearing the query discards outdated matches; switching tabs cancels pending
 automatic search. Search does not start a price comparison.
 
+The catalog filter bar offers All games, Cheaper / equal, Pricier, Different
+discounts and Uncompared, using the same default-game-price rules as Wishlist.
+One selection applies within each group in the active tab; group order stays
+unchanged. Developers and Publishers remember separate selections through reload,
+expansion, currency updates and Undo. Pending products appear under All games;
+Uncompared covers checked products with missing prices or failed requests.
+
+Filtered groups show the visible count out of their loaded products, and remain
+visible with an explanation if nothing matches. Statistics and CSV always cover
+all loaded, checked products, including those hidden by these filters. Sorting
+applies to visible rows. The best-offer display choice does not affect filtering.
+Changing a filter performs no Steam requests.
+
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
 with three selected games each from Supergiant Games, CD PROJEKT RED, and Techland.
 Publishers features Devolver Digital (US), THQ Nordic (Austria), and 11 bit studios

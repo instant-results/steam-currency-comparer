@@ -457,7 +457,7 @@ h2 {
   gap: 4px;
   flex-wrap: wrap;
 }
-.filter {
+.filter, .catalog-filter {
   padding: 6px 9px;
   font-size: 14px;
   border: 1px solid transparent;
@@ -466,10 +466,10 @@ h2 {
   border-radius: 6px;
   transition: background .15s, color .15s;
 }
-.filter:hover {
+.filter:hover, .catalog-filter:hover {
   color: var(--text);
 }
-.filter.active {
+.filter.active, .catalog-filter.active {
   color: #ffffff;
   border-color: rgba(59, 130, 246, 0.4);
   background: rgba(59, 130, 246, 0.12);
@@ -883,7 +883,7 @@ progress::-webkit-progress-value {
   .summary span { font-size: 14px; }
   .summary > div { padding: 12px 8px; }
   .summary strong, .summary .count-completion { font-size: 26px; }
-  .filter { font-size: 14px; padding: 6px; }
+  .filter, .catalog-filter { font-size: 14px; padding: 6px; }
   .results-panel { padding: 20px 14px 0; }
   .foreign { display: block; }
   .foreign span { display: block; }

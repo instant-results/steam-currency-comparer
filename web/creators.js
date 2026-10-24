@@ -15,6 +15,8 @@
     let currencyUpdating = false, currencyRetry = null, completedComparison = false;
     let searching = false, searchChoices = [], searchTimer = null, searchRevision = 0, searchPending = false;
     let catalogSort = "arrival", catalogDirection = 1;
+    const filterNames = ["all", "fair", "expensive", "discounts", "skipped"];
+    let catalogFilter = "all";
     const groups = new Map(), results = new Map(), defaultIds = new Set();
     const removedCatalogs = new Set(), finalizedCatalogs = new Set(), orphanedProducts = new Set(), catalogSources = new Map(), catalogOrder = new Map();
     let cleanupRunning = false, cleanupTimer = null;
@@ -140,7 +142,7 @@
         sessionStorage.setItem(storageKey, JSON.stringify({job: creatorJob, request: savedRequest, creators: creators.filter(c => c.selector),
           featuredIds: [...defaultIds], showCredits: $("creator-show-credits").checked, home: creatorHome, regions: creatorRegions, catalogs: [...groups].map(([id, group]) => ({id,
             products: group.products, nextStart: group.nextStart, hasMore: group.hasMore, total: group.total, expanded: group.expanded, discoveryHome: group.discoveryHome, statisticsExpanded: group.statisticsExpanded})),
-          results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize(),
+          results: [...results.values()], rates: creatorRates, catalogSort, catalogDirection, catalogFilter, currencyUpdating, currencyRetry, completedComparison, removals: removals.serialize(),
           removedCatalogs: [...removedCatalogs], orphanedProducts: cleanupProductIds(),
           catalogSources: [...catalogSources].map(([id, source]) => ({id, token: source.token, legacyProducts: source.legacyProducts}))}));
       } catch (_) { /* A full or unavailable session store does not interrupt comparisons. */ }
@@ -280,11 +282,13 @@
         more.title = `Load more products from ${creator.name}`;
         more.setAttribute("aria-label", `Load more products from ${creator.name}`);
         more.addEventListener("click", () => loadMore(creator.id));
-        footer.append(count, more); catalog.append(wrap, footer); section.append(heading, catalog);
+        const empty = node("p", "No loaded products match this filter.", "hint catalog-filter-empty");
+        empty.hidden = true; empty.setAttribute("role", "status");
+        footer.append(count, more); catalog.append(wrap, footer, empty); section.append(heading, catalog);
         $("creator-groups").append(section);
         groups.set(creator.id, {products: [...creator.examples], nextStart: 0, hasMore: true, total: null,
           discoveryHome: creatorHome,
-          expanded: !creator.examples.length, section, body, head, columns, table, wrap, statistics, count, more, rowCache: new Map(),
+          expanded: !creator.examples.length, section, body, head, columns, table, wrap, statistics, count, more, empty, rowCache: new Map(),
           order: new Map(creator.examples.map((product, index) => [product.app_id, index]))});
         wrap.addEventListener("scroll", () => syncColumns(wrap));
       }
@@ -361,7 +365,21 @@
       target.append(coverage);
     }
 
+    function matchesFilter(product) {
+      if (catalogFilter === "all") return true;
+      const item = results.get(product.app_id), comparison = item?.comparison;
+      if (catalogFilter === "skipped") return !!item?.skipped && !comparison;
+      if (catalogFilter === "discounts") return hasDifferentDiscounts(comparison);
+      return !!comparison && comparison.is_fair === (catalogFilter === "fair");
+    }
+
     function renderGroups() {
+      for (const name of filterNames) {
+        const button = $("creator-filter-" + name);
+        button.classList.toggle("active", catalogFilter === name);
+        button.setAttribute("aria-pressed", String(catalogFilter === name));
+      }
+      $("creators-filter-help").hidden = catalogFilter !== "skipped";
       $("creators-currencies").hidden = !results.size;
       $("creators-currencies").textContent = `Displayed: ${currencyLabel({home: creatorHome, regions: creatorRegions})}`;
       $("creators-panel").classList.toggle("credit-column-visible", $("creator-show-credits").checked);
@@ -378,10 +396,12 @@
         group.columns.replaceChildren(...tableColumns());
         group.head.replaceChildren(tableHeading(creatorHome), storefrontLabelRow());
         setComparisonLayout(group.table, creatorRegions, $("creator-show-credits").checked);
-        const displayedIds = new Set(group.products.map(item => item.app_id));
+        const visibleProducts = group.products.filter(matchesFilter);
+        const displayedIds = new Set(visibleProducts.map(item => item.app_id));
+        const loadedIds = new Set(group.products.map(item => item.app_id));
         for (const row of [...group.body.children]) if (!displayedIds.has(row.dataset.appId)) row.remove();
-        for (const id of group.rowCache.keys()) if (!displayedIds.has(id)) group.rowCache.delete(id);
-        const sortedProducts = [...group.products];
+        for (const id of group.rowCache.keys()) if (!loadedIds.has(id)) group.rowCache.delete(id);
+        const sortedProducts = [...visibleProducts];
         if (catalogSort !== "arrival") sortedProducts.sort((a, b) => {
           const left = results.get(a.app_id), right = results.get(b.app_id);
           if (catalogSort === "name") return catalogDirection * (left?.name || a.name).localeCompare(right?.name || b.name);
@@ -413,7 +433,9 @@
           if (group.body.children[index] !== cached.row) group.body.insertBefore(cached.row, group.body.children[index] || null);
         }
         group.more.hidden = !group.hasMore && group.discoveryHome === creatorHome;
-        group.count.textContent = `${group.products.length} products shown${group.total != null && group.discoveryHome === creatorHome ? ` · ${group.total} in Steam catalog` : group.expanded ? "" : " · featured games"}`;
+        const count = catalogFilter === "all" ? `${group.products.length}` : `${visibleProducts.length} of ${group.products.length}`;
+        group.count.textContent = `${count} products shown${group.total != null && group.discoveryHome === creatorHome ? ` · ${group.total} in Steam catalog` : group.expanded ? "" : " · featured games"}`;
+        group.empty.hidden = catalogFilter === "all" || visibleProducts.length > 0;
       }
       if (active && creatorRates.length) renderRates(creatorRates, $("rates"));
       refreshControls();
@@ -649,6 +671,7 @@
       for (const [id, group] of groups) if (removedCatalogs.has(id)) { group.section.remove(); groups.delete(id); }
       catalogSort = ["name", "home", "difference", "percentage"].includes(saved.catalogSort) ? saved.catalogSort : "arrival";
       catalogDirection = saved.catalogDirection === -1 ? -1 : 1;
+      catalogFilter = filterNames.includes(saved.catalogFilter) ? saved.catalogFilter : "all";
       removals.restore(saved.removals);
       completedComparison = saved.completedComparison ?? !!saved.results?.length;
       currencyRetry = validCurrencies(saved.currencyRetry) ? saved.currencyRetry : null;
@@ -754,6 +777,9 @@
     $("creators-refresh").addEventListener("click", () => initialized ? refreshFeatured() : initialize());
     $("creator-search-form").addEventListener("submit", searchCreators);
     $("creator-query").addEventListener("input", scheduleSearch);
+    for (const name of filterNames) $("creator-filter-" + name).addEventListener("click", () => {
+      catalogFilter = name; renderGroups(); save();
+    });
     $("creator-show-credits").addEventListener("change", () => { renderGroups(); save(); });
     $("creators-cancel").addEventListener("click", async () => {
       if (!creatorJob) return;

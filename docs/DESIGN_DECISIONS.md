@@ -251,6 +251,12 @@ Both use 16px native checkboxes with the blue accent, an 8px text gap and
 matching 14px, regular-weight muted labels with 24px line height. Align each
 checkbox with its label's first line, including when the offer text wraps.
 
+Place Wishlist's five result filters at the start of this wrapping row. Use the
+same button states, typography and keyboard behavior. Preserve group headings,
+statistics, expansion and removal controls when no rows match; explain the empty
+view and show visible/loaded counts. Filters change row visibility, leaving loaded
+membership, statistics and CSV intact. Keep a separate saved filter per role.
+
 ## Catalog workflow order
 
 Use discovery/addition, currencies, then comparison results in all three visible

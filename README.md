@@ -99,6 +99,8 @@ change over time. No personal Steam profile is used.
   edits, with **Add** on the left of each match. Their search/add step precedes
   currency setup. Catalog headers sort titles within each group by name, baseline
   price, absolute difference or percentage difference, retaining group order.
+  The same five result filters apply within each catalog, with separate remembered
+  selections per tab; statistics and CSV continue to cover all loaded products.
   Developer and publisher selections, results, and catalog positions are saved
   independently in the same browser tab. Developer/publisher credits appear
   beneath each game, or in a separate column using **Show publisher column** /

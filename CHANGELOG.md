@@ -2,6 +2,10 @@
 
 ## 0.9.1 — 2026-10-24
 
+- Add the five wishlist result filters to each catalog tab, applied within groups
+  with separate saved selections. Keep statistics and CSV based on all loaded
+  products, and explain empty groups with visible/loaded counts.
+
 - Search developer/publisher names after four seconds without edits, with immediate
   Search Steam submission and protection against stale responses. Place Add before
   each match, matching wishlist search.
