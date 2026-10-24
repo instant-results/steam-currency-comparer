@@ -312,6 +312,104 @@ function savedCatalogPair(kind) {
     catalogSources:[{id:"a".repeat(32),token:"b".repeat(43)}]};
 }
 
+function filteredCatalogFixture(kind) {
+  const saved = savedCatalogPair(kind);
+  saved.catalogs[0].total = 25;
+  saved.catalogs[0].total = 25;
+  const fair = game("1", "Zebra"), expensive = game("2", "Pricier title"), discounts = game("4", "Alpha");
+  expensive.comparison.home_price.amount = 30; expensive.comparison.is_fair = false;
+  fair.comparison.home_price.discount_percent = 0; fair.comparison.alternatives[0].discount_percent = 0;
+  discounts.comparison.home_price.discount_percent = 25; discounts.comparison.alternatives[0].discount_percent = 0;
+  saved.results = [fair, expensive, discounts, skipped("3", "request_failure"), skipped("6", "app_unavailable")];
+  saved.catalogs[0].products = [fair, expensive, discounts, {app_id:"6", name:"Unavailable"}].map(({app_id,name}) => ({app_id,name}));
+  saved.catalogs[1].products = [{app_id:"1",name:"Zebra"},{app_id:"3",name:"Failed"},{app_id:"5",name:"Pending"}];
+  return saved;
+}
+
+for (const kind of ["developer", "publisher"]) test(`${kind} filters each group without altering statistics, CSV, membership or starting requests`, async () => {
+  const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(filteredCatalogFixture(kind))}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const bodies = () => ctx.get("creator-groups").children.map(group => group.children[1].children[0].children[0].children[2]);
+  const ids = () => bodies().map(body => body.children.map(row => row.dataset.appId));
+  const summary = () => ctx.get("creator-groups").children.map(group => descendants(group.children[0].children[1]).map(el => el.textContent || "").join("|"));
+  const statistics = summary(), count = ctx.calls.length;
+  const expected = {all:[["1","2","4","6"],["1","3","5"]], fair:[["1","4"],["1"]],
+    expensive:[["2"],[]], discounts:[["4"],[]], skipped:[["6"],["3"]]};
+  for (const [name, visible] of Object.entries(expected)) {
+    ctx.get("creator-filter-"+name).listeners.click();
+    assert.deepEqual(ids(), visible);
+    for (const key of Object.keys(expected)) assert.equal(ctx.get("creator-filter-"+key).attributes["aria-pressed"], String(key === name));
+    assert.equal(ctx.get("creators-filter-help").hidden, name !== "skipped");
+    assert.deepEqual(summary(), statistics);
+    assert.equal(ctx.calls.length, count);
+    const saved = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+    assert.deepEqual(saved.catalogs.map(group => group.products.map(item => item.app_id)), expected.all);
+    assert.equal(saved.catalogFilter, name);
+    assert.equal(ctx.group().children[1].children[1].children[0].textContent,
+      name === "all" ? "4 products shown · 25 in Steam catalog" : `${visible[0].length} of 4 products shown · 25 in Steam catalog`);
+  }
+  ctx.run('downloadCsv = contents => {window.filteredCatalogCsv = contents;}'); ctx.get("creators-export").listeners.click();
+  const exported = parseCsv(ctx.run("window.filteredCatalogCsv")).rows;
+  assert.deepEqual([...new Set(exported.map(row => row.game_id))].sort(), ["1","2","3","4","6"]);
+  assert.equal(exported.filter(row => row.game_id === "1").length, 4);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} filtering persists with sorting, independent tabs, empty groups and title Undo`, async () => {
+  const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(filteredCatalogFixture(kind))}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-filter-fair").listeners.click();
+  catalogSortButtons(ctx).find(button => button.dataset.sort === "name").listeners.click();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["4","1"]);
+  findRemovalButton(ctx.body().children[0]).listeners.click({detail:1});
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1"]);
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["4","1"]);
+  ctx.get("creator-filter-expensive").listeners.click();
+  const second = ctx.get("creator-groups").children[1];
+  assert.equal(second.children[1].children[2].hidden, false);
+  assert.match(second.children[1].children[2].textContent, /No loaded products match/);
+  const restored = creatorSetup({[`polisher-${kind}-job`]:ctx.storage.get(`polisher-${kind}-job`)},kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-filter-expensive").attributes["aria-pressed"], "true");
+  assert.deepEqual(restored.body().children.map(row => row.dataset.appId), ["2"]);
+  const other = kind === "developer" ? "publisher" : "developer";
+  restored.get(other+"s-tab").listeners.click(); await settle();
+  assert.equal(restored.get(other+"-filter-all").attributes["aria-pressed"], "true");
+  restored.get(kind+"s-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-filter-expensive").attributes["aria-pressed"], "true");
+  restored.get("creator-filter-all").listeners.click();
+  assert.equal(restored.get("creator-groups").children[1].children[1].children[2].hidden, true);
+});
+
+test("catalog filtering follows new default-price results through expansion and currency updates, independently of best offers", async () => {
+  const saved = filteredCatalogFixture("developer");
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-filter-expensive").listeners.click();
+  const added = game("7","New pricier title"); added.comparison.is_fair = false;
+  added.best_offer_comparison = {...added.comparison, is_fair:true};
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"7",name:added.name}],next_start:50,has_more:false,total:25}},items:[added],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["2","7"]);
+  ctx.get("developers-show-best-offers").checked = true; ctx.get("developers-show-best-offers").listeners.change();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["2","7"]);
+  const repriced = saved.results.map(item => JSON.parse(JSON.stringify(item)));
+  repriced[0].comparison.is_fair = false; repriced[1].comparison.is_fair = true;
+  ctx.radios.forEach(radio => radio.checked = radio.value === "gb");
+  ctx.snapshots.push({state:"complete",message:"Updated",catalogs:{},items:[...repriced,added],rates:[],warnings:[]});
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","7"]);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogFilter,"expensive");
+});
+
+test("invalid saved catalog filters fall back to All games", async () => {
+  const saved = {...filteredCatalogFixture("developer"),catalogFilter:"unexpected"};
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(saved)});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-filter-all").attributes["aria-pressed"], "true");
+  assert.equal(ctx.body().children.length, 4);
+});
+
 for (const kind of ["developer", "publisher"]) test(`${kind} catalog removal preserves shared titles, omits private group rows from storage/CSV and supports Undo`, async () => {
   const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(savedCatalogPair(kind))}, kind);
   ctx.get("creators-tab").listeners.click(); await settle();
