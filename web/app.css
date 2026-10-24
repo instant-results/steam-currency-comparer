@@ -1240,7 +1240,7 @@ td:first-child { min-width: 0; }
   .creator-load-more { grid-column: 1; grid-row: 2; width: 52.5%; }
 }
 
-.catalog-credit-toggle { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; }
+.catalog-credit-toggle { display: flex; align-items: flex-start; gap: 8px; margin: 1rem 0; cursor: pointer; }
 .catalog-credit { display: block; color: var(--muted); margin-top: 0.4rem; overflow-wrap: anywhere; }
 .wishlist-credits {
   display: grid;
@@ -1554,8 +1554,8 @@ td:first-child { min-width: 0; }
 .result-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--blue); }
 .results-panel .offer-toggle { display: flex; align-items: flex-start; gap: 8px; min-width: 0; max-width: 100%; margin: 0 0 16px; }
 .comparison-toolbar .offer-toggle { margin: 0; }
-.offer-toggle > input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--blue); }
-.offer-label-with-info { min-width: 0; font-size: 14px; line-height: 24px; color: var(--muted); }
+.offer-toggle > input, .catalog-credit-toggle > input { flex: 0 0 auto; width: 16px; height: 16px; margin: 4px 0 0; accent-color: var(--blue); }
+.offer-label-with-info, .catalog-credit-toggle { min-width: 0; font-size: 14px; font-weight: 400; line-height: 24px; color: var(--muted); }
 .offer-label-with-info label { display: inline; font-size: inherit; cursor: pointer; }
 .offer-info-button {
   display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; transform: translateY(-2px);

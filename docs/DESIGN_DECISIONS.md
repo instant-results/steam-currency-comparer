@@ -247,6 +247,9 @@ exist only during Undo; session storage and retries retain bounded ID-only clean
 
 Place Show publisher/developer column beside the best-offers checkbox in a shared
 wrapping row above the tables. Retain each control's label association and state.
+Both use 16px native checkboxes with the blue accent, an 8px text gap and
+matching 14px, regular-weight muted labels with 24px line height. Align each
+checkbox with its label's first line, including when the offer text wraps.
 
 ## Catalog workflow order
 
