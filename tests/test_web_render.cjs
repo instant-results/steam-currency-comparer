@@ -8,6 +8,7 @@ class Element {
   constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attributes = {}; this.scrollLeft = 0; this.value = ""; this.checked = false; this.parent = null; this.classList = {toggle() {}}; this.style = {values:{},setProperty(key,value) {this.values[key]=value;},getPropertyValue(key) {return this.values[key];}}; }
   get parentElement() { return this.parent; }
   get firstElementChild() { return this.children[0] || null; }
+  closest(selector) { return this.tagName === selector ? this : this.parent?.closest(selector) || null; }
   contains(element) { return this === element || this.children.some(child => child.contains(element)); }
   append(...children) { for (const child of children) this.insertBefore(child, null); }
   insertBefore(child, target) { child.remove(); const index = target ? this.children.indexOf(target) : this.children.length; this.children.splice(index, 0, child); child.parent = this; this.insertions = (this.insertions || 0) + 1; }
@@ -230,6 +231,229 @@ function expireRemoval(ctx, owner, id) {
 }
 const findRemovalButton = row => row.children[0].children[0].children[0].children[1];
 
+const descendants = element => [element, ...element.children.flatMap(descendants)];
+function fireCatalogTimer(ctx, delay) {
+  const entry = [...ctx.timerDelays].find(([id, value]) => value === delay && ctx.timers.has(id));
+  assert.ok(entry, `Expected a ${delay}ms timer`);
+  const callback = ctx.timers.get(entry[0]); ctx.timers.delete(entry[0]); ctx.timerDelays.delete(entry[0]);
+  return callback();
+}
+
+for (const kind of ["developer", "publisher"]) test(`${kind} name search debounces edits, submits immediately and cancels on leaving`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  const query = ctx.get("creator-query"), searchCalls = () => ctx.calls.filter(call => call.path === "/api/creators/search");
+  query.value = "Va"; query.listeners.input();
+  const first = [...ctx.timers.keys()][0];
+  query.value = "Valve"; query.listeners.input();
+  assert.equal(ctx.timers.has(first), false);
+  assert.equal(searchCalls().length, 0);
+  fireCatalogTimer(ctx, 4000); await settle();
+  assert.equal(searchCalls().length, 1);
+  assert.deepEqual(searchCalls()[0].body, {query:"Valve", home:"pl", role:kind});
+  query.value = "Supergiant"; query.listeners.input();
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(searchCalls().length, 2);
+  assert.equal([...ctx.timers.values()].length, 0);
+  query.value = "x"; query.listeners.input();
+  assert.equal([...ctx.timers.values()].length, 0);
+  query.value = "New name"; query.listeners.input();
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal([...ctx.timers.values()].length, 0);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} ignores stale search responses and runs the latest elapsed query after an in-flight search`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.run(`const catalogFetch = fetch; window.searchCount = 0;
+    fetch = (path, options) => path === '/api/creators/search'
+      ? (window.searchCount++, new Promise(resolve => {window.finishCatalogSearch = resolve;})) : catalogFetch(path, options);`);
+  const query = ctx.get("creator-query"); query.value = "Old query"; query.listeners.input();
+  fireCatalogTimer(ctx, 4000); await settle();
+  query.value = "Latest query"; query.listeners.input();
+  fireCatalogTimer(ctx, 4000); await settle();
+  assert.equal(ctx.run("window.searchCount"), 1);
+  ctx.run(`window.finishCatalogSearch({ok:true,json:async()=>({exact_matches:[{id:'${kind}-'+'a'.repeat(24),name:'Old query',selector:{kind:'${kind}',name:'Old query'}}]})})`);
+  await settle();
+  assert.equal(ctx.run("window.searchCount"), 2);
+  assert.equal(ctx.get("creator-search-results").children.length, 0);
+  ctx.run("window.finishCatalogSearch({ok:true,json:async()=>({exact_matches:[]})})"); await settle();
+  assert.match(ctx.get("creator-search-status").textContent, /No matching/);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} search shows Add before its accessible organization name`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-query").value = "Studio Name";
+  ctx.searches.push({exact_matches:[{id:kind+'-'+'d'.repeat(24),name:"Studio Name",selector:{kind,name:"Studio Name"}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  const row = ctx.get("creator-search-results").children[0], button = row.children[0].children[0];
+  assert.equal(button.textContent, "Add");
+  assert.equal(row.children[1].children[0].textContent, "Studio Name");
+  assert.match(button.attributes["aria-label"], /Add Studio Name/);
+});
+
+const catalogSortButtons = ctx => descendants(ctx.get("creator-columns-head")).filter(element => element.dataset.sort);
+test("a catalog query typed during registry initialization still runs automatically", async () => {
+  let ready;
+  const registry = new Promise(resolve => {ready = resolve;});
+  const ctx = creatorSetup({}, "developer", false, [], false, registry);
+  ctx.get("creators-tab").listeners.click();
+  ctx.get("creator-query").value = "Valve"; ctx.get("creator-query").listeners.input();
+  fireCatalogTimer(ctx,4000); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").length,0);
+  ready(); await settle(); fireCatalogTimer(ctx,4000); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").length,1);
+});
+const findCatalogRemoveButton = group => group.children[0].children[0].children[0].children[1];
+function savedCatalogPair(kind) {
+  const second = {id:kind+'-'+'f'.repeat(24),name:"Other studio",selector:{kind,name:"Other studio"}};
+  return {home:"pl",regions:["us"],request:{mode:"products"},featuredIds:["studio"],creators:[second],
+    catalogs:[{id:"studio",products:[{app_id:"1",name:"Shared"},{app_id:"2",name:"Exclusive"}],nextStart:25,hasMore:true},
+      {id:second.id,products:[{app_id:"1",name:"Shared"},{app_id:"3",name:"Other"}],nextStart:25,hasMore:true}],
+    results:[game("1","Shared"),game("2","Exclusive"),game("3","Other")],rates:[],
+    catalogSources:[{id:"a".repeat(32),token:"b".repeat(43)}]};
+}
+
+for (const kind of ["developer", "publisher"]) test(`${kind} catalog removal preserves shared titles, omits private group rows from storage/CSV and supports Undo`, async () => {
+  const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(savedCatalogPair(kind))}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  const first = ctx.group(), button = findCatalogRemoveButton(first);
+  assert.match(button.attributes["aria-label"], new RegExp(`Remove Studio ${kind} catalog`));
+  button.listeners.click({detail:0});
+  assert.equal(ctx.get("creator-query").focused, true);
+  assert.equal(ctx.get("creator-groups").children.length, 1);
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","3"]);
+  const saved = JSON.parse(ctx.storage.get(`polisher-${kind}-job`));
+  assert.deepEqual(saved.results.map(item => item.app_id), ["1","3"]);
+  assert.deepEqual(saved.catalogs.map(group => group.id), [kind+'-'+'f'.repeat(24)]);
+  assert.deepEqual(saved.removedCatalogs, ["studio"]);
+  assert.ok(!JSON.stringify(saved).includes('"Exclusive"'));
+  const notice = ctx.get("removal-notices").children[0];
+  assert.equal(notice.children[0].children[0].textContent, "Studio");
+  assert.doesNotMatch(notice.children[0].children[1].textContent, /App ID/);
+  ctx.run('downloadCsv = contents => {window.catalogCsvContents = contents;}'); ctx.get("creators-export").listeners.click();
+  assert.ok(parseCsv(ctx.run("window.catalogCsvContents")).rows.every(row => row.catalog_id !== "studio" && row.game_id !== "2"));
+  notice.children[1].listeners.click();
+  assert.equal(ctx.group(), first);
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2"]);
+  assert.equal(ctx.calls.filter(call => call.path.endsWith("/remove-catalogs")).length, 0);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} catalog finalization purges backend state and reload retains exclusions`, async () => {
+  const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(savedCatalogPair(kind))}, kind);
+  ctx.get("creators-tab").listeners.click(); await settle();
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  ctx.run(`window.removedCatalogEntry = removalNotices.find('${kind}-catalog','studio')`);
+  expireRemoval(ctx,kind+'-catalog',"studio"); await settle();
+  assert.equal(ctx.run("window.removedCatalogEntry.data"), null);
+  const cleanup = ctx.calls.find(call => call.path.endsWith("/remove-catalogs"));
+  assert.deepEqual(cleanup.body, {catalog_ids:["studio"],app_ids:["2"]});
+  assert.equal(cleanup.authorization, "Bearer "+"b".repeat(43));
+  const restored = creatorSetup({[`polisher-${kind}-job`]:ctx.storage.get(`polisher-${kind}-job`)}, kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length, 1);
+  assert.deepEqual(restored.body().children.map(row => row.dataset.appId), ["1","3"]);
+  assert.equal(restored.calls.filter(call => call.path === "/api/creator-jobs").length, 0);
+});
+
+test("catalog removal during loading captures late pages for Undo and prevents resurrection after expiry", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.snapshots.push({state:"running",message:"Loading",catalogs:{},items:[],rates:[],warnings:[]});
+  ctx.group().children[1].children[1].children[1].listeners.click(); await settle();
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[{app_id:"4",name:"Late title"}],next_start:50,has_more:true,total:60}},items:[game("4","Late title")],rates:[],warnings:[]});
+  fireCatalogTimer(ctx, 1200); await settle();
+  assert.equal(ctx.get("creator-groups").children.length, 0);
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2","3","4"]);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).catalogs[0].nextStart, 50);
+});
+
+test("currency updates retain pending catalog IDs for Undo but store only visible groups", async () => {
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(savedCatalogPair("developer"))});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  ctx.radios.forEach(radio => radio.checked = radio.value === "gb");
+  ctx.snapshots.push({state:"complete",message:"Done",catalogs:{},items:[game("1","Shared"),game("2","Exclusive"),game("3","Other")],rates:[],warnings:[]});
+  ctx.get("creators-refresh").listeners.click(); await settle();
+  const body = ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body;
+  assert.ok(body.app_ids.includes("2")); assert.deepEqual(body.catalog_memberships.studio, ["1","2"]);
+  assert.deepEqual(JSON.parse(ctx.storage.get("polisher-developer-job")).results.map(item => item.app_id), ["1","3"]);
+  ctx.get("removal-notices").children[0].children[1].listeners.click();
+  assert.deepEqual(ctx.body().children.map(row => row.dataset.appId), ["1","2"]);
+  assert.equal(JSON.parse(ctx.storage.get("polisher-developer-job")).home, "gb");
+});
+
+test("reload finalizes catalog Undo and retries ID-only cleanup after connection failure", async () => {
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(savedCatalogPair("developer"))});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  const saved = ctx.storage.get("polisher-developer-job");
+  const restored = creatorSetup({"polisher-developer-job":saved});
+  restored.run(`const previousCatalogFetch = fetch; window.cleanupCount = 0;
+    fetch = async (path, options) => path.endsWith('/remove-catalogs') && !window.cleanupCount++
+      ? {ok:false,status:503,json:async()=>({error:'Unavailable'})} : previousCatalogFetch(path,options);`);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.match(restored.get("creators-notice").textContent, /cleanup will retry/);
+  assert.equal(restored.get("removal-notices").children.length, 0);
+  fireCatalogTimer(restored, 4000); await settle();
+  const cleanup = restored.calls.find(call => call.path.endsWith("/remove-catalogs"));
+  assert.deepEqual(cleanup.body, {catalog_ids:["studio"],app_ids:["2"]});
+});
+
+test("title Undo after its only catalog was finalized cannot resurrect orphan result data", async () => {
+  const ctx = creatorSetup({"polisher-developer-job":JSON.stringify(savedCatalogPair("developer"))});
+  ctx.get("creators-tab").listeners.click(); await settle();
+  // The title removal is newer, so the catalog can expire while title Undo remains.
+  findCatalogRemoveButton(ctx.group()).listeners.click({detail:1});
+  const remaining = ctx.group();
+  findRemovalButton(ctx.body().children[1]).listeners.click({detail:1});
+  findCatalogRemoveButton(remaining).listeners.click({detail:1});
+  expireRemoval(ctx,"developer-catalog", "developer-"+"f".repeat(24)); await settle();
+  const titleNotice = ctx.run('removalNotices.find("developer","3").element');
+  titleNotice.children[1].listeners.click();
+  const saved = JSON.parse(ctx.storage.get("polisher-developer-job"));
+  assert.deepEqual(saved.results, []);
+  assert.deepEqual(saved.catalogs, []);
+});
+
+test("both catalog workflows show discovery ahead of shared currencies and retain independent queries", async () => {
+  const ctx = creatorSetup();
+  ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-query").value = "Developer query";
+  assert.equal(ctx.get("developer-discovery").hidden, false);
+  assert.equal(ctx.get("publisher-discovery").hidden, true);
+  assert.equal(ctx.get("currencies-step").textContent, "02 / CURRENCIES");
+  ctx.get("publishers-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("developer-discovery").hidden, true);
+  assert.equal(ctx.get("publisher-discovery").hidden, false);
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal(ctx.get("publisher-discovery").hidden, true);
+  assert.equal(ctx.get("creator-query").value, "Developer query");
+});
+for (const kind of ["developer", "publisher"]) for (const column of ["name","home","difference","percentage"]) {
+  test(`${kind} ${column} sorting cycles within groups, keeps missing values last and restores without requests`, async () => {
+    const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta"),skipped("4","request_failure")];
+    data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
+    const second = {id:kind+'-'+'f'.repeat(24),name:"Second studio",selector:{kind,name:"Second studio"}};
+    const saved = {home:"pl",regions:["us"],request:{mode:"products"},featuredIds:["studio"],creators:[second],
+      catalogs:[{id:"studio",products:data,nextStart:25,hasMore:false},{id:second.id,products:[data[2],data[0]],nextStart:25,hasMore:false}],results:data,rates:[]};
+    const ctx = creatorSetup({[`polisher-${kind}-job`]:JSON.stringify(saved)}, kind);
+    ctx.get("creators-tab").listeners.click(); await settle();
+    const count = ctx.calls.length, click = () => catalogSortButtons(ctx).find(button => button.dataset.sort === column).listeners.click();
+    const ids = () => ctx.body().children.map(row => row.dataset.appId);
+    click();
+    assert.deepEqual(ids(), column === "name" ? ["4","2","3","1"] : ["1","3","2","4"]);
+    assert.equal(catalogSortButtons(ctx).find(button => button.dataset.sort === column).attributes["data-sort-direction"], "ascending");
+    click();
+    assert.deepEqual(ids(), column === "name" ? ["1","3","2","4"] : ["2","3","1","4"]);
+    const restored = creatorSetup({[`polisher-${kind}-job`]:ctx.storage.get(`polisher-${kind}-job`)}, kind);
+    restored.get("creators-tab").listeners.click(); await settle();
+    assert.deepEqual(restored.body().children.map(row => row.dataset.appId), ids());
+    click(); assert.deepEqual(ids(), ["1","2","3","4"]);
+    assert.equal(ctx.calls.length, count);
+    assert.deepEqual(JSON.parse(ctx.storage.get(`polisher-${kind}-job`)).catalogs[1].products.map(item => item.app_id), ["3","1"]);
+  });
+}
+
 test("thumbnail removal excludes active and saved rows and CSV immediately, and Undo restores arrival order", async () => {
   const ctx = removalWishlist();
   const button = findRemovalButton(ctx.get("rows").children[1]);
@@ -395,7 +619,7 @@ for (const column of ["name","home","difference","percentage"]) test(`wishlist $
   });
   const data = [game("1","Zebra"),game("2","Alpha"),game("3","Beta"),skipped("4","request_failure")];
   data[1].comparison.home_price.amount = 30; data[2].comparison.home_price.amount = 20;
-  const ctx = setup({'.sort:not(.library-sort)':sorts});
+  const ctx = setup({'.sort:not(.library-sort):not(.catalog-sort)':sorts});
   ctx.run(`items = ${JSON.stringify(data)}; render()`);
   const button = sorts.find(value => value.dataset.sort === column), ids = () => ctx.get("rows").children.map(row => row.dataset.appId);
   button.listeners.click();
@@ -725,7 +949,7 @@ test("developer search adds a dynamic catalog while retaining featured rows and 
   ctx.searches.push({creators:[],exact_matches:[creator]});
   ctx.get("creator-query").value = "ConcernedApe";
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
-  const button = ctx.get("creator-search-results").children[0].children[1].children[0];
+  const button = ctx.get("creator-search-results").children[0].children[0].children[0];
   ctx.snapshots.push({state:"complete",message:"Done",catalogs:{[creator.id]:{
     products:[{app_id:"4",name:"Stardew Valley"}],next_start:12,has_more:true,total:15}},
     items:[game("4","Stardew Valley")],rates:[],warnings:[]});
@@ -752,9 +976,9 @@ test("creator search distinguishes empty matches, failures, and exact-name roles
   ctx.searches.push({creators:[],exact_matches:[{id:"developer-"+"a".repeat(24),name:"A & B",selector:{kind:"developer",name:"A & B"}}]});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   assert.match(ctx.get("creator-search-status").textContent,/Choose a developer/);
-  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"A & B");
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].textContent,"A & B");
   ctx.run("setBusy(true); window.creatorPane.refreshControls();");
-  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].disabled,true);
+  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].disabled,true);
   ctx.run("setBusy(false);");
   ctx.searches.push({error:"Steam is unavailable"});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
@@ -775,9 +999,9 @@ test("developer search ignores homepage and publisher options and deduplicates n
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   const rows = ctx.get("creator-search-results").children;
   assert.equal(rows.length,1);
-  assert.equal(rows[0].children[0].children[0].textContent,"Valve");
-  const buttons = rows[0].children[1].children;
-  assert.deepEqual(buttons.map(button => button.textContent),["Add & compare"]);
+  assert.equal(rows[0].children[1].children[0].textContent,"Valve");
+  const buttons = rows[0].children[0].children;
+  assert.deepEqual(buttons.map(button => button.textContent),["Add"]);
   buttons[0].listeners.click(); await settle();
   assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,developer.selector);
   assert.equal(buttons[0].disabled,true);
@@ -791,7 +1015,7 @@ test("saved dynamic creators cannot inject links and preserve exact-name selecto
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.equal(ctx.get("creator-groups").children.length,2);
   const identity = ctx.get("creator-groups").children[1].children[0].children[0];
-  assert.equal(identity.children[0].src,"/steam-logo.svg");
+  assert.equal(identity.children[0].children[0].children[0].src,"/steam-logo.svg");
   assert.equal(identity.children[1].children[0].href,"https://store.steampowered.com/search/?developer=A%20%26%20B");
 });
 
@@ -883,7 +1107,7 @@ test("free-only catalog pages still advance to later paid products", async () =>
 
 test("creator icons fall back to Steam and terminal catalogs hide Load more", async () => {
   const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
-  const img = ctx.group().children[0].children[0].children[0]; img.listeners.error();
+  const img = ctx.group().children[0].children[0].children[0].children[0].children[0]; img.listeners.error();
   assert.equal(img.src, "/steam-logo.svg");
   assert.equal(img.referrerPolicy, "no-referrer");
   ctx.snapshots.push({state:"complete",message:"Done",catalogs:{studio:{products:[],next_start:12,has_more:false,total:3}},items:[],rates:[],warnings:[]});
@@ -985,7 +1209,7 @@ test("developer and publisher tabs retain independent searches, groups, prices, 
   ctx.get("creator-query").value = "Valve";
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"developer");
-  ctx.get("creator-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  ctx.get("creator-search-results").children[0].children[0].children[0].listeners.click(); await settle();
   const developerState = ctx.storage.get("polisher-developer-job");
   ctx.get("publishers-tab").listeners.click(); await settle();
   assert.equal(ctx.get("developers-panel").hidden,true);
@@ -998,14 +1222,14 @@ test("developer and publisher tabs retain independent searches, groups, prices, 
   await ctx.get("publisher-search-form").listeners.submit({preventDefault(){}});
   assert.equal(ctx.calls.filter(call => call.path === "/api/creators/search").at(-1).body.role,"publisher");
   assert.equal(ctx.get("publisher-search-results").children.length,1);
-  ctx.get("publisher-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  ctx.get("publisher-search-results").children[0].children[0].children[0].listeners.click(); await settle();
   assert.deepEqual(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector,publisher.selector);
   assert.equal(ctx.storage.get("polisher-developer-job"),developerState);
   ctx.get("creators-tab").listeners.click(); await settle();
   assert.equal(ctx.body().children[0],retained);
   assert.equal(ctx.get("creator-groups").children.length,2);
   assert.equal(ctx.get("creator-query").value,"Valve");
-  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].textContent,"Added");
+  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].textContent,"Added");
   const restored = creatorSetup(Object.fromEntries(ctx.storage));
   restored.get("creators-tab").listeners.click(); await settle();
   restored.get("publishers-tab").listeners.click(); await settle();
@@ -1785,7 +2009,7 @@ test("running catalog CSV preserves overlapping memberships and omits pending an
   ctx.snapshots.push({state:"running",message:"Checking",catalogs:{[creator.id]:{
     products:[{app_id:"1",name:"First"},{app_id:"4",name:"Pending"},{app_id:"5",name:"Free"},{app_id:"6",name:"Unavailable"}],next_start:25,has_more:true,total:30}},
     items:[{...game("5","Free"),is_free:true},skipped("6","no_regional_price")],rates:[],warnings:[]});
-  ctx.get("creator-search-results").children[0].children[1].children[0].listeners.click(); await settle();
+  ctx.get("creator-search-results").children[0].children[0].children[0].listeners.click(); await settle();
   ctx.run('downloadCsv = contents => {window.exportContents = contents;}'); ctx.get("creators-export").listeners.click();
   const {rows} = parseCsv(ctx.run("window.exportContents"));
   assert.equal(rows.length, 9); // Three featured products, one repeated product, one skipped product.
@@ -2256,7 +2480,7 @@ for (const kind of ["developer","publisher"]) test(`${kind} switch preserves gro
   ctx.snapshots.push({state:"running",message:"Checking",items:[],rates:[],warnings:[],catalogs:{}});
   ctx.get("update-currencies").listeners.click(); await settle();
   const submitted = ctx.calls.filter(c => c.path === "/api/creator-jobs").at(-1).body;
-  assert.deepEqual(submitted,{home:"gb",regions:["us"],mode:"products",app_ids:["1","2","3","4"]});
+  assert.deepEqual(submitted,{home:"gb",regions:["us"],mode:"products",app_ids:["1","2","3","4"],catalog_memberships:{studio:["1","2","3","4"]}});
   assert.equal(ctx.body().children[0],row);
   ctx.get("creators-export").listeners.click();
   const withoutTime = value => parseCsv(value).rows.map(({exported_at_utc, ...row}) => row);
