@@ -20,11 +20,14 @@ class Element {
   removeAttribute(name) { delete this.attributes[name]; }
   querySelector(selector) { return (this.queries ||= {})[selector] ||= new Element("p"); }
   focus() { this.focused = true; }
+  showModal() { this.open = true; }
+  close() { this.open = false; this.listeners?.close?.(); }
+  dispatchEvent(event) { return this.listeners?.[event.type]?.(event); }
 }
 function setup(selectors = {}, extras = {}, ownedLibraryEnabled = false) {
   const elements = new Map(), documentEvents = new Map();
   const get = id => { if(!elements.has(id)) { const el = new Element("div"); el.id = id; elements.set(id, el); } return elements.get(id); };
-  const context = vm.createContext({Intl, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
+  const context = vm.createContext({Intl, Event, console, queueMicrotask, setTimeout, clearTimeout, document: {addEventListener:(name, callback) => documentEvents.set(name, callback),documentElement:{dataset:{ownedLibraryEnabled:String(ownedLibraryEnabled),storefronts:fs.readFileSync("steam_price_polisher/storefronts.json","utf8")}},getElementById: get, createElement: tag => new Element(tag), querySelectorAll: query => selectors[query] || []}, sessionStorage: {getItem: () => null}, window: {}, ...extras});
   context.document.createElementNS = (namespace, tag) => { const element = new Element(tag); element.namespaceURI = namespace; return element; };
   vm.runInContext(fs.readFileSync("web/app.js", "utf8"), context);
   return {get, dispatchDocument: (name, event) => documentEvents.get(name)?.(event), ready: () => { const callback = documentEvents.get("DOMContentLoaded"); documentEvents.delete("DOMContentLoaded"); callback?.(); }, run: source => vm.runInContext(source, context)};
@@ -3429,4 +3432,76 @@ test('removal cleanup credentials survive more than twenty sequential additions'
     window.restoredRemovals.restore(wishlistRemovals.serialize());`);
   assert.equal(ctx.run('window.restoredRemovals.serialize().sources.length'),25);
   assert.equal(ctx.run('window.restoredRemovals.serialize().sources[0].id'),'0'.padStart(32,'a'));
+});
+
+
+for (const kind of ["developer", "publisher"]) test(`${kind} URL resolves below the field and waits for Add`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  const before = ctx.calls.filter(call => call.path === "/api/creator-jobs").length;
+  const query = "https://store.steampowered.com/dev/Studio/?snr=" + "a".repeat(180);
+  ctx.get("creator-query").value = query;
+  const candidate = {id:kind+'-'+'d'.repeat(24),name:"Linked Studio",selector:{kind,name:"Linked Studio"}};
+  ctx.searches.push({exact_matches:[candidate]});
+  ctx.get("creator-query").listeners.input(); fireCatalogTimer(ctx,4000); await settle();
+  const searches = ctx.calls.filter(call => call.path === "/api/creators/search");
+  assert.deepEqual(searches.at(-1).body,{query,home:"pl",role:kind});
+  const row = ctx.get("creator-search-results").children[0];
+  assert.equal(row.children[0].children[0].textContent,"Add");
+  assert.equal(row.children[1].children[0].textContent,"Linked Studio");
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,before);
+  row.children[0].children[0].listeners.click(); await settle();
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").length,before+1);
+  assert.equal(ctx.calls.filter(call => call.path === "/api/creator-jobs").at(-1).body.selector.name,"Linked Studio");
+  const saved = ctx.storage.get(`polisher-${kind}-job`);
+  assert.ok(JSON.parse(saved).creators.some(creator => creator.id === candidate.id));
+  const restored = creatorSetup({[`polisher-${kind}-job`]:saved},kind);
+  restored.get("creators-tab").listeners.click(); await settle();
+  assert.equal(restored.get("creator-groups").children.length,2);
+  assert.ok(JSON.parse(restored.storage.get(`polisher-${kind}-job`)).creators.some(creator => creator.id === candidate.id));
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} wrong-role warning can stay or switch with the pasted URL`, async () => {
+  const ctx = creatorSetup({},kind); ctx.get("creators-tab").listeners.click(); await settle();
+  const other = kind === "developer" ? "publisher" : "developer";
+  const query = "https://store.steampowered.com/dev/OtherStudio/";
+  const warning = {role:other,message:`Verified ${other} credits. Open the other tab.`};
+  ctx.get("creator-query").value = query;
+  ctx.searches.push({exact_matches:[],role_warning:warning});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("organization-role-warning").open,true);
+  assert.equal(ctx.get("organization-role-warning-text").textContent,warning.message);
+  assert.equal(ctx.get("creator-search-results").children.length,0);
+  ctx.get("organization-role-warning-close").listeners.click();
+  assert.equal(ctx.get("organization-role-warning").open,false);
+  assert.equal(ctx.storage.get("polisher-active-tab"),kind);
+  ctx.searches.push({exact_matches:[],role_warning:warning});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  let cancelled = false;
+  ctx.get("organization-role-warning").listeners.cancel({preventDefault(){cancelled=true;}});
+  assert.equal(cancelled,true);
+  assert.equal(ctx.get("organization-role-warning").open,false);
+  assert.equal(ctx.get("creator-query").focused,true);
+  ctx.searches.push({exact_matches:[],role_warning:warning});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  ctx.get("organization-role-warning-switch").listeners.click(); await settle();
+  assert.equal(ctx.get("organization-role-warning").open,false);
+  assert.equal(ctx.storage.get("polisher-active-tab"),other);
+  assert.equal(ctx.get(other+"-query").value,query);
+  assert.equal(ctx.get(other+"-query").focused,true);
+});
+
+test("catalog URL results reuse existing catalog identity and invalidated warnings never appear", async () => {
+  const ctx = creatorSetup(); ctx.get("creators-tab").listeners.click(); await settle();
+  ctx.get("creator-query").value = "https://store.steampowered.com/dev/studio/";
+  ctx.searches.push({exact_matches:[{id:"studio",name:"Studio",selector:{kind:"developer",name:"Studio"}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("creator-search-results").children[0].children[0].children[0].disabled,true);
+  ctx.run(`const originalCatalogFetch = fetch; fetch = (path, options) => path === '/api/creators/search'
+    ? new Promise(resolve => {window.finishUrlSearch = resolve;}) : originalCatalogFetch(path, options);`);
+  const pending = ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  ctx.get("creator-query").value = "Changed"; ctx.get("creator-query").listeners.input();
+  ctx.run(`window.finishUrlSearch({ok:true,json:async()=>({exact_matches:[],role_warning:{role:"publisher",message:"Old warning"}})})`);
+  await pending;
+  assert.notEqual(ctx.get("organization-role-warning").open,true);
+  assert.equal(ctx.get("creator-search-status").textContent,"");
 });
