@@ -4,6 +4,40 @@
 (() => {
   const panes = new Map();
   let selectedTab = "wishlist";
+  const roleWarning = document.getElementById("organization-role-warning");
+  let warningTarget = null;
+  function closeRoleWarning() {
+    if (roleWarning.open) {
+      roleWarning.close();
+      if (warningTarget?.origin === selectedTab) document.getElementById(selectedTab + "-query").focus();
+    }
+    warningTarget = null;
+  }
+  roleWarning.addEventListener("cancel", event => { event.preventDefault(); closeRoleWarning(); });
+  function validQuery(query) {
+    const url = /^(?:[a-z][a-z0-9+.-]*:\/\/|(?:https?|file|javascript|data):|\/\/|(?:store\.|www\.)?steampowered\.com(?:\/|$))/i.test(query);
+    return query.length >= 2 && query.length <= (url ? 1024 : 100);
+  }
+  function showRoleWarning(warning, kind, query) {
+    const other = kind === "developer" ? "publisher" : "developer";
+    if (warning?.role !== other || typeof warning.message !== "string") return;
+    closeRoleWarning();
+    warningTarget = {kind: other, query, origin: kind};
+    document.getElementById("organization-role-warning-text").textContent = warning.message;
+    document.getElementById("organization-role-warning-switch").textContent = `Open ${other === "developer" ? "Developers" : "Publishers"}`;
+    roleWarning.showModal();
+  }
+  document.getElementById("organization-role-warning-close").addEventListener("click", closeRoleWarning);
+  document.getElementById("organization-role-warning-switch").addEventListener("click", () => {
+    const target = warningTarget;
+    closeRoleWarning();
+    if (!target) return;
+    const input = document.getElementById(target.kind + "-query");
+    input.value = target.query;
+    selectTab(target.kind);
+    input.dispatchEvent(new Event("input", {bubbles: true}));
+    input.focus();
+  });
   const anyBusy = () => [...panes.values()].some(pane => pane.busy);
   function createPane(kind) {
     const plural = kind + "s";
@@ -647,11 +681,12 @@
     }
 
     function scheduleSearch() {
+      closeRoleWarning();
       clearTimeout(searchTimer); searchTimer = null; searchRevision++; searchPending = false;
       searchChoices = []; $("creator-search-results").replaceChildren();
       $("creator-search-status").textContent = "";
-      const length = $("creator-query").value.trim().length;
-      if (active && length >= 2 && length <= 100) searchTimer = setTimeout(() => {
+      const query = $("creator-query").value.trim();
+      if (active && validQuery(query)) searchTimer = setTimeout(() => {
         searchTimer = null; searchCreators();
       }, 4000);
     }
@@ -663,8 +698,8 @@
       if (searching) { searchPending = true; return; }
       searchPending = false;
       const query = $("creator-query").value.trim();
-      if (query.length < 2 || query.length > 100) {
-        $("creator-search-status").textContent = "Enter a name between 2 and 100 characters."; return;
+      if (!validQuery(query)) {
+        $("creator-search-status").textContent = "Enter a name between 2 and 100 characters, or a Steam organization URL up to 1,024 characters."; return;
       }
       const revision = ++searchRevision, home = selectedHome();
       const current = () => revision === searchRevision && query === $("creator-query").value.trim() && home === selectedHome();
@@ -703,7 +738,8 @@
         }
         $("creator-search-status").textContent = rows.size
           ? `Choose a ${kind} to add to the current comparison.`
-          : `No matching ${plural} found. Try the full name from a game's store page.`;
+          : data.notice || data.role_warning?.message || `No matching ${plural} found. Try the full name from a game's store page.`;
+        if (active && !rows.size && data.role_warning) showRoleWarning(data.role_warning, kind, query);
       } catch (error) { if (current()) $("creator-search-status").textContent = error.message; }
       finally {
         searching = false; refreshControls();
@@ -863,6 +899,7 @@
 
   for (const kind of ["developer", "publisher"]) panes.set(kind, createPane(kind));
   function selectTab(tab) {
+    closeRoleWarning();
     if (tab === "library" && !libraryEnabled) tab = "wishlist";
     selectedTab = tab;
     document.getElementById("currencies-step").textContent = "02 / CURRENCIES";

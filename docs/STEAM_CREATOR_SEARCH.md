@@ -41,7 +41,8 @@ The parser extracts individual app IDs and title text from `search_result_row` l
 - Homepage selectors carry numeric clan IDs; credit selectors carry role/name. Catalog requests accept no arbitrary URLs. Query names are encoded. Homepage and credit catalog IDs stay distinct.
 - Added creators persist with their catalog cursors/results in the tab; at most 20 creators are displayed. Saved links are reconstructed from validated selectors.
 - Existing price caching, comparisons, free-product handling, statistics, cancellation, and refresh are reused. Searching alone performs no price requests.
-- This version takes names, not pasted homepage URLs.
+- Name search and Steam organization URL resolution share the existing search endpoint.
+  See [organization URLs](USAGE.md#organization-urls) for supported formats and limits.
 
 ## Potential TODO (deferred)
 
@@ -50,3 +51,25 @@ Consider a locally maintained searchable developer/publisher directory with alia
 ## Role tabs (0.4.0-beta)
 
 The frontend keeps independent developer and publisher state and session keys. Featured registry role entries have exact-name selectors, so expansion uses product credits. Old homepage selectors are excluded from migration; explicit role selections retain their compatible catalog positions. Internal creator filenames and legacy API routes remain for compatibility.
+
+## Organization URL resolution (unreleased)
+
+Verified 2026-10-24. Valve documents `/developer/`, `/dev/`, `/publisher/` and
+`/pub/` as interchangeable homepage aliases. Their prefixes are not role evidence.
+Numeric `/curator/ID` URLs are accepted only after creator-homepage verification.
+Exact-credit Steam search links can be verified directly without homepage lookup.
+
+Homepage HTML supplies a bounded identity/product sample. Observed legacy pages
+use `g_pagingData.clanid`; newer pages can omit that data and expose identity in
+FollowCurator controls. Both require `g_bIsCreatorHome = true`. Creator StoreBrowse
+lookup verifies the ID; one homepage catalog page supplies samples when HTML has
+none. StoreBrowse basic-info credit entries carry `creator_clan_account_id`, which
+links exact credit names to the resolved homepage. At most twelve sampled products
+and twelve names per role are considered. Regional catalog checks verify nonempty
+selections, rejecting stale checks rather than presenting unverified Add buttons.
+
+Live checks resolved Techland's homepage label “Techland Publishing” to its exact
+“Techland” developer credit. Devolver Digital resolved from its numeric homepage;
+pasting its pub alias in Developers produced a verified Publishers warning.
+A publisher search link resolved without fetching homepage HTML. These checks used
+anonymous public data and normal 1.5-second pacing; no user wishlist was involved.

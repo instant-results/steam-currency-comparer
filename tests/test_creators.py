@@ -323,6 +323,27 @@ class CreatorApiTests(unittest.TestCase):
         self.assertNotIn("secret", json.dumps(response))
         self.assertFalse(self.manager.creator_search.lock.locked())
 
+    def test_organization_url_length_accepts_json_escaped_unicode_within_the_character_limit(self):
+        body = {"query": "https://store.steampowered.com/dev/Studio/?snr=" + "ą" * 900,
+                "home": "pl", "role": "developer"}
+        with patch.object(self.manager.creator_search, "search", return_value={"creators": [], "exact_matches": []}) as search:
+            self.assertEqual(self.request("/api/creators/search", "POST", body)["status"], 200)
+            search.assert_called_once()
+            self.assertEqual(self.request("/api/creators/search", "POST", {**body, "query": body["query"] + "a" * 1024})["status"], 400)
+            search.assert_called_once()
+
+    def test_organization_url_search_validation_does_not_create_jobs_or_fetch_unsafe_urls(self):
+        path = "/api/creators/search"
+        body = {"query": "https://store.steampowered.com/dev/Studio/?snr=" + "x" * 200,
+                "home": "pl", "role": "developer"}
+        with patch.object(self.manager.creator_search, "search", return_value={"creators": [], "exact_matches": []}) as search:
+            self.assertEqual(self.request(path, "POST", body)["status"], 200)
+            search.assert_called_once()
+            for url in ("https://evil.test/developer/Studio/", "https://store.steampowered.com/search/?developer=A&publisher=B"):
+                self.assertEqual(self.request(path, "POST", {**body, "query": url})["status"], 400)
+            search.assert_called_once()
+        self.assertFalse(self.manager.jobs)
+
     def test_featured_registry_separates_roles_and_uses_credit_selectors(self):
         data = self.request("/api/creators")["data"]
         self.assertEqual([c["name"] for c in data["developers"]], ["Supergiant Games", "CD PROJEKT RED", "Techland"])

@@ -86,6 +86,15 @@ class UrllibJsonHttpClient:
         url: str,
         headers: Mapping[str, str] | None = None,
     ) -> Any:
+        payload = self._read_payload(url, headers)
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise HttpClientError(
+                f"Invalid JSON response from {url}", invalid_response=True,
+            ) from exc
+
+    def _read_payload(self, url, headers=None, *, maximum_bytes=None):
         request_headers = dict(headers or {})
         request_headers.setdefault(
             "User-Agent",
@@ -99,7 +108,12 @@ class UrllibJsonHttpClient:
         request = urllib.request.Request(url, headers=request_headers)
         try:
             with self._opener.open(request, timeout=self._timeout) as response:
-                payload = response.read().decode("utf-8")
+                raw = response.read() if maximum_bytes is None else response.read(maximum_bytes + 1)
+                if maximum_bytes is not None and len(raw) > maximum_bytes:
+                    raise HttpClientError("Upstream response is too large.", invalid_response=True)
+                return raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HttpClientError("Upstream returned unreadable text.", invalid_response=True) from exc
         except urllib.error.HTTPError as exc:
             retry_after = _parse_retry_after(exc.headers.get("Retry-After"))
             transient = exc.code == 429 or 500 <= exc.code <= 599
@@ -122,14 +136,6 @@ class UrllibJsonHttpClient:
             raise HttpClientError(
                 f"Temporary network failure for {url}: {exc}",
                 transient=True,
-            ) from exc
-
-        try:
-            return json.loads(payload)
-        except json.JSONDecodeError as exc:
-            raise HttpClientError(
-                f"Invalid JSON response from {url}",
-                invalid_response=True,
             ) from exc
 
 

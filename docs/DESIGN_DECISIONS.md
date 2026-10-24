@@ -291,3 +291,19 @@ Use discovery/addition, currencies, then comparison results in all three visible
 tabs. Catalog search sections occupy the workspace above shared currency setup;
 show only the active role's section. Keep queries, matches, labels and keyboard
 behavior independent, and number currencies 02 consistently.
+
+## Organization URL input
+
+Reuse each role's search field, four-second search delay, explicit Search Steam
+submission and left-side Add results. Accept names and Steam organization URLs;
+resolve first and compare only after Add. Preserve the existing catalog identity
+when a URL resolves to a name already selected. Keep field prompts aligned with
+their input borders and retain shared form/action tracks.
+
+A verified mismatch opens a native modal dialog with a pale-blue surface, readable
+dark text, Stay here and Open Developers/Publishers actions. The destination tab
+receives the original URL for resolution, retaining explicit Add. The dialog has
+an accessible heading/description, keyboard focus handling and native Escape
+support. Actions wrap at narrow widths. Edits and tab changes dismiss old warnings;
+stale search responses must never reopen them. Homepage prefixes alone do not
+justify a warning because Steam exposes them as aliases.
