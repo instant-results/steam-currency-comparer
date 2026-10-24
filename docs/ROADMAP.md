@@ -1,11 +1,18 @@
 # Development roadmap
 
-Updated: 2026-10-23. These are development directions, without delivery dates or
+Updated: 2026-10-24. These are development directions, without delivery dates or
 release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
 
-## Implemented on feature/single-game-comparison (0.9.0)
+## Completed in 0.9.1
+
+Catalog tabs share wishlist-style search timing, left-side Add actions and result
+sorting within groups. Entire catalogs support removal, Undo and private backend
+cleanup. Search precedes currencies, display controls share a row, and expansion
+arrows stay centered in both credit modes. See the usage and design references.
+
+## Completed in 0.9.0
 
 - Shared profile/game input, anonymous name search, additions and immediate-or-queued
   execution with no batching timer. Persistent selections, manual CSV attribution

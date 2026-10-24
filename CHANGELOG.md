@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.1 — 2026-10-24
+
+- Search developer/publisher names after four seconds without edits, with immediate
+  Search Steam submission and protection against stale responses. Place Add before
+  each match, matching wishlist search.
+- Add catalog-header sorting by title, baseline price, absolute difference and
+  percentage difference. Cycle ascending, descending and original order within
+  each group; remember separate choices for Developers and Publishers.
+- Center Load more arrows consistently with compact or separate credit columns.
+- Remove entire catalogs through the × on organization icons. Show the organization
+  name and role in seven-second Undo notices, preserve shared titles in other
+  groups, and retain removals through loading, currency changes and reload.
+  Clean private backend memberships, results and selections with bounded retries.
+- Put credit-column and best-offer checkboxes together in a wrapping row.
+- Place each catalog's search/add step above currency selection and results.
+
 ## 0.9.0 — 2026-10-23
 
 - Add games to the wishlist comparison through the existing profile field using

@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.9.0** · Beta for local use.
+**Version: 0.9.1** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -95,7 +95,10 @@ change over time. No personal Steam profile is used.
 - Each catalog's summary shows average and median percentage differences for
   each comparison currency, sample sizes, and coverage of loaded products.
   Statistics cover the displayed selection rather than the entire catalog.
-- Developers and Publishers each search their own role and offer **Add** for matching names.
+- Developers and Publishers each search their own role after four seconds without
+  edits, with **Add** on the left of each match. Their search/add step precedes
+  currency setup. Catalog headers sort titles within each group by name, baseline
+  price, absolute difference or percentage difference, retaining group order.
   Developer and publisher selections, results, and catalog positions are saved
   independently in the same browser tab. Developer/publisher credits appear
   beneath each game, or in a separate column using **Show publisher column** /
