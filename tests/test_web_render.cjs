@@ -285,9 +285,36 @@ for (const kind of ["developer", "publisher"]) test(`${kind} search shows Add be
   ctx.searches.push({exact_matches:[{id:kind+'-'+'d'.repeat(24),name:"Studio Name",selector:{kind,name:"Studio Name"}}]});
   await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
   const row = ctx.get("creator-search-results").children[0], button = row.children[0].children[0];
+  assert.equal(row.tagName, "li");
+  assert.equal(ctx.get("creator-search-status").textContent, `Choose a ${kind} to add to the current comparison.`);
   assert.equal(button.textContent, "Add");
   assert.equal(row.children[1].children[0].textContent, "Studio Name");
   assert.match(button.attributes["aria-label"], /Add Studio Name/);
+});
+
+for (const kind of ["developer", "publisher"]) test(`${kind} search-results block follows its tab and clears stale matches on edits`, async () => {
+  const ctx = creatorSetup({}, kind); ctx.get("creators-tab").listeners.click(); await settle();
+  const other = kind === "developer" ? "publisher" : "developer";
+  assert.equal(ctx.get("creator-search-discovery").hidden, false);
+  assert.equal(ctx.get(other+"-search-discovery").hidden, true);
+  const name = "Studio & <Partners>";
+  ctx.get("creator-query").value = name;
+  ctx.searches.push({exact_matches:[{id:kind+'-'+'c'.repeat(24),name,selector:{kind,name}}]});
+  await ctx.get("creator-search-form").listeners.submit({preventDefault(){}});
+  assert.equal(ctx.get("creator-search-results").children[0].children[1].children[0].textContent, name);
+  ctx.get(other+"s-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-search-discovery").hidden, true);
+  assert.equal(ctx.get(other+"-search-discovery").hidden, false);
+  assert.equal(ctx.get(other+"-search-results").children.length, 0);
+  ctx.get(kind+"s-tab").listeners.click(); await settle();
+  assert.equal(ctx.get("creator-search-discovery").hidden, false);
+  assert.equal(ctx.get("creator-search-results").children.length, 1);
+  ctx.get("creator-query").value = ""; ctx.get("creator-query").listeners.input();
+  assert.equal(ctx.get("creator-search-results").children.length, 0);
+  assert.equal(ctx.get("creator-search-status").textContent, "");
+  ctx.get("wishlist-tab").listeners.click();
+  assert.equal(ctx.get("creator-search-discovery").hidden, true);
+  assert.equal(ctx.get(other+"-search-discovery").hidden, true);
 });
 
 const catalogSortButtons = ctx => descendants(ctx.get("creator-columns-head")).filter(element => element.dataset.sort);
