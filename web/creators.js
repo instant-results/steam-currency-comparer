@@ -110,6 +110,7 @@
     const removals = createTitleRemovals(kind, () => {
       for (const group of allGroups().values()) group.products = group.products.filter(product => !removals.has(product.app_id));
       for (const id of results.keys()) if (removals.has(id)) results.delete(id);
+      acceptResults([]);
       renderGroups(); save();
     }, record => {
       if (record.item && !record.item.pending) results.set(record.item.app_id, record.item);

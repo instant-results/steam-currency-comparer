@@ -300,7 +300,8 @@ class Job:
                 for app_id in ids:
                     memberships.setdefault(app_id, []).append(key)
             excluded = self.excluded_catalog_ids | removed
-            retained = {app_id: [key for key in keys if key not in excluded] for app_id, keys in memberships.items()}
+            retained = {app_id: list(dict.fromkeys(key for key in keys if key not in excluded))
+                        for app_id, keys in memberships.items()}
             orphaned = {app_id for app_id, keys in retained.items() if not keys}
             orphaned.update(app_id for app_id in orphan_app_ids if not retained.get(app_id))
             if len(orphaned | self.excluded_app_ids) > 10000:
@@ -310,9 +311,8 @@ class Job:
             for key in removed:
                 self.data.get("catalogs", {}).pop(key, None)
                 self.creator_request.get("catalog_memberships", {}).pop(key, None)
-            for item in self.data["items"]:
-                if "creator_ids" in item:
-                    item["creator_ids"] = [key for key in item["creator_ids"] if key not in excluded]
+            self.data["items"] = [{**item, "creator_ids": [key for key in item["creator_ids"] if key not in excluded]}
+                                  if "creator_ids" in item else item for item in self.data["items"]]
             if self.creator_request.get("creator_id") in excluded:
                 self.creator_request.clear()
                 self.creator_request.update(mode="products", app_ids=[item.app_id for item in self.loaded_items or () if item.app_id not in orphaned])
