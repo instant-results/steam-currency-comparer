@@ -900,7 +900,7 @@ test("a fresh page automatically compares the example once using current selecti
   ctx.ready(); ctx.ready(); await settle();
   const starts = ctx.calls.filter(call => call.path === "/api/jobs");
   assert.equal(starts.length, 1);
-  assert.deepEqual(starts[0].body, {identifier:"example",home:"gb",regions:["no"],order:"name"});
+  assert.deepEqual(starts[0].body, {identifier:"example",home:"gb",regions:["no"],order:"name",offer_basis:"game"});
   assert.equal(ctx.get("identifier").value, "");
   assert.equal(ctx.get("results-title").textContent, "Example price comparison");
   assert.match(ctx.get("profile-attribution").textContent, /Curated example wishlist/);
@@ -2171,6 +2171,9 @@ test("running catalog CSV preserves overlapping memberships and omits pending an
 
 const offerFixture = () => {
   const item = game("330020", "Children of Morta");
+  item.comparison.home_price.amount = 79.99;
+  item.comparison.home_price.base_amount = 100;
+  Object.assign(item.comparison.alternatives[0], {original_amount:25,amount_in_home:100,base_amount:50});
   item.best_offers = {
     pl:{status:"available",kind:"bundle",id:22978,name:"Complete Edition",source:"live",currency_basis:"requested storefront",price:{region:"pl",currency:"PLN",amount:19.99,base_amount:null,discount_percent:null}},
     us:{status:"available",kind:"package",id:123,name:"Base game",source:"cache",price:{region:"us",currency:"USD",amount:5,base_amount:10,discount_percent:50}}
@@ -2179,6 +2182,109 @@ const offerFixture = () => {
   return item;
 };
 const contentText = el => [el.textContent || "", ...el.children.map(contentText)].join(" ");
+
+for (const kind of ['developer','publisher']) test(`${kind} primary prices drive filters and statistics without refetching`, async () => {
+  const item=offerFixture(); item.best_offers.us.price.amount=2;
+  const ctx=creatorSetup({},kind,false,[{state:'complete',message:'Done',items:[item],rates:[],warnings:[],
+    catalogs:{studio:{products:[{app_id:item.app_id,name:item.name}],next_start:1,has_more:false,total:1}}}]);
+  chooseCurrencies(ctx,'pl',['us']);
+  ctx.get('creators-tab').listeners.click(); await settle();
+  const statistics=()=>contentText(ctx.group().children[0].children[1]);
+  const before=statistics(), count=ctx.calls.length;
+  ctx.get('creator-filter-fair').listeners.click();
+  assert.equal(ctx.body().children.length,1);
+  ctx.get('show-best-offers').checked=true;ctx.get('show-best-offers').listeners.change();
+  ctx.get('show-best-offers-best').checked=true;ctx.get('show-best-offers-best').listeners.change();
+  assert.equal(ctx.body().children.length,0);
+  assert.notEqual(statistics(),before);
+  ctx.get('creator-filter-expensive').listeners.click();
+  assert.equal(ctx.body().children.length,1);
+  assert.equal(ctx.calls.length,count);
+});
+
+test('new loading requests capture the chosen primary basis independently from order', async () => {
+  const ctx=creatorSetup({'polisher-best-offers':'true','polisher-primary-offer':'best'});
+  ctx.get('wishlist-order').value='discount';ctx.ready();await settle();
+  const started=ctx.calls.find(call=>call.path==='/api/jobs');
+  assert.equal(started.body.order,'discount');
+  assert.equal(started.body.offer_basis,'best');
+  assert.equal(ctx.run('lastRequest.offer_basis'),'best');
+});
+
+test("primary preference is conditional, persists across tabs, and changes prices without requests", () => {
+  const values = new Map();
+  const storage = {getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)};
+  const ctx = setup({}, {sessionStorage:storage}), item = offerFixture();
+  item.best_offers.us.price.amount = 2; // Default comparison is fair; selected offers are pricier at home.
+  ctx.run(`items=${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.get("show-best-offers-priority").hidden,true);
+  ctx.get("show-best-offers").checked=true; ctx.get("show-best-offers").listeners.change();
+  assert.equal(ctx.get("show-best-offers-priority").hidden,false);
+  ctx.get("show-best-offers-best").checked=true; ctx.get("show-best-offers-best").listeners.change();
+  assert.equal(ctx.run('selectedOfferBasis()'), 'best');
+  assert.equal(ctx.run('displayItem(items[0],"pl",["us"]).comparison.is_fair'),false);
+  assert.equal(ctx.get("count-total").textContent,1);
+  assert.equal(ctx.get("developers-show-best-offers-best").checked,true);
+  assert.equal(ctx.run('items[0].comparison.home_price.amount'),79.99);
+  const csv=parseCsv(ctx.run('buildPriceCsv(items,"pl",[],{regions:["us"]})'));
+  assert.equal(csv.rows[0].final_price,'79.99');
+  assert.equal(csv.rows[0].primary_final_price,'19.99');
+  assert.equal(csv.rows[0].primary_offer_id,'22978');
+  assert.equal(csv.rows[0].primary_discount_is_effective,'true');
+  assert.equal(Number(csv.rows[0].primary_discount_percent),80.01);
+  assert.equal(values.get('polisher-primary-offer'),'best');
+  const restored=setup({}, {sessionStorage:storage});
+  assert.equal(restored.run('selectedOfferBasis()'),'best');
+  ctx.get("show-best-offers").checked=false; ctx.get("show-best-offers").listeners.change();
+  assert.equal(ctx.run('selectedOfferBasis()'),'game');
+  assert.equal(ctx.get("show-best-offers-priority").hidden,true);
+});
+
+test("paired rows sort and filter only by the primary and removal/Undo keeps the group whole", async () => {
+  const ctx=setup(), bundle=offerFixture(), ordinary=game('2','Other game');
+  bundle.best_offers.pl.price.amount=5;
+  ctx.run(`showBestOffers=true; items=${JSON.stringify([bundle,ordinary])}; sort='home'; direction=1; render();`);
+  assert.deepEqual(ctx.get('rows').children.map(row=>row.dataset.appId),['2','330020']);
+  ctx.run('primaryOfferMode="best"; render();');
+  assert.deepEqual(ctx.get('rows').children.map(row=>row.dataset.appId),['330020','2']);
+  assert.equal(ctx.get('rows').children.length,2);
+  ctx.run('filter="expensive"; render();');
+  assert.equal(ctx.get('rows').children.length,0);
+  ctx.run('primaryOfferMode="game"; filter="all"; render(); primaryOfferMode="best"; render();');
+  // One title owns the entire paired row, including CSV and Undo.
+  ctx.run('removeWishlistTitle("330020");');
+  assert.equal(ctx.get('rows').children.length,1);
+  assert.doesNotMatch(ctx.run('buildCsv(false)'),/Complete Edition/);
+  ctx.get('removal-notices').children[0].children[1].listeners.click(); await settle();
+  assert.equal(ctx.get('rows').children.length,2);
+  assert.match(contentText(ctx.get('rows').children[0]),/Complete Edition/);
+});
+
+test("regional selection falls back to game prices and effective discounts never borrow bundle percentages", () => {
+  const ctx=setup(), item=offerFixture();
+  item.comparison.home_price={amount:60,base_amount:100,currency:'PLN'};
+  item.best_offers.pl.price={amount:45,base_amount:50,discount_percent:10,currency:'PLN'};
+  item.best_offers.us.price.amount=30; // More expensive than the game.
+  ctx.run(`showBestOffers=true; primaryOfferMode='best'; lastRequest={home:'pl',regions:['us']}; items=${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.run('offerGroup(items[0],"pl",["us"]).primary.us.kind'),'game');
+  assert.ok(Math.abs(ctx.run('displayItem(items[0],"pl",["us"]).comparison.home_price.discount_percent')-55)<1e-10);
+  assert.match(contentText(ctx.get('rows').children[0]),/55% effective/);
+  assert.match(contentText(ctx.get('rows').children[0]),/Game price/);
+  ctx.run('items[0].comparison.home_price.base_amount=null; render();');
+  assert.match(contentText(ctx.get('rows').children[0]),/Effective discount unavailable/);
+  assert.equal(ctx.run('displayItem(items[0],"pl",["us"]).comparison.home_price.discount_percent'),null);
+});
+
+test("partial defaults remain visible and a selected offer can rescue an uncompared title", () => {
+  const ctx=setup(), item=offerFixture();
+  item.default_prices={pl:{amount:60,base_amount:100,currency:'PLN'}};
+  delete item.comparison;
+  item.skipped={category:'no_regional_price',reason:'No game price in US'};
+  ctx.run(`showBestOffers=true; primaryOfferMode='best'; lastRequest={home:'pl',regions:['us']}; items=${JSON.stringify([item])}; render();`);
+  assert.equal(ctx.get('rows').children.length,1);
+  assert.equal(ctx.run('displayItem(items[0],"pl",["us"]).comparison.home_price.amount'),19.99);
+  assert.match(contentText(ctx.get('rows').children[0]),/60.00/);
+});
 
 test("regional headings identify the country while rows retain converted and original prices separately", () => {
   const ctx = setup();
@@ -2298,9 +2404,9 @@ test("best-offer checkbox reveals separate offers without replacing default pric
   ctx.get("show-best-offers").checked=true;ctx.get("show-best-offers").listeners.change();
   const row=ctx.get("rows").children[0];
   assert.equal(row.children.length,4);
-  assert.equal(row.children[1].textContent,"10.00 zł");
+  assert.match(contentText(row.children[1]),/79.99 zł/);
   assert.match(contentText(row.children[1]),/19.99 zł.*Complete Edition \(bundle\)/);
-  assert.match(contentText(row.children[1]),/Regular-price discount unavailable/);
+  assert.match(contentText(row.children[1]),/80.01% effective/);
   assert.equal(ctx.get("count-total").textContent,1);
   ctx.get("show-best-offers").checked=false;ctx.get("show-best-offers").listeners.change();
   assert.doesNotMatch(contentText(ctx.get("rows").children[0]),/Complete Edition/);
@@ -2311,13 +2417,13 @@ test("best-offer rendering retains columns when default offers are missing", () 
   ctx.run(`showBestOffers=true; items=${JSON.stringify([item])}; $("show-unavailable").checked=true; render();`);
   const row=ctx.get("rows").children[0];
   assert.equal(row.children.length,4);
-  assert.match(contentText(row.children[3]),/Steam best offers/);
+  assert.match(contentText(row.children[3]),/Secondary comparison/);
 });
 
 test("CSV retains default and best-offer identity, amounts, and unknown discounts separately", () => {
   const ctx=setup();const item=offerFixture();
   const csv=parseCsv(ctx.run(`buildPriceCsv(${JSON.stringify([item])},"pl",[])`));
-  assert.equal(csv.rows[0].final_price,"10");
+  assert.equal(csv.rows[0].final_price,"79.99");
   assert.equal(csv.rows[0].best_offer_final_price,"19.99");
   assert.equal(csv.rows[0].best_offer_kind,"bundle");
   assert.equal(csv.rows[0].best_offer_id,"22978");
@@ -3003,12 +3109,12 @@ test("regional slots and best-offer placeholders keep all headers aligned even w
   assert.equal(ctx.get("wishlist-table").style.getPropertyValue("--region-count"),"36");
   assert.equal(foreign.children[0].children.length,36);
   assert.equal(foreign.children[1].children.length,36);
-  assert.deepEqual(foreign.children[0].children.map(el=>el.children[0].children[1].children[1].textContent),regions.map(id=>storefrontRegistry[id].currency));
-  assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Offer unavailable/);
+  assert.deepEqual(foreign.children[0].children.map(el=>el.children[1].children[1].children[1].textContent),regions.map(id=>storefrontRegistry[id].currency));
+  assert.match(contentText(foreign.children[1].children[regions.indexOf("jp")]),/Game only/);
   assert.match(rendered.children[0].className,/pinned-game/);
   assert.match(rendered.children[1].className,/pinned-home/);
   assert.match(rendered.children[3].className,/pinned-difference/);
-  assert.match(contentText(rendered.children[3]),/Cheapest: USD/);
+  assert.match(contentText(rendered.children[3]),/Cheapest: United States/);
   const csv = parseCsv(ctx.run("buildCsv(false)"));
   assert.equal(csv.rows.length,37);
   assert.equal(csv.rows[0].comparison_storefronts,regions.join("; "));
