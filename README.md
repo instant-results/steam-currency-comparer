@@ -23,6 +23,10 @@ the screenshot shows part of the completed results. Prices and exchange rates
 change over time. No personal Steam profile is used.
 [View the app title and setup screen](docs/images/app-overview.jpg).
 
+[View the current display controls](docs/images/offer-controls-0.11.png), captured
+on 2026-10-25 using the public seven-game example. Checkboxes and primary-offer
+choices sit above the result filters.
+
 ## What it does
 
 - The profile field also accepts a Steam App ID, an `/app/` store URL, or a game
