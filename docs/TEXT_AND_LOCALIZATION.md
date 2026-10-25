@@ -176,7 +176,13 @@ same right edge across rows. Original amount and code form one unit that can
 wrap together below the converted price when space is limited. Do not change
 comparison arithmetic, sale-note currencies, or CSV values.
 
-Best-offer blocks share their label, value and name bands across a game's
+With best offers enabled, show Game price primary and Steam's best offer primary
+radio labels under Primary offer. A cheaper alternative's discount badge uses
+the word effective and a distinct purple style; its tooltip explains the regular
+standalone game reference. Offer help explains that changing priority uses loaded
+data and preserves the original loading sequence.
+
+Primary and secondary offer blocks share their label, value and name bands across a game's
 baseline, regional and difference cells. Compensate for wrapped default details
 before the best-offer label; align the best-offer amounts and the sale details
 following offer names. Missing or subscription offers retain their value slot.
@@ -199,8 +205,9 @@ Keep compact country labels inline with amounts on narrow screens.
 
 Place **Show Steam's best purchase offers alongside game prices** directly above
 the comparison table in every tab. Wishlist and the internal library place it and
-Show unavailable products beside the result filters in one wrapping toolbar.
-Keep catalog placement after the overview. Match checkbox typography; narrower
+Show unavailable products in a dedicated wrapping row above result filters.
+Catalog credit and best-offer checkboxes also precede their filters, after the
+overview. Match checkbox typography; narrower
 layouts wrap complete controls and allow the long offer label to wrap naturally.
 
 Place a small blue circular i button immediately after the offer label, outside

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .analysis import AnalysisRunner, WISHLIST_ORDERS, deduplicate_wishlist
+from .analysis import AnalysisRunner, WISHLIST_ORDERS, STEAM_WISHLIST_ORDERS, deduplicate_wishlist
 from .cache import SQLiteCache
 from .configuration import ComparisonConfig, MAX_COMPARISONS, STOREFRONTS
 from .exchange_rates import CachedExchangeRateProvider, NbpExchangeRateProvider
@@ -76,7 +76,7 @@ class BusyError(RuntimeError):
 
 def validate_request(payload):
     required = {"identifier", "regions"}
-    allowed = {*required, "home", "order", "excluded_app_ids", "app_ids", "added_app_ids"}
+    allowed = {*required, "home", "order", "offer_basis", "excluded_app_ids", "app_ids", "added_app_ids"}
     if not isinstance(payload, dict) or not required <= set(payload) <= allowed:
         raise InputError("Supply a Steam profile and comparison regions.")
     raw = payload["identifier"]
@@ -105,8 +105,10 @@ def validate_request(payload):
         config = ComparisonConfig.from_regions(regions, home=payload.get("home", "pl"))
     except ValueError as exc:
         raise InputError(str(exc)) from exc
-    if payload.get("order", "priority") not in WISHLIST_ORDERS:
-        raise InputError("Choose name, date added, or personal priority order.")
+    if not isinstance(payload.get("order", "priority"), str) or payload.get("order", "priority") not in WISHLIST_ORDERS:
+        raise InputError("Choose a supported wishlist loading order.")
+    if payload.get("offer_basis", "game") not in ("game", "best"):
+        raise InputError("Choose game price or Steam's best offer as primary.")
     validate_exclusions(payload.get("excluded_app_ids", []))
     for field in ("app_ids", "added_app_ids"):
         if field in payload:
@@ -196,7 +198,7 @@ def validate_creator_request(payload):
 
 
 class Job:
-    def __init__(self, identifier, config, owner, order, creator_request=None, library=False):
+    def __init__(self, identifier, config, owner, order, creator_request=None, library=False, offer_basis="game"):
         self.id = secrets.token_urlsafe(24)
         self.token = secrets.token_urlsafe(32)
         self.identifier, self.config, self.owner, self.order = identifier, config, owner, order
@@ -204,6 +206,7 @@ class Job:
         self.excluded_app_ids = set()
         self.excluded_catalog_ids = set()
         self.library = library
+        self.offer_basis = offer_basis
         self.request_app_ids = None
         self.added_app_ids = ()
         # Private, expiring discovery state; never saved to the shared price cache.
@@ -218,7 +221,7 @@ class Job:
         self.created = self.updated
         self.data = {"state": "queued", "message": "Queued — waiting for the current comparison.",
                      "profile": identifier, "home": config.home.region, "regions": [r.region for r in config.alternatives], "order": order,
-                     "total": 0, "items": [], "rates": [], "warnings": [], "error": None,
+                     "total": 0, "items": [], "rates": [], "warnings": [], "error": None, "offer_basis": offer_basis,
                      "methodology": asdict(ComparisonMethodology(rule="FAIR means the baseline price is no higher than every selected price converted to the baseline currency."))}
         if creator_request:
             self.data.update(profile="", source="creators", creator_request=self.creator_request, catalogs={})
@@ -359,9 +362,11 @@ class JobManager:
             self.thread.start()
 
     def submit(self, identifier, config, owner, order="priority", creator_request=None, library=False,
-               *, source_job=None, excluded_app_ids=(), app_ids=None, added_app_ids=()):
+               *, source_job=None, excluded_app_ids=(), app_ids=None, added_app_ids=(), offer_basis="game"):
         if order not in WISHLIST_ORDERS:
             raise ValueError(f"Unsupported wishlist order: {order!r}")
+        if offer_basis not in ("game", "best"):
+            raise ValueError("Invalid primary offer")
         with self.lock:
             now = time.monotonic()
             if source_job is not None:
@@ -375,6 +380,7 @@ class JobManager:
                     raise BusyError("A currency change is already running for this comparison.")
                 identifier = source_job.data["profile"]
                 order, creator_request, library = source_job.order, source_job.creator_request, source_job.library
+                offer_basis = source_job.offer_basis
             self.jobs = {key: job for key, job in self.jobs.items()
                          if job.data["state"] not in TERMINAL or now - job.updated < 3600}
             if any(job.owner == owner and job.data["state"] not in TERMINAL for job in self.jobs.values()):
@@ -382,7 +388,7 @@ class JobManager:
             self._prune_completed(now)
             if sum(job.data["state"] not in TERMINAL for job in self.jobs.values()) >= self.max_jobs or self.queue.full():
                 raise BusyError("The comparison service is busy. Please try again later.")
-            job = Job(identifier, config, owner, order, creator_request, library)
+            job = Job(identifier, config, owner, order, creator_request, library, offer_basis)
             job.request_app_ids = tuple(app_ids) if app_ids is not None else None
             job.added_app_ids = tuple(added_app_ids)
             job.excluded_app_ids.update(excluded_app_ids)
@@ -587,6 +593,15 @@ class JobManager:
                 return
             if any(not re.fullmatch(r"[0-9]{1,12}", item.app_id) for item in wishlist):
                 raise ValueError("Invalid app ID")
+            if job.order in STEAM_WISHLIST_ORDERS:
+                ordered = steam.get_wishlist_order(job.identifier, wishlist, STEAM_WISHLIST_ORDERS[job.order], job.config.home.region)
+                job.check_cancelled()
+                if ordered.failure:
+                    job.update(state="failed", error=NETWORK_ACCESS_MESSAGE if ordered.failure is WishlistFailure.NETWORK_ACCESS_DENIED
+                               else "Steam could not provide the selected loading order. Retry, or choose another order.",
+                               error_code=ordered.failure.value, message="Wishlist ordering failed.")
+                    return
+                wishlist = ordered.items
         if job.previous_job_id is None and job.request_app_ids is None:
             wishlist = deduplicate_wishlist((*wishlist, *(WishlistItem(app_id) for app_id in job.added_app_ids)))
         if len(wishlist) > self.max_games:
@@ -632,7 +647,14 @@ class JobManager:
             "priority": "Comparing games in personal priority order…",
             "date_added": "Comparing newest wishlist additions first…",
             "name": "Loading game names to prepare alphabetical order…",
+            "price": "Preparing baseline prices to load the cheapest primary offers first…",
+            "discount": "Preparing baseline offers to load the largest discounts first…",
+            "top_selling": "Comparing games in Steam's Top Selling order…",
+            "release_date": "Comparing games in Steam's Release Date order…",
+            "review_score": "Comparing games in Steam's Review Score order…",
         }
+        if job.order in STEAM_WISHLIST_ORDERS and (job.request_app_ids is not None or job.identifier == "example"):
+            order_messages[job.order] = "Comparing games in saved selection order…"
         job.update(state="running", rates=rate_rows, warnings=warnings,
                    message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if creator_request else order_messages[job.order])
         runner = AnalysisRunner(CachedBatchPriceService(SteamBatchProvider(steam_http, policy=self.batch_policy, check_cancelled=job.check_cancelled), cache), home=job.config.home, alternatives=job.config.alternatives)
@@ -641,7 +663,8 @@ class JobManager:
             wishlist,
             rates_to_baseline(rates, job.config.home.currency),
             order=job.order,
-            preserve_order=job.previous_job_id is not None or job.request_app_ids is not None,
+            preserve_order=job.previous_job_id is not None or (job.request_app_ids is not None and job.order not in {"price", "discount"}),
+            offer_basis=job.offer_basis,
         ):
             job.check_cancelled()
             item = asdict(progress)
@@ -789,6 +812,7 @@ class WebApplication:
                         excluded_app_ids=payload.get("excluded_app_ids", []),
                         app_ids=payload.get("app_ids") if path == "/api/jobs" else None,
                         added_app_ids=payload.get("added_app_ids", []) if path == "/api/jobs" else (),
+                        offer_basis=payload.get("offer_basis", "game") if path == "/api/jobs" else "game",
                     )
                 except ValueError as exc:
                     return respond("400 Bad Request", {"error": str(exc)})

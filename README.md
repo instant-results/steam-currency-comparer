@@ -1,6 +1,6 @@
 # Steam Currency Comparer
 
-**Version: 0.10.0** · Beta for local use.
+**Version: 0.11.0** · Beta for local use.
 
 [GitHub repository](https://github.com/instant-results/steam-currency-comparer)
 
@@ -22,6 +22,10 @@ Live seven-game example captured on 2026-09-23 with version 0.1.0-beta.1;
 the screenshot shows part of the completed results. Prices and exchange rates
 change over time. No personal Steam profile is used.
 [View the app title and setup screen](docs/images/app-overview.jpg).
+
+[View the current display controls](docs/images/offer-controls-0.11.png), captured
+on 2026-10-25 using the public seven-game example. Checkboxes and primary-offer
+choices sit above the result filters.
 
 ## What it does
 
@@ -57,12 +61,19 @@ change over time. No personal Steam profile is used.
 - Optionally shows Steam's best purchase offers alongside default game prices,
   identifying packages and bundles separately. Find the checkbox directly above
   the table in each tab. Toggling it uses already
-  loaded data; filters and totals continue to describe default game offers.
+  loaded data. When enabled, choose Game price primary or Steam's best offer primary.
+  A cheaper alternative stays with its game in one paired row; the primary offer
+  drives filters, sorting and statistics. Effective discounts compare the cheaper
+  purchase price with the regular standalone game price.
 - Retrieves prices in batches. A single 200-game cold-cache measurement took
   20.7 seconds versus 13 minutes 35 seconds previously; first results arrived in
   10.9 seconds versus 4.9 seconds. See the [test protocol and limitations](docs/STEAM_PRICE_PERFORMANCE.md).
-- Loads games by Your Rank, Date Added, or Name, with search, filters, and
+- Loads games by Your Rank, Name, Price, Discount, Date Added, Top Selling,
+  Release Date or Review Score, with search, filters, and
   result sorting once results arrive.
+  Price/Discount prepare all baseline prices first and use the selected primary
+  offer. The three Steam ranking modes apply to public wishlists and retain
+  omitted titles at the end. See [loading behavior](docs/USAGE.md#local-operation-and-loading-order).
   Table headers cycle ascending, descending and original loading order; compact
   blue indicators show the active direction. Wishlist search sits below Game name.
 - Caches prices and exchange rates, labels stale results, and lets you cancel

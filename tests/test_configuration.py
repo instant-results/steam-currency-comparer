@@ -58,7 +58,7 @@ class ConfigurationCliTests(unittest.TestCase):
              patch.object(cli, "SQLiteCache"), \
              patch.object(cli, "CachedExchangeRateProvider") as rates, \
              patch.object(cli, "SteamClient") as steam, \
-             patch.object(cli, "CachedPriceService") as prices, \
+             patch.object(cli, "CachedPriceService", autospec=True) as prices, \
              patch.object(cli, "ConsolePresenter"):
             rates.return_value.get_rate_details.return_value = {"EUR": ExchangeRate("EUR", 4.0, "2026-09-08")}
             steam.return_value.get_wishlist.return_value = WishlistResult(

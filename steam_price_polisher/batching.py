@@ -279,6 +279,12 @@ class CachedBatchPriceService:
         self.window_size = provider.policy.price_size
         self.lookups, self.metadata, self.offers = {}, {}, {}
         self.window_requests = 0
+        self.prefetched_lookups = {}
+
+    def prepare_baseline(self, ids, region):
+        """Freeze the baseline observations used to establish global loading order."""
+        self.prepare(ids, (region,))
+        self.prefetched_lookups = dict(self.lookups)
 
     def _fresh(self, cached):
         if cached is None:
@@ -294,6 +300,8 @@ class CachedBatchPriceService:
         missing, stale = [], {}
         for app_id in ids:
             key = (app_id, region.region)
+            if key in self.prefetched_lookups:
+                continue
             meta = self.cache.get_observation('metadata', *key)
             offer = self.cache.get_observation('offer', *key)
             if meta:
@@ -336,6 +344,10 @@ class CachedBatchPriceService:
             self.provider.check()
             missing, stale = [], {}
             for app_id in ids:
+                key = (app_id, region.region)
+                if key in self.prefetched_lookups:
+                    self.lookups[key] = self.prefetched_lookups[key]
+                    continue
                 cached = self.cache.get_price(app_id, region.region, region.currency)
                 if self._fresh(cached):
                     self.lookups[(app_id, region.region)] = PriceLookup(cached.result, 'cache')

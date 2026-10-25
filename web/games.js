@@ -72,7 +72,7 @@
     if (appIds.length > 1000) { comparisonCoordinator.setBusy("wishlist", false); paused = true; message("The loaded wishlist and queued games exceed 1,000 games. Remove games, then retry."); save(); refreshControls(); return; }
     const added = new Set([...(lastRequest?.added_app_ids || []), ...items.filter(item => item.manually_added).map(item => item.app_id), ...ids]);
     const body = {identifier: existing.length ? lastRequest?.identifier || "selection" : "selection", home: selection.home,
-      regions: [...selection.regions], order: lastRequest?.order || "priority", app_ids: appIds,
+      regions: [...selection.regions], order: lastRequest?.order || $("wishlist-order").value || "priority", offer_basis: selectedOfferBasis(), app_ids: appIds,
       added_app_ids: appIds.filter(id => added.has(id))};
     batch = {ids, request: body, job: null};
     setBusy(true); $("cancel").disabled = true; status("ADDING GAMES", true);

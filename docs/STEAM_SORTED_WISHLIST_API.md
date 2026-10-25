@@ -1,20 +1,29 @@
 # Steam sorted wishlist API — implementation handoff
 
-Research verified: 2026-09-12. This is an implementation brief, not a claim
-that Valve guarantees every observed response detail indefinitely.
-Implementation status checked against the repository on 2026-10-02: still not
-integrated. The live API observations remain dated 2026-09-12 and were not
-re-probed during the documentation refresh; revalidate before implementation.
+Original research: 2026-09-12; follow-up research: 2026-10-24. Integration added
+2026-10-25 in version 0.11.0. Observed API details are not Valve guarantees.
+See [Price and Discount findings](STEAM_WISHLIST_PRICE_DISCOUNT.md).
 
-## Objective
+## Implemented scope
 
-Evaluate Steam's richer wishlist-page service as the source of loading order and
-catalog metadata for Steam Currency Comparer. The immediate opportunity is to
-match Steam's **Release Date**, **Top Selling**, and **Review Score** sorts without
-first fetching regional prices for every game.
+Basic `GetWishlist` remains the membership source. `SteamClient.get_wishlist_order`
+requests lightweight sorted records for Top Selling (5), Release Date (6) and
+Review Score (7), using the baseline country, empty filters/data request and
+`page_size: 0`. It keeps matching basic entries in Steam's sequence, then appends
+missing basic entries in original order. No ranking-status badge is displayed.
+Duplicates, malformed IDs and invalid envelopes fail explicitly; failure never
+silently substitutes a different sort. Rich records are not needed for ordering.
 
-No integration described here has been started. The application still uses
-`IWishlistService/GetWishlist/v1` as its primary wishlist source.
+Price and Discount use a complete baseline prefetch, based on the selected primary
+game or cheaper Steam offer. Name retains metadata prefetch; Your Rank and Date
+Added retain basic metadata sorting. Currency updates preserve emitted order;
+manual lists/examples keep selection order for Steam-only modes. Manual additions
+append for non-price orders. Changing primary display uses already loaded data.
+
+A 2026-10-25 live check of all three integrated Steam modes in PL and DE succeeded
+and preserved all 759 basic entries after reconciliation. This is a response and
+membership check, not independent verification of Steam's ranking algorithm.
+The detailed observations below retain their original research dates.
 
 ## Executive summary
 
@@ -30,16 +39,19 @@ a SteamID64, Store Browse context and data request, sort order, filters, start
 index, page size, and wishlist share token.
 
 A live anonymous request for a public wishlist succeeded without a Web API key
-or share token. It returned the complete lightweight wishlist in the requested
+or share token. It returned a lightweight item list in the requested
 server-side order. Only the range selected by `start_index` and `page_size` was
 decorated with a nested `store_item`. This matches Steam's description that Store
 Browse data is filled into that range; `page_size` did **not** truncate the
 top-level item list in the observed response.
 
-The service can therefore provide Steam's ordering for all items while limiting
-rich metadata to a manageable window. Its detailed contract is not formally
-documented, so parsing must be defensive and retain the current `GetWishlist`
-path as a fallback.
+The service can therefore provide Steam's ordering for its returned selection
+while limiting rich metadata to a manageable window. The 2026-10-24 checks found
+that this selection can omit entries present in basic `GetWishlist`, even with
+empty filters. Do not equate a complete sorted response with complete wishlist
+membership. Retain the basic source for membership reconciliation; fallback must
+also preserve the requested ordering semantics rather than silently substitute
+another order.
 
 ## Relationship to the current implementation
 
@@ -93,9 +105,9 @@ Important request behavior:
 
 - Use `https://api.steampowered.com`, consistent with the current wishlist call.
 - URL-encode the complete JSON value; do not construct nested query keys by hand.
-- `context.country_code` affects Store Browse data and may affect
-  region-sensitive sorting such as Top Selling. Deliberately choose whether it
-  follows the selected baseline storefront or another product rule.
+- `context.country_code` affects Store Browse data, Price/Discount order and
+  sorted-list membership; it may also affect Top Selling. Deliberately choose
+  whether it follows the selected baseline storefront or another product rule.
 - `data_request` controls which `store_item` sections are returned. Request only
   fields the feature uses.
 - Steam's metadata says `share_token` determines visibility and effective
@@ -176,16 +188,18 @@ instead of attempting a simple timestamp sort that mishandles these cases.
 
 ## Sort-order values
 
-This working mapping matches Steam's UI order and live response behavior. Numeric
-values are observed protocol details and need contract tests because the public
-API metadata exposes only an enum type, not its labels.
+This working mapping matches Steam's UI order. The enum mapping was confirmed
+in Steam's current wishlist frontend on 2026-10-24; Price and Discount received
+fresh live checks. Modes 5/6/7 were also exercised on 2026-10-25 as described above.
+Numeric values are observed protocol details and need contract tests because the
+public API metadata exposes only an enum type, not its labels.
 
 | Value | Steam label | Evidence and handling |
 |---:|---|---|
 | `0` | Your Rank | Default; observed priorities ascending. |
 | `1` | Name | Observed names ascending. |
-| `2` | Price | Outside the current request; requires storefront semantics. |
-| `3` | Discount | Outside the current request; dynamic. |
+| `2` | Price | Researched 2026-10-24: ascending Steam-selected offer price; can differ from default game price. |
+| `3` | Discount | Researched 2026-10-24: Steam discount order; hidden percentages and bundles prevent a simple universal reconstruction. |
 | `4` | Date Added | Observed timestamps descending. |
 | `5` | Top Selling | Server-defined and dynamic; no numeric rank was returned. |
 | `6` | Release Date | Server-defined handling for past, upcoming, and unknown dates. |
@@ -194,29 +208,36 @@ API metadata exposes only an enum type, not its labels.
 Expose named internal constants or an enum. Do not scatter these integers across
 the web, analysis, and access layers.
 
-## Recommended integration
+## Original integration proposal (historical)
+
+The proposal and checklists below record the original research plan. The
+implemented 0.11.0 scope is described above; these are not outstanding feature
+commitments or an alternative description of current behavior.
 
 Prefer one retrieval abstraction with two implementations:
 
 1. Add `SteamClient.get_wishlist_sorted_filtered(...)` beside `get_wishlist`.
 2. Map product order names to a typed Steam sort enum in `steam_access.py`.
-3. Request the complete server-side order and enrich only the first processing
-   window. Preserve every item when `store_item` is absent.
+3. Request the server-side order and enrich only the first processing window,
+   or request no details when only the sequence is needed. Reconcile membership
+   with basic `GetWishlist` using an explicit omission policy. Preserve every
+   returned item when `store_item` is absent.
 4. Process items in response order. Fetch later metadata windows only if the UI
    needs release/review fields before regional `appdetails` provides a name.
 5. Fall back to `GetWishlist/v1` only when doing so preserves the requested
    semantics. Retain existing TLS, network-denial, malformed-response, and retry
    classifications.
 6. Keep local sorting as fallback for Your Rank, Date Added, and Name when enough
-   metadata exists. For Top Selling, Release Date, and Review Score, expose a
-   clear unsupported/failure state if authoritative ordering is unavailable;
-   silently substituting another order would be misleading.
+   metadata exists. For Top Selling, Release Date, Review Score, and Steam-style
+   Price/Discount, expose a clear unsupported/failure state if authoritative
+   ordering is unavailable. Local default-price sorting has different semantics
+   and must not silently replace Steam order.
 
 Replacing the primary endpoint for every order would match Steam most closely
 but introduces a larger undocumented response surface. A staged implementation
 is safer: add and validate the client method, use it for one sort, then expand.
 
-## Files likely to change
+## Original implementation checklist
 
 - `steam_price_polisher/steam_access.py`: request construction, enum mapping,
   defensive parsing, and fallback policy.
@@ -226,8 +247,9 @@ is safer: add and validate the client method, use it for one sort, then expand.
   remove alphabetical baseline prefetch when Name comes from this service.
 - `steam_price_polisher/web_app.py`: validate product order values and expose
   precise failure messages.
-- `web/index.html` and `web/app.js`: add Release Date, Top Selling, and Review
-  Score options and persist them with jobs.
+- `web/index.html` and `web/app.js`: add approved loading-order options and
+  persist them with jobs. The original proposal covered Release Date, Top Selling
+  and Review Score; Price/Discount labels depend on the offer-model decision.
 - `tests/test_steam_access.py`, `tests/test_analysis.py`,
   `tests/test_web_app.py`, and `tests/test_web_render.cjs`: fixtures and behavior.
 
@@ -245,8 +267,10 @@ Keep feature and test changes in separate commits, per `AGENTS.md`.
 - Response order survives deduplication, analysis, job snapshots, rendering,
   refresh, retry, and restoring original loading order via the header sort cycle.
 - Name ordering no longer duplicates baseline price requests.
-- Top Selling, Release Date, and Review Score never silently fall back to a
-  semantically different local order.
+- Top Selling, Release Date, Review Score and Steam-style Price/Discount never
+  silently fall back to a semantically different local order.
+- Country-dependent omissions are reconciled with basic wishlist membership;
+  incomplete responses never silently remove games from the comparison.
 - Network denial, TLS failure, rate limiting, invalid JSON, and fallback remain
   distinguishable and sanitized.
 - A fixture proves `page_size` limits enrichment rather than deleting lightweight
@@ -257,8 +281,9 @@ Keep feature and test changes in separate commits, per `AGENTS.md`.
 ## Acceptance criteria
 
 - The requested order dictates the first and every subsequent game processed.
-- UI labels match Steam: Your Rank, Name, Date Added, Top Selling, Release Date,
-  and Review Score.
+- UI labels describe the approved semantics. Steam-parity candidates are Your
+  Rank, Name, Price, Discount, Date Added, Top Selling, Release Date and Review
+  Score; default-game Price/Discount sorting is a distinct option.
 - A public wishlist needs no Steam sign-in, cookie, or user Web API key.
 - Top Selling follows a documented country/storefront rule.
 - Missing rich metadata neither loses games nor exposes private data.
@@ -266,24 +291,22 @@ Keep feature and test changes in separate commits, per `AGENTS.md`.
   remain unchanged unless explicitly redesigned and tested.
 - Documentation and fixtures distinguish observed behavior from guarantees.
 
-## Open decisions
+## Remaining scope
 
-1. Should Top Selling use the baseline storefront's country? This is coherent,
-   but changing the baseline could change load order.
-2. Should release/review metadata be displayed or used only for ordering?
-   Displaying it expands model, API, rendering, and CSV scope.
-3. Should `GetWishlistSortedFiltered` replace the primary call or only support
-   sorts the lightweight endpoint cannot reproduce?
-4. How should an absent share token interact with future shared-wishlist URLs?
-   Treat any token as a secret capability.
-5. Should the historical `/wishlistdata/` fallback be removed after the new
-   service is proven, or retained behind a contract check?
+No release/review metadata is exposed as new columns. Shared-wishlist tokens,
+removal of the historical wishlist fallback and replacing basic membership with
+the sorted endpoint remain outside this integration. Steam ordering can change
+between fresh runs. Current Price/Discount labels promise app-selected primary
+prices, not exact Steam-wishlist discount parity.
 
 ## Revalidation procedure
 
-Before implementation, query official API metadata again and run a schema-only
+Before changing the integration contract, query official API metadata and run a schema-only
 probe. Do not print or commit app IDs, titles, profile identifiers, share tokens,
 or prices from a real user's wishlist.
+Use the current request and membership checks in
+[Price and Discount research](STEAM_WISHLIST_PRICE_DISCOUNT.md); the earlier
+request below remains an example for enriched Name ordering.
 
 PowerShell outline:
 
