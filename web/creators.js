@@ -357,7 +357,7 @@
     }
 
     function renderStatistics(group) {
-      const loaded = [...new Set(group.products.map(product => product.app_id))].map(id => results.get(id));
+      const loaded = [...new Set(group.products.map(product => product.app_id))].map(id => displayItem(results.get(id), creatorHome, creatorRegions));
       const compared = loaded.filter(item => item?.comparison);
       const uncompared = loaded.filter(item => item?.skipped).length;
       const pending = loaded.length - compared.length - uncompared;
@@ -405,7 +405,7 @@
 
     function matchesFilter(product) {
       if (catalogFilter === "all") return true;
-      const item = results.get(product.app_id), comparison = item?.comparison;
+      const item = displayItem(results.get(product.app_id), creatorHome, creatorRegions), comparison = item?.comparison;
       if (catalogFilter === "skipped") return !!item?.skipped && !comparison;
       if (catalogFilter === "discounts") return hasDifferentDiscounts(comparison);
       return !!comparison && comparison.is_fair === (catalogFilter === "fair");
@@ -441,7 +441,7 @@
         for (const id of group.rowCache.keys()) if (!loadedIds.has(id)) group.rowCache.delete(id);
         const sortedProducts = [...visibleProducts];
         if (catalogSort !== "arrival") sortedProducts.sort((a, b) => {
-          const left = results.get(a.app_id), right = results.get(b.app_id);
+          const left = displayItem(results.get(a.app_id), creatorHome, creatorRegions), right = displayItem(results.get(b.app_id), creatorHome, creatorRegions);
           if (catalogSort === "name") return catalogDirection * (left?.name || a.name).localeCompare(right?.name || b.name);
           const value = item => !item?.comparison ? null : catalogSort === "home" ? item.comparison.home_price.amount
             : catalogSort === "percentage" ? percentageDifference(item.comparison)
@@ -453,9 +453,9 @@
         });
         for (let index = 0; index < sortedProducts.length; index++) {
           const product = sortedProducts[index];
-          const item = results.get(product.app_id) || {...product, pending: true};
+          const item = displayItem(results.get(product.app_id), creatorHome, creatorRegions) || {...product, pending: true};
           const showCredits = $("creator-show-credits").checked;
-          const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + JSON.stringify(item);
+          const signature = creatorHome + creatorRegions.join(",") + showCredits + showBestOffers + primaryOfferMode + JSON.stringify(item);
           let cached = group.rowCache.get(product.app_id);
           if (!cached || cached.signature !== signature) {
             const row = comparisonRow(item, creatorHome, false, creatorRegions, removeTitle);

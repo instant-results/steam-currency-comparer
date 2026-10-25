@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0 — 2026-10-25
+
+- Add Price and Discount loading by the chosen primary offer, preparing and
+  reusing all baseline observations before emitting rows. Add Steam Top Selling,
+  Release Date and Review Score order for public wishlists, preserving complete
+  basic-wishlist membership when Steam's sorted response omits entries.
+- Keep a game and its cheaper Steam-selected package/bundle in one paired row.
+  The existing checkbox reveals primary-offer radio choices shared across tabs.
+  Primary prices drive filters, sorting and statistics; removal and Undo affect
+  the whole group. Show a distinct effective discount against the regular game
+  price and retain both source offers plus the selected basis in CSV.
+- Place display checkboxes in a dedicated row above result filters across
+  comparison tabs, with the primary-offer choices beneath their checkbox.
+
 ## 0.10.0 — 2026-10-24
 
 - Accept Steam organization homepage aliases, numeric creator homepages and

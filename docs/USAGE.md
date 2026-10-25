@@ -28,9 +28,30 @@ Your Rank loads the lowest Steam wishlist priority number first. Date Added load
 the newest additions first. Items without the selected metadata retain their
 relative order at the end. Steam's current wishlist response usually omits game
 names, so alphabetical loading first resolves StoreBrowse metadata for sorting.
-Those observations are reused. Other orders prepare up to 100 games at a time,
-then append the window's rows in order. The chosen order is retained for refresh
-and retry within the browser tab.
+Those observations are reused.
+
+Price loads the cheapest baseline-country primary purchase first. Discount loads
+the largest discount first, including effective game discounts when a cheaper
+Steam offer is primary. Both prepare the entire baseline before emitting the
+first row, then reuse those observations in normal regional windows. Missing
+values follow known ones; ties keep the source order. This adds initial waiting,
+not a second baseline fetch. These modes follow this app's selected prices and
+discount calculation, which can differ from Steam's own Discount order.
+
+Top Selling, Release Date and Review Score use Steam's order for the baseline
+country. The complete basic wishlist supplies membership: ranked entries come
+first, then omitted entries retain basic-response order at the end. There is no
+extra ranking badge. Failure to obtain the selected Steam order fails the run
+with a retry/change-order message. Examples and manual lists have no personal
+Steam ranking and retain selection order for these three choices.
+
+Other orders prepare up to 100 games at a time, then append each window in order.
+Changing primary offer after starting changes displayed prices, filters and
+statistics immediately without fetching again; it preserves the loading sequence.
+Retry uses the saved order and offer basis, with refreshed observations as needed.
+Currency updates preserve the emitted sequence while the source job exists.
+Manual additions use the same paired-offer retrieval; Price/Discount reorder the
+combined selection, while other orders retain existing positions and append additions.
 
 For eventual public hosting, see [DEPLOYMENT.md](../DEPLOYMENT.md). The WSGI service
 includes bounded background jobs, input checks, same-origin POST protection,
@@ -341,7 +362,8 @@ Uncompared covers checked products with missing prices or failed requests.
 Filtered groups show the visible count out of their loaded products, and remain
 visible with an explanation if nothing matches. Statistics and CSV always cover
 all loaded, checked products, including those hidden by these filters. Sorting
-applies to visible rows. The best-offer display choice does not affect filtering.
+applies to visible rows. Filters use the selected primary offer; secondary offers
+follow their parent game.
 Changing a filter performs no Steam requests.
 
 Open **Developers** or **Publishers** beside **Your wishlist**. Developers starts
@@ -945,8 +967,8 @@ displayed/pending state separately.
 
 ## Continuing development
 
-The owned-library prototype is retained but hidden behind an internal flag in
-0.5.0-beta. Authenticated live testing remains TODO; see the
+The owned-library prototype, introduced in 0.5.0-beta, remains hidden behind an
+internal flag. Authenticated live testing remains TODO; see the
 [development roadmap](ROADMAP.md) before enabling it. The available wishlist,
 developer, and publisher features retain the shared CSV and product credits.
 
@@ -975,12 +997,12 @@ By default, credits appear as small text below each product title. Check
 **Show publisher column** / **Show developer column** beside the best-offer checkbox to move the
 credits into a separate labeled column. All reported names appear, including
 co-publishers. Each tab remembers its display mode;
-missing credits are labeled Unavailable. Credits come from the same Steam
-appdetails response as prices and are cached with them. Older saved catalog
+missing credits are labeled Unavailable. Credits come from Steam StoreBrowse
+metadata and are cached independently of prices. Older saved catalog
 comparisons refresh once to obtain credits.
 
 
-## Batched retrieval and Steam best purchase offers (0.6.0-beta)
+## Batched retrieval and Steam best purchase offers
 
 The web app uses one batch pipeline for every list size. Default prices come from
 appdetails price-only requests, and StoreBrowse supplies metadata and Steam's
@@ -989,23 +1011,28 @@ selection limit is now one to 36 alternatives, using one representative country
 for each of the 37 supported live currencies.
 
 The checkbox sits directly above the comparison table in each tab. Wishlist
-groups it with Show unavailable products and the game filters in one wrapping
-row. The blue circular i button after its label opens an explanation without
+groups it with Show unavailable products in a wrapping row above the game
+filters. Catalog display checkboxes also appear above their filters. The blue
+circular i button after its label opens an explanation without
 changing the checkbox. Close it with its circular X, the i button or Escape.
 Clicking elsewhere leaves it open. The bubble opens centered on the i, adjusting
 near viewport edges, and scrolls with the page. Its setting is shared across tabs
 and survives reload in the same browser tab.
 
-Enable **Show Steam's best purchase offers alongside game prices** to reveal a
-separate set of prices and regional differences. Both datasets are fetched during
-loading, so changing this checkbox requires no network request. The choice survives
-refresh in the same browser tab and applies to all comparison tabs. Older saved
-results need a new comparison to populate best offers. Default game offers still
-drive filters, sorting, counts, and catalog statistics; the secondary offer section
-has its own difference and color. Unavailable default rows remain subject to the
-existing Show unavailable products control.
+Enable **Show Steam's best purchase offers alongside game prices** to reveal
+**Game price primary** and **Steam's best offer primary** radio choices. A cheaper
+qualifying Steam-selected package or bundle forms a paired structure with its game,
+within one table row. The primary controls price sorting, filters, differences,
+counts and catalog statistics. The secondary follows it through filtering, ordering,
+removal and Undo. If a country has no cheaper alternative, its game price is used.
+An available selected offer can make an otherwise uncompared game comparable.
+With the checkbox off, the game is primary and alternatives are hidden.
 
-Each secondary offer identifies its package or bundle and links to that purchase
+Both datasets are fetched during loading, so changing these controls requires no
+network request. Settings are shared across tabs and survive reload in the same
+browser tab. Older results may need a new comparison to populate offer data.
+
+Each alternative identifies its package or bundle and links to that purchase
 option. Anonymous prices assume no existing ownership. Steam may choose different
 editions/bundles between countries, and personalized eligibility can change the
 checkout price. Recurring subscription options are not compared. StoreBrowse does
@@ -1023,6 +1050,16 @@ used. Regular bundle discounts remain unavailable when only component savings or
 ambiguous reference prices are supplied. This does not prevent comparing current
 bundle prices. Default game prices remain separately available with their own base.
 
+For the cheaper alternative, the displayed purple **effective** badge instead uses
+`(regular standalone game price - alternative purchase price) / regular standalone
+game price * 100`. A game normally costing 100, on sale for 60, with a bundle
+costing 45 has a 55% effective discount. This is the cost of acquiring that game
+through the offer; it is not the bundle's advertised percentage or an allocation
+of its price across components. It is rounded to two decimals for display. If the
+game's regular price is unknown or zero, the effective percentage is unavailable.
+Different countries can select different offers. The app trusts Steam's selection
+and does not enumerate every bundle containing the game.
+
 CSV schema 1 gains additive `best_offer_*` fields after existing library columns:
 status, kind, ID, name, original-currency final price, currency, currency basis,
 regular price, discount percentage, converted price, source, comparison difference,
@@ -1031,16 +1068,25 @@ checkbox. Missing values stay blank. For an uncompared default game with best-of
 observations, one row per requested region retains those observations separately.
 No extra request is made when exporting.
 
+Additional `primary_*` columns record basis, kind, ID, native/converted amount,
+discount percentage, effective-discount flag and comparison differences. Existing
+default and raw `best_offer_*` fields retain their meanings. Exports include every
+loaded game regardless of display filters; the primary columns reflect the current
+display choice. Partial default observations are retained even without a full
+default comparison. Request counts must still be deduplicated across regional rows.
+
 The legacy `live_price_requests` field now counts physical attempts for default
 price, metadata and best-offer batches. Shared attempts are attributed once to the
-first emitted game in a window; name-prefetch attempts join the first window. A
+first emitted game in a window; Name and Price/Discount prefetch attempts join
+the first window. A
 zero on a later row does not imply that row came from cache. Cache-hit fields count
 item-country observations. These per-game fields repeat in regional CSV rows;
 do not sum them across those duplicates. Wishlist/NBP requests are counted
 separately in the performance report, not this legacy per-row field.
 
-Cache schema 8 tracks calculated-discount provenance, retains existing prices/rates and adds independent metadata (24 h)
-and best-offer (15 min) observations. Default-price TTLs remain one hour normally,
+Cache schema 9 retains calculated-discount provenance, complete-table rate fetch
+times, and independent metadata (24 h) and best-offer (15 min) observations.
+Default-price TTLs remain one hour normally,
 15 minutes on sale, one hour for missing prices and six hours for unavailable apps.
 Metadata/offer refreshes do not reset default-price age. Partial and cancelled jobs
 retain completed observations. Temporary-error stale fallback is labeled; local

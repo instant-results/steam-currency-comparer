@@ -48,7 +48,8 @@
     $("expensive-label").textContent = `Pricier in ${storefronts[home].name}`;
     $("profile-attribution").textContent = lastRequest ? `Library: ${lastRequest.identifier}` : "";
     $("profile-attribution").hidden = !lastRequest;
-    const compared = items.filter(item => item.comparison);
+    const viewItems = items.map(item => displayItem(item, home, regions));
+    const compared = viewItems.filter(item => item.comparison);
     $("count-total").textContent = items.length || (lastRequest ? "0" : "—");
     $("count-fair").textContent = compared.filter(item => item.comparison.is_fair).length;
     $("count-expensive").textContent = compared.filter(item => !item.comparison.is_fair).length;
@@ -56,7 +57,7 @@
     const unavailable = item => ["no_regional_price", "app_unavailable"].includes(item.skipped?.category);
     const showUnavailable = $("show-unavailable").checked;
     const search = $("search").value.trim().toLocaleLowerCase();
-    const visible = items.filter(item => (showUnavailable || !unavailable(item)) && item.name.toLocaleLowerCase().includes(search)
+    const visible = viewItems.filter(item => (showUnavailable || !unavailable(item)) && item.name.toLocaleLowerCase().includes(search)
       && (filter === "all" || (filter === "discounts" ? hasDifferentDiscounts(item.comparison)
         : filter === "skipped" ? !item.comparison : item.comparison && item.comparison.is_fair === (filter === "fair"))));
     const value = item => sort === "home" ? item.comparison?.home_price.amount
@@ -72,7 +73,7 @@
     const allIds = new Set(items.map(item => item.app_id));
     for (const id of rows.keys()) if (!allIds.has(id)) rows.delete(id);
     visible.forEach((item, index) => {
-      const signature = home + showBestOffers + JSON.stringify(item);
+      const signature = home + showBestOffers + primaryOfferMode + JSON.stringify(item);
       let cached = rows.get(item.app_id);
       if (!cached || cached.signature !== signature) {
         cached?.row.remove(); cached = {signature, row:comparisonRow(item, home, true, regions)}; rows.set(item.app_id, cached);

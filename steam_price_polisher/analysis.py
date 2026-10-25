@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 
 from .comparison import compare_game
 from .configuration import ComparisonConfig, RegionConfig
@@ -17,8 +17,10 @@ from .models import (
 )
 from .price_service import CachedPriceService, PriceLookup
 from .steam_access import SteamAccessError
+from .offer_selection import primary_price
 
-WISHLIST_ORDERS = frozenset({"priority", "date_added", "name"})
+STEAM_WISHLIST_ORDERS = {"top_selling": 5, "release_date": 6, "review_score": 7}
+WISHLIST_ORDERS = frozenset({"priority", "date_added", "name", "price", "discount", *STEAM_WISHLIST_ORDERS})
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class AnalysisProgress:
     best_offer_comparison: GameComparison | None = None
     best_offers: dict | None = None
     metadata_source: str | None = None
+    default_prices: dict | None = None
 
     @property
     def status(self) -> str:
@@ -94,12 +97,14 @@ def order_wishlist_items(
             -(pair[1].date_added if pair[1].date_added is not None else 0),
             pair[0],
         )
-    else:
+    elif order == "name":
         key = lambda pair: (
             pair[1].name is None,
             (pair[1].name or "").casefold(),
             pair[0],
         )
+    else:
+        return tuple(items)  # Already prepared by Steam or baseline acquisition data.
     return tuple(item for _, item in sorted(indexed, key=key))
 
 
@@ -123,12 +128,17 @@ class AnalysisRunner:
         *,
         order: str = "priority",
         preserve_order: bool = False,
+        offer_basis: str = "game",
     ) -> Iterator[AnalysisProgress]:
         if order not in WISHLIST_ORDERS:
             raise ValueError(f"Unsupported wishlist order: {order!r}")
+        if offer_basis not in ("game", "best"):
+            raise ValueError("Unsupported offer basis")
         if hasattr(self._price_service, "prepare"):
-            yield from self._run_batched(wishlist, rates_to_home, order, preserve_order)
+            yield from self._run_batched(wishlist, rates_to_home, order, preserve_order, offer_basis)
             return
+        if order in {"price", "discount"} and not preserve_order:
+            raise ValueError("Price and discount loading require the batch price service")
         prepared = (tuple((item, None, None) for item in wishlist) if preserve_order
                     else self._prepare_wishlist(wishlist, order))
         total = len(prepared)
@@ -142,7 +152,7 @@ class AnalysisRunner:
                 home_error=home_error,
             )
 
-    def _run_batched(self, wishlist, rates, order, preserve_order=False):
+    def _run_batched(self, wishlist, rates, order, preserve_order=False, offer_basis="game"):
         service = self._price_service
         regions = (self._home, *self._alternatives)
         prefix_requests = 0
@@ -154,6 +164,24 @@ class AnalysisRunner:
             wishlist = tuple(replace(item, name=service.metadata.get((item.app_id, self._home.region), {}).get("name") or item.name)
                              for item in wishlist)
         ordered = wishlist if preserve_order else order_wishlist_items(wishlist, order)
+        if order in {"price", "discount"} and not preserve_order:
+            started = service.provider.attempts
+            service.prepare_baseline([item.app_id for item in wishlist], self._home)
+            prefix_requests += service.provider.attempts - started
+            def loading_key(item):
+                service.provider.check()
+                try:
+                    result = service.get_regional_price(item.app_id, self._home.region, self._home.currency).result
+                except SteamAccessError:
+                    result = None
+                default = asdict(result.price) if result and result.price else None
+                offer = service.best_offers(item.app_id, (self._home,))[self._home.region]
+                price = primary_price(default, offer, offer_basis)
+                value = price.get("amount" if order == "price" else "discount_percent") if price else None
+                if value is None and order == "price" and result and result.is_free:
+                    value = 0
+                return (value is None, (-value if order == "discount" else value) if value is not None else 0)
+            ordered = tuple(sorted(wishlist, key=loading_key))
         for offset in range(0, len(ordered), service.window_size):
             window = ordered[offset:offset + service.window_size]
             service.prepare([item.app_id for item in window], regions)
@@ -163,10 +191,19 @@ class AnalysisRunner:
                 service.provider.check()
                 progress = self._analyze_game(offset + position + 1, len(ordered), item, rates)
                 offers = service.best_offers(item.app_id, regions)
+                defaults = {}
+                for region in regions:
+                    try:
+                        lookup = service.get_regional_price(item.app_id, region.region, region.currency)
+                        if lookup.result.price:
+                            defaults[region.region] = asdict(replace(lookup.result.price, source=lookup.source))
+                    except SteamAccessError:
+                        pass  # Existing progress/offer status retains the failure.
                 for region in regions:
                     offer = offers[region.region]
+                    factor = 1 if region.region == self._home.region else rates[region.currency]
+                    offer["rate_to_home"] = factor
                     if offer.get("price"):
-                        factor = 1 if region.region == self._home.region else rates[region.currency]
                         offer.update(rate_to_home=factor, amount_in_home=offer["price"]["amount"] * factor)
                 best = None
                 if all(offers[r.region].get("status") == "available" for r in regions):
@@ -177,6 +214,7 @@ class AnalysisRunner:
                 # Attribute shared physical requests once, to the window's first row.
                 yield replace(progress, live_requests=requests if position == 0 else 0,
                     best_offer_comparison=best, best_offers=offers,
+                    default_prices=defaults,
                     metadata_source=metadata.get("source"),
                     name=metadata.get("name") or progress.name,
                     developers=tuple(metadata["developers"]) if metadata else progress.developers,

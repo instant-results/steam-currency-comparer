@@ -137,6 +137,7 @@ class SteamClient:
         self._sleep = sleep
         self._wishlist_file = wishlist_file
         self._web_api_key = web_api_key.strip()
+        self._last_wishlist_identifier = None
 
     def get_owned_library(self, raw_identifier):
         """Get visible owned games in one request; never use cookies/local files."""
@@ -266,6 +267,7 @@ class SteamClient:
                     )
                     for item in raw_items
                 )
+                self._last_wishlist_identifier = (raw_identifier, lookup_identifier)
                 return WishlistResult(items, "Steam Web API", tuple(warnings))
             except HttpClientError as exc:
                 if exc.network_access_denied:
@@ -289,6 +291,52 @@ class SteamClient:
             failure = legacy_failure
         return WishlistResult(legacy_items, "legacy Steam store endpoint", tuple(warnings),
                               (failure or legacy_failure) if not legacy_items else legacy_failure)
+
+    def get_wishlist_order(self, raw_identifier, items, sort_order, country):
+        """Reconcile Steam's country-specific rank with complete basic membership."""
+        if sort_order not in {5, 6, 7}:
+            raise ValueError("Unsupported Steam wishlist ordering")
+        identifier = normalize_steam_identifier(raw_identifier)
+        if self._last_wishlist_identifier and self._last_wishlist_identifier[0] == raw_identifier:
+            identifier = self._last_wishlist_identifier[1]
+        if not re.fullmatch(r"[0-9]{17}", identifier):
+            resolution = self.resolve_vanity_url(identifier)
+            if not resolution.resolved:
+                failure = (WishlistFailure.NETWORK_ACCESS_DENIED if resolution.status is VanityResolutionStatus.NETWORK_ACCESS_DENIED
+                           else WishlistFailure.VANITY)
+                return WishlistResult((), "Steam sorted wishlist", failure=failure)
+            identifier = resolution.steam_id
+        request = {"steamid": identifier, "context": {"country_code": country.upper(), "language": "english"},
+                   "data_request": {}, "filters": {}, "sort_order": sort_order, "start_index": 0, "page_size": 0}
+        try:
+            payload = self._http_client.get_json(
+                "https://api.steampowered.com/IWishlistService/GetWishlistSortedFiltered/v1/?" +
+                urlencode({"input_json": json.dumps(request, separators=(",", ":"))}))
+            if not isinstance(payload, dict) or not isinstance(payload.get("response"), dict):
+                raise ValueError("Invalid sorted wishlist")
+            values = payload["response"].get("items", [])
+            if not isinstance(values, list) or len(values) > 10000:
+                raise ValueError("Invalid sorted wishlist items")
+            ordered, seen = [], set()
+            basic = {item.app_id: item for item in items}
+            for value in values:
+                app_id = value.get("appid") if isinstance(value, dict) else None
+                if (isinstance(app_id, bool) or not re.fullmatch(r"[1-9][0-9]{0,9}", str(app_id))
+                        or int(app_id) > 4294967295 or str(app_id) in seen):
+                    raise ValueError("Invalid sorted wishlist ID")
+                app_id = str(app_id)
+                seen.add(app_id)
+                if app_id in basic:
+                    ordered.append(basic[app_id])
+            ordered.extend(item for item in basic.values() if item.app_id not in seen)
+            return WishlistResult(tuple(ordered), "Steam sorted wishlist")
+        except HttpClientError as exc:
+            failure = (WishlistFailure.NETWORK_ACCESS_DENIED if exc.network_access_denied else
+                       WishlistFailure.TLS if exc.tls_error else
+                       WishlistFailure.INVALID_RESPONSE if exc.invalid_response else WishlistFailure.REQUEST)
+        except (ValueError, TypeError):
+            failure = WishlistFailure.INVALID_RESPONSE
+        return WishlistResult((), "Steam sorted wishlist", failure=failure)
 
     def _load_local_wishlist(self) -> tuple[WishlistItem, ...]:
         if self._wishlist_file is None or not self._wishlist_file.exists():

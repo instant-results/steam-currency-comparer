@@ -111,9 +111,9 @@ Keep it a non-submit button. Retry comparison starts fresh and clears removals;
 Retry currency update preserves the current selection and its removals.
 Wrap the pair on narrow screens; the results footer retains the result count.
 
-On wide layouts, place result filters, Show unavailable products and the Steam
-best-offers checkbox in the same left-aligned row. Allow the row to wrap as space
-narrows; preserve readable labels, checkbox states and accessible associations.
+Place display checkboxes in a dedicated left-aligned row above result filters.
+Apply the same ordering to catalog credit and best-offer controls. Allow each row
+to wrap as space narrows; preserve readable labels, states and accessible associations.
 Remove the separate sorting toolbar, including its loading-order note. Headers cycle
 ascending, descending and original loading order; no separate Reset sorting
 button is needed. Switching columns starts ascending. Use 12x18px geometric
@@ -144,6 +144,30 @@ Choose the bubble's side and viewport clearance when opening. Preserve that
 placement relative to the information button during layout changes, including
 currency-panel expansion/collapse. Refit on viewport resize only when the button
 is visible; an offscreen button carries the bubble offscreen with the results.
+
+## Paired purchase offers and loading order
+
+Retain the existing best-offer checkbox. Only when enabled, show a fieldset with
+Game price primary and Steam's best offer primary radio choices. Share these
+settings across tabs and persist them in the browser tab. Offer preference remains
+independent of the wishlist loading-order dropdown.
+
+Represent each game as one indivisible row with two aligned price bands when a
+cheaper Steam-selected package or bundle exists. Only primary prices determine
+sorting, filtering, differences and statistics. The secondary stays with its
+parent through removal and Undo; manual additions use the same representation.
+Each country links its actual purchase option, falling back to the game when
+there is no cheaper alternative. Keep the game as the group's identity.
+
+Use a purple badge containing the word effective for savings against the regular
+standalone game price. Do not use a bundle's own discount as the game's effective
+discount. Explain the calculation in its tooltip and offer-help bubble. Align
+primary and secondary label/value/name bands after wrapping and viewport changes.
+
+Price and Discount prepare a complete baseline snapshot before emitting results;
+switching display priority later preserves that loading sequence. The three
+Steam ranking modes use the baseline country and append basic-list omissions in
+their original order without an extra user-facing ranking status.
 
 ## Wishlist title search
 

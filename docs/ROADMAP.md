@@ -1,9 +1,19 @@
 # Development roadmap
 
-Updated: 2026-10-24. These are development directions, without delivery dates or
+Updated: 2026-10-25. These are development directions, without delivery dates or
 release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
+
+## Completed in 0.11.0
+
+Paired game/purchase offers with conditional primary-offer radios, effective
+discounts relative to regular game prices, and primary-driven filters/statistics.
+Price and Discount prepare and reuse the complete baseline. Top Selling, Release
+Date and Review Score use Steam's sequence reconciled with basic membership.
+Display checkboxes sit above filters across comparison tabs.
+See [usage](USAGE.md#local-operation-and-loading-order) and
+[research and chosen semantics](STEAM_WISHLIST_PRICE_DISCOUNT.md).
 
 ## Completed in 0.10.0
 

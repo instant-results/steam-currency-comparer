@@ -1,6 +1,7 @@
 # Steam price batching — implemented design
 
-Updated: 2026-10-18. Branch: `codex/steam-price-batching`, version `0.6.0-beta`.
+Updated: 2026-10-25 for version `0.11.0`. Original batching implementation:
+`codex/steam-price-batching`, version `0.6.0-beta`.
 Research and limits: [STEAM_PRICE_BATCHING.md](STEAM_PRICE_BATCHING.md).
 Measured before/after results: [STEAM_PRICE_PERFORMANCE.md](STEAM_PRICE_PERFORMANCE.md).
 
@@ -47,8 +48,10 @@ cached if later work fails or is cancelled.
 
 ## Cache and progress
 
-Schema 7 adds independent regional metadata and offer observations. Existing
-price/rate tables remain compatible. Metadata is English and country-contextual,
+Schema 7 introduced independent regional metadata and offer observations; the
+current schema is 9, also retaining calculated-discount provenance and complete
+rate-table fetch times. Existing price/rate tables remain compatible.
+Metadata is English and country-contextual,
 with a 24-hour TTL. Offers, including known absence, have a 15-minute TTL.
 Default prices retain one hour normally, 15 minutes on sale, one hour for missing
 prices, and six hours for unavailable apps. Fresh legacy prices can be enriched
@@ -63,8 +66,12 @@ sets, including available best offers from incomplete regional comparisons.
 
 Your Rank and Date Added prepare bounded windows, then emit rows in order. Name
 order first resolves metadata for sorting and reuses the resulting observations.
+Price and Discount first prepare all baseline prices and offers, order by the
+chosen primary basis, then freeze and reuse those observations across windows.
+Top Selling, Release Date and Review Score use Steam's baseline-country sequence,
+reconciled with basic wishlist membership. Omitted entries follow in basic order.
 Physical Steam data attempts are charged once to the first emitted row in each
-window; name-prefetch attempts join the first window. Cache-hit fields still count
+window; all baseline-prefetch attempts join the first window. Cache-hit fields still count
 item-country observations. The legacy `live_price_requests` CSV field now includes
 metadata and best-offer requests; it must not be summed across repeated regional
 CSV rows without deduplicating games/windows. Wishlist/NBP calls are not included
@@ -72,26 +79,30 @@ in that per-row field. The benchmark independently counts all physical calls.
 
 ## Two price interpretations
 
-Default offers continue to drive game filters, sorting, totals and catalog
-statistics. The shared checkbox reveals a separately calculated comparison of
-Steam-selected offers. It preserves package/bundle IDs, names, prices and source
-labels, persists in tab storage, and works across comparison tabs. CSV always
-retains both datasets in separate fields, regardless of checkbox state.
+The shared checkbox reveals cheaper Steam-selected offers and two primary-offer
+radio choices. Game primary uses standalone prices; best-offer primary uses a
+cheaper qualifying package/bundle, falling back to the game per country. Primary
+prices drive filters, sorting, differences and catalog statistics. Both offers
+stay in one game row and share removal/Undo. The preference persists in tab
+storage and works across comparison tabs without new requests. CSV retains raw
+default/best observations plus additive primary_* fields for the display choice.
 
 StoreBrowse prices have no explicit currency code in the observed schema.
 Their currency is attributed to the requested supported storefront and that
 basis is retained in results, tooltips and CSV. An appdetails currency mismatch
 also blocks the corresponding best offer. This is not an independent currency
-code validation of StoreBrowse. Current support remains the existing five pairs;
-additional real storefronts require validation before enabling them.
+code validation of StoreBrowse. Current support covers 37 currency/storefront
+pairs; see [supported storefronts](STOREFRONTS.md).
 
 A best offer is Steam's anonymous selection, not a personalized checkout quote.
 Bundles can differ by country and existing ownership. Recurring subscription
-options are explicitly unsupported. The discount metric is `(regular-current) /
-regular × 100`, rounded to two decimals, for the same offer. Compliance-only
-reference fields never supply that regular baseline. Bundle regular-price
-percentages remain unavailable because component savings are not proof of a
-regular bundle price. Current offer prices and regional comparisons remain usable.
+options are explicitly unsupported. Default game discounts retain valid Steam
+percentages or calculate missing/inconsistent values, rounded down to whole
+points. Alternative effective discounts use `(regular game price - alternative
+purchase price) / regular game price * 100`, displayed to two decimals with a
+distinct effective badge. A missing regular game price leaves that effective
+percentage unknown. Compliance-only and bundle-component references never supply
+the game's regular baseline. Raw bundle discount fields remain separate in CSV.
 
 ## Verification and remaining scope
 
