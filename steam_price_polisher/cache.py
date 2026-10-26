@@ -9,6 +9,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
+from threading import local
 from typing import Iterator
 
 from .models import ExchangeRate, PriceStatus, RegionalPriceResult, StorePrice
@@ -40,6 +41,7 @@ class SQLiteCache:
     ) -> None:
         self._database_path = database_path
         self._clock = clock
+        self._connections = local()
         database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -49,13 +51,29 @@ class SQLiteCache:
         return connection
 
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
+    def connection_scope(self) -> Iterator[None]:
+        """Reuse this thread's connection; each cache operation still commits separately."""
+        if getattr(self._connections, "connection", None) is not None:
+            yield
+            return
         connection = self._connect()
+        self._connections.connection = connection
+        try:
+            yield
+        finally:
+            self._connections.connection = None
+            connection.close()
+
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        scoped = getattr(self._connections, "connection", None)
+        connection = scoped if scoped is not None else self._connect()
         try:
             with connection:
                 yield connection
         finally:
-            connection.close()
+            if scoped is None:
+                connection.close()
 
     def _initialize(self) -> None:
         with self._connection() as connection:

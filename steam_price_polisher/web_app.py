@@ -659,29 +659,30 @@ class JobManager:
                    message=("Comparing owned games by name…" if job.order == "name" else "Comparing owned games in Steam order…") if job.library else "Comparing catalog products…" if creator_request else order_messages[job.order])
         runner = AnalysisRunner(CachedBatchPriceService(SteamBatchProvider(steam_http, policy=self.batch_policy, check_cancelled=job.check_cancelled), cache), home=job.config.home, alternatives=job.config.alternatives)
         partial = False
-        for progress in runner.run(
-            wishlist,
-            rates_to_baseline(rates, job.config.home.currency),
-            order=job.order,
-            preserve_order=job.previous_job_id is not None or (job.request_app_ids is not None and job.order not in {"price", "discount"}),
-            offer_basis=job.offer_basis,
-        ):
-            job.check_cancelled()
-            item = asdict(progress)
-            item["manually_added"] = progress.app_id in job.added_app_ids
-            if creator_request:
-                item["creator_ids"] = creator_membership.get(progress.app_id, [])
-            item["source_summary"] = progress.source_summary
-            if progress.skipped:
-                # Only controlled labels cross the web boundary; upstream errors
-                # may contain URLs, local information, or unexpected text.
-                item["skipped"]["reason"] = progress.skipped.category.label
-                partial |= progress.skipped.category.is_technical_failure
-            job.append(item)
-            if progress.skipped and progress.skipped.category is SkipCategory.NETWORK_ACCESS_DENIED:
-                job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
-                           error_code="network_access_denied", message="Server network access blocked.")
-                return
+        with cache.connection_scope():
+            for progress in runner.run(
+                wishlist,
+                rates_to_baseline(rates, job.config.home.currency),
+                order=job.order,
+                preserve_order=job.previous_job_id is not None or (job.request_app_ids is not None and job.order not in {"price", "discount"}),
+                offer_basis=job.offer_basis,
+            ):
+                job.check_cancelled()
+                item = asdict(progress)
+                item["manually_added"] = progress.app_id in job.added_app_ids
+                if creator_request:
+                    item["creator_ids"] = creator_membership.get(progress.app_id, [])
+                item["source_summary"] = progress.source_summary
+                if progress.skipped:
+                    # Only controlled labels cross the web boundary; upstream errors
+                    # may contain URLs, local information, or unexpected text.
+                    item["skipped"]["reason"] = progress.skipped.category.label
+                    partial |= progress.skipped.category.is_technical_failure
+                job.append(item)
+                if progress.skipped and progress.skipped.category is SkipCategory.NETWORK_ACCESS_DENIED:
+                    job.update(state="failed", error=NETWORK_ACCESS_MESSAGE,
+                               error_code="network_access_denied", message="Server network access blocked.")
+                    return
         job.check_cancelled()
         if any(any(offer.get("status") in {"temporary_failure", "request_failure", "invalid_response", "region_mismatch"}
                        for offer in (item.get("best_offers") or {}).values()) for item in job.snapshot()["items"]):

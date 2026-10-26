@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Improve backend cache handling during comparisons.
+
 ## 0.11.0 — 2026-10-25
 
 - Add Price and Discount loading by the chosen primary offer, preparing and

@@ -1,6 +1,6 @@
 # Development roadmap
 
-Updated: 2026-10-25. These are development directions, without delivery dates or
+Updated: 2026-10-26. These are development directions, without delivery dates or
 release commitments. See the [README](../README.md) for current features, the
 [usage guide](USAGE.md) for behavior and limitations, and the
 [changelog](../CHANGELOG.md) for completed changes.
@@ -84,6 +84,8 @@ request volume and failure recovery under control:
 - Compare batch sizes and smaller initial processing windows.
 - Reduce the delay between results becoming ready and reaching the browser.
 - Explore earlier display of complete, fresh cached rows while preserving order.
+
+Cache handling has been improved. Further loading improvements remain planned.
 
 Keep default prices and best offers together in each published row. Preserve
 request pacing, cache freshness, cancellation and result provenance. The
