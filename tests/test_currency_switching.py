@@ -5,15 +5,16 @@ import sqlite3
 import tempfile
 import unittest
 from copy import deepcopy
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from steam_price_polisher.batching import BatchPolicy, SteamBatchProvider
+from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.configuration import ComparisonConfig
 from steam_price_polisher.models import ExchangeRate, RegionalPriceResult, StorePrice, WishlistItem, WishlistResult
-from steam_price_polisher.web_app import BusyError, JobManager, WebApplication
+from steam_price_polisher.web_app import BusyError, Cancelled, JobManager, WebApplication
 from tests.batch_fixtures import BatchHttpFixture
 
 
@@ -77,6 +78,36 @@ class CurrencySwitchingTests(unittest.TestCase):
             output.append(json.loads(query["input_json"][0])["context"]["country_code"].lower()
                           if "input_json" in query else query["cc"][0])
         return output
+
+    def test_analysis_connection_is_closed_on_completion_cancellation_and_failure(self):
+        scoped = []
+        original_scope = SQLiteCache.connection_scope
+
+        @contextmanager
+        def observe_scope(cache):
+            with original_scope(cache):
+                with cache._connection() as connection:
+                    scoped.append(connection)
+                yield
+
+        with patch.object(SQLiteCache, "connection_scope", observe_scope):
+            for state, error in (("complete", None), ("cancelled", Cancelled()),
+                                 ("failed", RuntimeError("fixture failure"))):
+                with self.subTest(state=state):
+                    job = self.manager.submit("example", ComparisonConfig(), state, order="price")
+                    if error is None:
+                        self.execute(job)
+                    else:
+                        self.assertIs(self.manager.queue.get_nowait(), job)
+                        try:
+                            with patch("steam_price_polisher.web_app.AnalysisRunner.run", side_effect=error):
+                                self.manager.execute(job)
+                        finally:
+                            self.manager.queue.task_done()
+                    self.assertEqual(job.data["state"], state)
+                    self.assertEqual(len(scoped), {"complete": 1, "cancelled": 2, "failed": 3}[state])
+                    with self.assertRaises(sqlite3.ProgrammingError):
+                        scoped[-1].execute("SELECT 1")
 
     def test_baseline_swap_reuses_both_offer_sets_without_discovery_or_http(self):
         source = self.initial()

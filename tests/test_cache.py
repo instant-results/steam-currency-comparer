@@ -3,7 +3,9 @@ import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import patch
 
 from steam_price_polisher.cache import SQLiteCache
 from steam_price_polisher.exchange_rates import CachedExchangeRateProvider
@@ -80,6 +82,76 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(lookup.source, "cache")
         self.assertTrue(lookup.result.is_free)
         self.assertEqual(live.calls, 1)
+
+    def test_connection_scope_reuses_connection_and_commits_each_operation(self):
+        result = RegionalPriceResult.available(StorePrice("pl", "PLN", 10), "Game")
+        observer = SQLiteCache(Path(self.temp_directory.name) / "cache.sqlite3")
+        with patch.object(self.cache, "_connect", wraps=self.cache._connect) as connect:
+            with self.cache.connection_scope():
+                self.cache.put_price("10", "pl", "PLN", result)
+                with self.cache._connection() as connection:
+                    self.assertFalse(connection.in_transaction)
+                with self.cache.connection_scope():
+                    self.assertEqual(self.cache.get_price("10", "pl", "PLN").result, result)
+                self.cache.put_observation("offer", "10", "pl", {"status": "unavailable"})
+                self.assertEqual(observer.get_price("10", "pl", "PLN").result, result)
+                self.assertIsNotNone(observer.get_observation("offer", "10", "pl"))
+                self.assertEqual(connect.call_count, 1)
+            with self.assertRaises(sqlite3.ProgrammingError):
+                connection.execute("SELECT 1")
+            self.assertIsNotNone(self.cache.get_price("10", "pl", "PLN"))
+            self.assertEqual(connect.call_count, 2)
+
+    def test_connection_scope_closes_after_exception_and_can_be_reopened(self):
+        with self.assertRaisesRegex(RuntimeError, "interrupted"):
+            with self.cache.connection_scope():
+                self.cache.put_exchange_rate("USD", 4)
+                with self.cache._connection() as connection:
+                    pass
+                raise RuntimeError("interrupted")
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
+        with self.cache.connection_scope():
+            self.assertEqual(self.cache.get_exchange_rate("USD").rate, 4)
+            self.cache.put_exchange_rate("EUR", 5)
+        self.assertEqual(self.cache.get_exchange_rate("EUR").rate, 5)
+
+    def test_failed_scoped_write_preserves_prior_commit_and_allows_retry(self):
+        with self.cache._connection() as connection:
+            connection.execute("""CREATE TRIGGER reject_observation BEFORE INSERT ON batch_observations
+                WHEN NEW.app_id = '20' BEGIN SELECT RAISE(ABORT, 'rejected'); END""")
+        with self.cache.connection_scope():
+            self.cache.put_observation("metadata", "10", "pl", {"name": "Saved"})
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.cache.put_observation("metadata", "20", "pl", {"name": "Rejected"})
+            self.assertIsNone(self.cache.get_observation("metadata", "20", "pl"))
+            self.cache.put_observation("metadata", "30", "pl", {"name": "Next"})
+            observer = SQLiteCache(Path(self.temp_directory.name) / "cache.sqlite3")
+            self.assertEqual(observer.get_observation("metadata", "10", "pl")[0], {"name": "Saved"})
+            self.assertEqual(observer.get_observation("metadata", "30", "pl")[0], {"name": "Next"})
+
+    def test_connection_scopes_are_isolated_between_threads(self):
+        def other_thread():
+            with self.cache.connection_scope():
+                self.assertEqual(self.cache.get_exchange_rate("USD").rate, 4)
+                self.cache.put_exchange_rate("EUR", 5)
+                with self.cache._connection() as connection:
+                    pass
+            with self.assertRaises(sqlite3.ProgrammingError):
+                connection.execute("SELECT 1")
+            return connection
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with self.cache.connection_scope():
+                self.cache.put_exchange_rate("USD", 4)
+                with self.cache._connection() as connection:
+                    pass
+                other = pool.submit(other_thread).result(timeout=5)
+                self.assertIsNot(other, connection)
+                self.assertEqual(self.cache.get_exchange_rate("EUR").rate, 5)
+                self.assertEqual(connection.execute("SELECT 1").fetchone()[0], 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
 
     def test_price_is_loaded_from_cache_on_repeated_lookup(self):
         live_result = RegionalPriceResult.available(
